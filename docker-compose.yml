@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: theraai-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: theraai
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - theraai-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: theraai-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongodb
+    volumes:
+      - ./backend:/app
+    networks:
+      - theraai-network
+    env_file:
+      - .env.docker
+    environment:
+      - MONGODB_URL=mongodb://admin:password123@mongodb:27017/theraai?authSource=admin
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # React Frontend with Vite
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: theraai-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    networks:
+      - theraai-network
+    env_file:
+      - ./web/.env
+    environment:
+      - VITE_API_URL=http://backend:8000
+      - VITE_ENVIRONMENT=docker
+    stdin_open: true
+    tty: true
+    command: npm run dev -- --host
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  theraai-network:
+    driver: bridge

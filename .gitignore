@@ -1,0 +1,380 @@
+# =============================================================================
+# TheraAI FYP Project - Git Ignore File
+# =============================================================================
+
+# =============================================================================
+# PROJECT-SPECIFIC FILES
+# =============================================================================
+
+# Project documentation and planning (keep private during development)
+docs/TODO.md
+docs/meeting-notes.md
+docs/personal-notes/
+*.private.md
+
+# Local development configuration
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.docker.local
+config/local/
+secrets/
+
+# IMPORTANT: Keep .env.example files but ignore actual .env files
+# .env.example files are templates - SAFE to commit
+# .env files contain real secrets - NEVER commit
+backend/.env
+web/.env
+.env.docker
+
+# Team member specific files
+team-notes/
+personal/
+scratch/
+
+# =============================================================================
+# BACKEND (FastAPI + Python)
+# =============================================================================
+
+# Python cache and compiled files
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
+
+# Virtual environments
+backend/venv/
+backend/env/
+backend/ENV/
+backend/env.bak/
+backend/venv.bak/
+
+# Python distribution / packaging
+backend/build/
+backend/develop-eggs/
+backend/dist/
+backend/downloads/
+backend/eggs/
+backend/.eggs/
+backend/lib/
+backend/lib64/
+backend/parts/
+backend/sdist/
+backend/var/
+backend/wheels/
+backend/share/python-wheels/
+backend/*.egg-info/
+backend/.installed.cfg
+backend/*.egg
+backend/MANIFEST
+
+# PyInstaller
+backend/*.manifest
+backend/*.spec
+
+# Installer logs
+backend/pip-log.txt
+backend/pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+backend/htmlcov/
+backend/.tox/
+backend/.nox/
+backend/.coverage
+backend/.coverage.*
+backend/.cache
+backend/nosetests.xml
+backend/coverage.xml
+backend/*.cover
+backend/*.py,cover
+backend/.hypothesis/
+backend/.pytest_cache/
+backend/cover/
+
+# FastAPI specific
+backend/app/*.log
+backend/app/logs/
+backend/app/temp/
+
+# Database files (local development)
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+backend/database/
+
+# AI/ML model files
+backend/models/*.pkl
+backend/models/*.joblib
+backend/models/*.model
+backend/models/cache/
+
+# =============================================================================
+# FRONTEND (React + Vite)
+# =============================================================================
+
+# Dependencies
+web/node_modules/
+web/.pnp/
+web/.pnp.js
+
+# Production builds
+web/build/
+web/dist/
+web/.next/
+web/out/
+
+# Vite specific
+web/.vite/
+web/vite.config.js.timestamp-*
+web/vite.config.ts.timestamp-*
+
+# React/Vite cache
+web/.cache/
+web/.parcel-cache/
+
+# Runtime data
+web/pids/
+web/*.pid
+web/*.seed
+web/*.pid.lock
+
+# Coverage directory used by tools like istanbul
+web/coverage/
+web/*.lcov
+
+# nyc test coverage
+web/.nyc_output
+
+# ESLint cache
+web/.eslintcache
+
+# Stylelint cache
+web/.stylelintcache
+
+# Optional npm cache directory
+web/.npm
+
+# Optional REPL history
+web/.node_repl_history
+
+# Output of 'npm pack'
+web/*.tgz
+
+# Yarn Integrity file
+web/.yarn-integrity
+
+# Microbundle cache
+web/.rpt2_cache/
+web/.rts2_cache_cjs/
+web/.rts2_cache_es/
+web/.rts2_cache_umd/
+
+# Storybook build outputs
+web/storybook-static/
+
+# =============================================================================
+# DATABASE (MongoDB)
+# =============================================================================
+
+# MongoDB data directory (if running locally)
+mongodb-data/
+data/db/
+mongo-data/
+
+# Database dumps
+*.dump
+*.bson
+*.json.gz
+
+# =============================================================================
+# DOCKER & DEVOPS
+# =============================================================================
+
+# Docker volumes
+docker-volumes/
+docker-data/
+
+# Docker override files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Container logs
+containers/
+
+# =============================================================================
+# ENVIRONMENT & SECRETS
+# =============================================================================
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env*
+web/.env*
+
+# API keys and secrets
+backend/secrets/
+web/secrets/
+*.pem
+*.key
+*.crt
+api-keys.txt
+secrets.json
+
+# =============================================================================
+# IDE & EDITOR FILES
+# =============================================================================
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# JetBrains IDEs
+.idea/
+*.swp
+*.swo
+*~
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*.tmp
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# =============================================================================
+# OPERATING SYSTEM FILES
+# =============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Icon?
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# LOGS & TEMPORARY FILES
+# =============================================================================
+
+# Logs
+logs/
+*.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary directories
+tmp/
+temp/
+.tmp/
+.temp/
+
+# =============================================================================
+# TESTING & CI/CD
+# =============================================================================
+
+# Test results
+test-results/
+coverage/
+*.lcov
+junit.xml
+
+# Playwright
+playwright-report/
+playwright/.cache/
+
+# Jest
+coverage/
+
+# =============================================================================
+# DOCUMENTATION (SELECTIVE IGNORE)
+# =============================================================================
+
+# Generated documentation
+docs/build/
+docs/_build/
+docs/site/
+
+# Personal notes and planning
+docs/personal/
+docs/drafts/
+docs/archive/
+
+# =============================================================================
+# MISCELLANEOUS
+# =============================================================================
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Large media files (add specific extensions as needed)
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+
+# Temporary files
+*.tmp
+*.temp

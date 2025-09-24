@@ -1,0 +1,52 @@
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 40px;
+  color: white;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+}
+
+.backend-data {
+  margin-top: 30px;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  max-width: 600px;
+}
+
+.backend-data h2 {
+  color: #61dafb;
+  margin-bottom: 20px;
+}
+
+.success {
+  background-color: rgba(76, 175, 80, 0.2);
+  padding: 15px;
+  border-radius: 5px;
+  border-left: 4px solid #4caf50;
+}
+
+.success p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.error {
+  background-color: rgba(244, 67, 54, 0.2);
+  padding: 15px;
+  border-radius: 5px;
+  border-left: 4px solid #f44336;
+  color: #ffcdd2;
+}
+
+.error p {
+  margin: 8px 0;
+}
