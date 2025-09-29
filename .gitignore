@@ -8,6 +8,7 @@
 
 # Project documentation and planning (keep private during development)
 docs/TODO.md
+docs/PROJECT_TODO.md
 docs/meeting-notes.md
 docs/personal-notes/
 *.private.md

@@ -1,58 +1,166 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
+import Login from './components/Auth/LoginModern';
+import Signup from './components/Auth/Signup';
+import Dashboard from './pages/Dashboard/ModernDashboard';
 import './App.css';
 
 function App() {
-  const [backendData, setBackendData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    // Fetch data from FastAPI backend
-    const fetchBackendData = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        setBackendData(data);
-      } catch (err) {
-        setError(err.message);
-        console.error('Error fetching backend data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBackendData();
-  }, []);
-
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>TheraAI Frontend</h1>
-        <p>React app connected to FastAPI backend</p>
-        
-        <div className="backend-data">
-          <h2>Backend Response:</h2>
-          {loading && <p>Loading backend data...</p>}
-          {error && (
-            <div className="error">
-              <p>Error: {error}</p>
-              <p>Make sure the backend is running on http://localhost:8000</p>
-            </div>
-          )}
-          {backendData && (
-            <div className="success">
-              <p><strong>Message:</strong> {backendData.message}</p>
-              <p><strong>Status:</strong> {backendData.status}</p>
-              <p><strong>Service:</strong> {backendData.service}</p>
-              <p><strong>Version:</strong> {backendData.version}</p>
-            </div>
-          )}
-        </div>
-      </header>
-    </div>
+    <ToastProvider>
+      <AuthProvider>
+        <Router>
+          <div className="app">
+            <Routes>
+            {/* Public Routes - only accessible when not authenticated */}
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <Login />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/signup"
+              element={
+                <PublicRoute>
+                  <Signup />
+                </PublicRoute>
+              }
+            />
+
+            {/* Protected Routes - require authentication */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Role-based Protected Routes */}
+            <Route
+              path="/patients"
+              element={
+                <ProtectedRoute roles={['psychiatrist', 'admin']}>
+                  <div className="page-placeholder">
+                    <h2>Patients Management</h2>
+                    <p>This page is available for psychiatrists and admins.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/sessions"
+              element={
+                <ProtectedRoute roles="patient">
+                  <div className="page-placeholder">
+                    <h2>My Sessions</h2>
+                    <p>View and manage your wellness sessions and consultations.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/community"
+              element={
+                <ProtectedRoute roles="patient">
+                  <div className="page-placeholder">
+                    <h2>Community Support</h2>
+                    <p>Connect with others on their wellness journey. Share experiences and find support.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute roles="admin">
+                  <div className="page-placeholder">
+                    <h2>User Management</h2>
+                    <p>Admin-only user management interface.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Placeholder Protected Routes */}
+            <Route
+              path="/progress"
+              element={
+                <ProtectedRoute>
+                  <div className="page-placeholder">
+                    <h2>Progress Tracking</h2>
+                    <p>Track your mental health progress over time.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/appointments"
+              element={
+                <ProtectedRoute>
+                  <div className="page-placeholder">
+                    <h2>Appointments</h2>
+                    <p>Manage your appointments and scheduling.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/resources"
+              element={
+                <ProtectedRoute>
+                  <div className="page-placeholder">
+                    <h2>Resources</h2>
+                    <p>Mental health resources and educational materials.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <div className="page-placeholder">
+                    <h2>Profile Settings</h2>
+                    <p>Manage your account settings and preferences.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Unauthorized Route */}
+            <Route
+              path="/unauthorized"
+              element={
+                <div className="unauthorized-page">
+                  <h2>Access Denied</h2>
+                  <p>You don't have permission to access this page.</p>
+                  <button onClick={() => window.history.back()}>Go Back</button>
+                </div>
+              }
+            />
+
+            {/* Default Routes */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </div>
+        </Router>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

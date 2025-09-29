@@ -1,0 +1,247 @@
+/**
+ * Toast Notification Styles
+ * Modern notification system styling
+ */
+
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 12px;
+  pointer-events: none;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.toast {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 320px;
+  max-width: 480px;
+  pointer-events: all;
+  animation: slideInFromBottom 0.3s ease-out;
+  transition: all 0.2s ease;
+}
+
+.toast:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.toast-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.toast-message {
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: 600;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 8px;
+}
+
+.toast-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.toast-close:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* Toast Types */
+.toast-success {
+  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+}
+
+.toast-success .toast-message {
+  color: #065f46;
+}
+
+.toast-error {
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #fef7f7 100%);
+}
+
+.toast-error .toast-message {
+  color: #991b1b;
+}
+
+.toast-warning {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #fefce8 100%);
+}
+
+.toast-warning .toast-message {
+  color: #92400e;
+}
+
+.toast-info {
+  border-left: 4px solid #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+}
+
+.toast-info .toast-message {
+  color: #1e40af;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .toast-container {
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+  }
+  
+  .toast {
+    min-width: auto;
+    max-width: none;
+    width: 100%;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .toast {
+    background: #1f2937;
+    border-color: #374151;
+  }
+  
+  .toast-message {
+    color: #f9fafb;
+  }
+  
+  .toast-close {
+    color: #9ca3af;
+  }
+  
+  .toast-close:hover {
+    background: #374151;
+    color: #f9fafb;
+  }
+  
+  .toast-success {
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+  }
+  
+  .toast-success .toast-message {
+    color: #6ee7b7;
+  }
+  
+  .toast-error {
+    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+  }
+  
+  .toast-error .toast-message {
+    color: #fca5a5;
+  }
+  
+  .toast-warning {
+    background: linear-gradient(135deg, #78350f 0%, #92400e 100%);
+  }
+  
+  .toast-warning .toast-message {
+    color: #fbbf24;
+  }
+  
+  .toast-info {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  }
+  
+  .toast-info .toast-message {
+    color: #93c5fd;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .toast {
+    border-width: 2px;
+  }
+  
+  .toast-success {
+    border-left-width: 6px;
+  }
+  
+  .toast-error {
+    border-left-width: 6px;
+  }
+  
+  .toast-warning {
+    border-left-width: 6px;
+  }
+  
+  .toast-info {
+    border-left-width: 6px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+  
+  .toast:hover {
+    transform: none;
+  }
+}

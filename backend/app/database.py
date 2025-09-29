@@ -1,0 +1,119 @@
+"""
+Database Configuration and Connection Management for TheraAI
+"""
+
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from typing import Optional
+from .config import get_settings
+
+settings = get_settings()
+
+
+class DatabaseManager:
+    """Database connection manager"""
+    
+    def __init__(self):
+        self.client: Optional[AsyncIOMotorClient] = None
+        self.database: Optional[AsyncIOMotorDatabase] = None
+    
+    async def connect_to_database(self):
+        """Create database connection"""
+        try:
+            self.client = AsyncIOMotorClient(settings.mongodb_url)
+            self.database = self.client[settings.mongodb_database]
+            
+            # Test the connection
+            await self.client.admin.command('ping')
+            print(f"✅ Connected to MongoDB database: {settings.mongodb_database}")
+            
+        except Exception as e:
+            print(f"❌ Failed to connect to MongoDB: {e}")
+            raise e
+    
+    async def close_database_connection(self):
+        """Close database connection"""
+        if self.client:
+            self.client.close()
+            print("✅ Disconnected from MongoDB")
+    
+    def get_database(self) -> AsyncIOMotorDatabase:
+        """Get database instance"""
+        if self.database is None:
+            raise RuntimeError("Database not connected. Call connect_to_database() first.")
+        return self.database
+
+
+# Global database manager instance
+db_manager = DatabaseManager()
+
+
+async def get_database() -> AsyncIOMotorDatabase:
+    """Dependency function to get database instance"""
+    return db_manager.get_database()
+
+
+# Database collections
+async def get_users_collection():
+    """Get users collection"""
+    db = await get_database()
+    return db.users
+
+
+async def init_database():
+    """Initialize database with indexes and constraints"""
+    try:
+        db = await get_database()
+        
+        # Create indexes for users collection
+        users_collection = db.users
+        
+        # Email index (unique)
+        await users_collection.create_index("email", unique=True)
+        
+        # Role index for filtering
+        await users_collection.create_index("role")
+        
+        # Active status index
+        await users_collection.create_index("is_active")
+        
+        # Created at index for sorting
+        await users_collection.create_index("created_at")
+        
+        # Compound index for email + role
+        await users_collection.create_index([("email", 1), ("role", 1)])
+        
+        print("✅ Database indexes created successfully")
+        
+    except Exception as e:
+        print(f"❌ Failed to initialize database: {e}")
+        raise e
+
+
+async def check_database_health() -> dict:
+    """Check database health and connection status"""
+    try:
+        db = await get_database()
+        
+        # Ping database
+        await db_manager.client.admin.command('ping')
+        
+        # Get server info
+        server_info = await db_manager.client.server_info()
+        
+        # Count users
+        users_count = await db.users.count_documents({})
+        
+        return {
+            "status": "healthy",
+            "mongodb_version": server_info.get("version", "unknown"),
+            "database_name": settings.mongodb_database,
+            "users_count": users_count,
+            "connection_url": settings.mongodb_url.split("@")[-1] if "@" in settings.mongodb_url else settings.mongodb_url
+        }
+        
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "database_name": settings.mongodb_database
+        }

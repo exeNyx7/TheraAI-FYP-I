@@ -1,21 +1,54 @@
 """
 TheraAI FastAPI Backend
-Main application entry point with environment configuration
+Main application entry point with authentication system
 """
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
 from .config import get_settings
-import os
+from .database import db_manager, init_database, check_database_health
+from .api import auth_router
 
 # Load settings
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan management"""
+    # Startup
+    print(f"🚀 Starting {settings.app_name} v{settings.app_version}")
+    print(f"🌍 Environment: {settings.environment}")
+    
+    try:
+        # Connect to database
+        await db_manager.connect_to_database()
+        
+        # Initialize database (create indexes)
+        await init_database()
+        
+        print("✅ Application startup complete")
+    except Exception as e:
+        print(f"❌ Failed to start application: {e}")
+        raise e
+    
+    yield
+    
+    # Shutdown
+    print("🛑 Shutting down application...")
+    await db_manager.close_database_connection()
+    print("✅ Application shutdown complete")
+
+
+# Create FastAPI application
 app = FastAPI(
     title=settings.app_name,
     description=settings.app_description,
     version=settings.app_version,
-    debug=settings.debug
+    debug=settings.debug,
+    lifespan=lifespan
 )
 
 # Configure CORS for React frontend
@@ -27,50 +60,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+# Include API routers
+app.include_router(auth_router, prefix="/api/v1")
+
+
+@app.get(
+    "/",
+    summary="Root endpoint",
+    description="Basic information about the API"
+)
 async def root():
-    """Simple root endpoint that returns JSON hello message"""
+    """Root endpoint with API information"""
     return {
-        "message": f"Hello from {settings.app_name}!",
+        "message": f"Welcome to {settings.app_name}!",
         "status": "success",
         "service": settings.app_name,
         "version": settings.app_version,
         "environment": settings.environment,
-        "debug": settings.debug
+        "docs_url": "/docs",
+        "api_base": "/api/v1"
     }
 
-@app.get("/health")
+
+@app.get(
+    "/health",
+    summary="Health check",
+    description="Comprehensive health check including database status"
+)
 async def health_check():
-    """Health check endpoint with environment info"""
-    return {
-        "status": "healthy",
-        "service": settings.app_name,
-        "version": settings.app_version,
-        "environment": settings.environment,
-        "database": "connected" if settings.mongodb_url else "disconnected"
-    }
+    """Comprehensive health check endpoint"""
+    try:
+        # Check database health
+        db_health = await check_database_health()
+        
+        return {
+            "status": "healthy" if db_health["status"] == "healthy" else "degraded",
+            "service": settings.app_name,
+            "version": settings.app_version,
+            "environment": settings.environment,
+            "timestamp": db_health.get("timestamp"),
+            "database": db_health,
+            "features": {
+                "authentication": "enabled",
+                "user_roles": ["patient", "psychiatrist", "admin"],
+                "jwt_auth": "enabled"
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Health check failed: {str(e)}")
 
-@app.get("/config")
-async def get_config():
-    """Get non-sensitive configuration info"""
+
+@app.get(
+    "/api/v1",
+    summary="API version info",
+    description="Information about API v1 endpoints"
+)
+async def api_info():
+    """API version information"""
     return {
-        "app_name": settings.app_name,
-        "version": settings.app_version,
-        "environment": settings.environment,
-        "cors_origins": settings.cors_origins,
-        "database_name": settings.mongodb_database,
+        "version": "v1",
+        "service": settings.app_name,
+        "endpoints": {
+            "auth": "/api/v1/auth",
+            "health": "/health",
+            "docs": "/docs"
+        },
         "features": {
-            "ai_enabled": bool(settings.openai_api_key),
-            "file_upload": True,
-            "max_file_size": settings.max_file_size
+            "authentication": "JWT-based authentication",
+            "user_management": "Multi-role user system",
+            "roles": ["patient", "psychiatrist", "admin"],
+            "database": "MongoDB with async operations"
         }
     }
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        app, 
-        host=settings.host, 
-        port=settings.port, 
+        app,
+        host=settings.host,
+        port=settings.port,
         reload=settings.reload
     )

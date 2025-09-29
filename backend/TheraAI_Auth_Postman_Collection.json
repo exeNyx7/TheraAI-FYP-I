@@ -1,0 +1,398 @@
+{
+	"info": {
+		"_postman_id": "theraai-auth-collection",
+		"name": "TheraAI Authentication API",
+		"description": "Complete authentication system testing for TheraAI",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "api_url",
+			"value": "{{base_url}}/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "test_email",
+			"value": "patient@example.com",
+			"type": "string"
+		},
+		{
+			"key": "test_password",
+			"value": "SecurePass123!",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health Checks",
+			"item": [
+				{
+					"name": "System Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						}
+					}
+				},
+				{
+					"name": "API Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}",
+							"host": ["{{api_url}}"]
+						}
+					}
+				},
+				{
+					"name": "Auth Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/auth/health",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "health"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "1. Register Patient",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const user = pm.response.json();",
+									"    console.log('User created:', user.email);",
+									"    pm.test('User created successfully', function () {",
+									"        pm.expect(user.email).to.eql(pm.variables.get('test_email'));",
+									"        pm.expect(user.role).to.eql('patient');",
+									"        pm.expect(user.is_active).to.be.true;",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\",\n  \"confirm_password\": \"{{test_password}}\",\n  \"full_name\": \"Test Patient\",\n  \"role\": \"patient\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/auth/signup",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "signup"]
+						}
+					}
+				},
+				{
+					"name": "2. Login Patient",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const token = pm.response.json();",
+									"    pm.variables.set('access_token', token.access_token);",
+									"    console.log('Login successful, token saved');",
+									"    pm.test('Login successful', function () {",
+									"        pm.expect(token.access_token).to.be.a('string');",
+									"        pm.expect(token.token_type).to.eql('bearer');",
+									"        pm.expect(token.expires_in).to.be.a('number');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/auth/login",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "3. Get Current User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const user = pm.response.json();",
+									"    pm.test('Current user retrieved', function () {",
+									"        pm.expect(user.email).to.eql(pm.variables.get('test_email'));",
+									"        pm.expect(user.role).to.eql('patient');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_url}}/auth/me",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "4. Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_url}}/auth/logout",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "logout"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Different User Roles",
+			"item": [
+				{
+					"name": "Register Psychiatrist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"psychiatrist@example.com\",\n  \"password\": \"DoctorPass123!\",\n  \"confirm_password\": \"DoctorPass123!\",\n  \"full_name\": \"Dr. Jane Smith\",\n  \"role\": \"psychiatrist\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/auth/signup",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "signup"]
+						}
+					}
+				},
+				{
+					"name": "Register Admin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"AdminPass123!\",\n  \"confirm_password\": \"AdminPass123!\",\n  \"full_name\": \"Admin User\",\n  \"role\": \"admin\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/auth/signup",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "signup"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Error Cases",
+			"item": [
+				{
+					"name": "Invalid Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Invalid credentials rejected', function () {",
+									"    pm.expect(pm.response.code).to.eql(401);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"wrongpassword\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/auth/login",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Duplicate Email",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Duplicate email rejected', function () {",
+									"    pm.expect(pm.response.code).to.eql(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\",\n  \"confirm_password\": \"{{test_password}}\",\n  \"full_name\": \"Duplicate User\",\n  \"role\": \"patient\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/auth/signup",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "signup"]
+						}
+					}
+				},
+				{
+					"name": "Weak Password",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Weak password rejected', function () {",
+									"    pm.expect(pm.response.code).to.eql(422);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"weakpassword@example.com\",\n  \"password\": \"123\",\n  \"confirm_password\": \"123\",\n  \"full_name\": \"Weak Password User\",\n  \"role\": \"patient\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/auth/signup",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "signup"]
+						}
+					}
+				},
+				{
+					"name": "Access Without Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Unauthorized access denied', function () {",
+									"    pm.expect(pm.response.code).to.eql(403);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/auth/me",
+							"host": ["{{api_url}}"],
+							"path": ["auth", "me"]
+						}
+					}
+				}
+			]
+		}
+	]
+}
