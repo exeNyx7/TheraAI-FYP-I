@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import db_manager, init_database, check_database_health
-from .api import auth_router
+from .api import auth_router, journal_router
 
 # Load settings
 settings = get_settings()
@@ -28,6 +28,12 @@ async def lifespan(app: FastAPI):
         
         # Initialize database (create indexes)
         await init_database()
+        
+        # Initialize AI service (loads model)
+        from .services.ai_service import get_ai_service
+        ai = get_ai_service()
+        device_info = ai.get_device_info()
+        print(f"🤖 AI Service: {device_info}")
         
         print("✅ Application startup complete")
     except Exception as e:
@@ -62,6 +68,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(journal_router, prefix="/api/v1")
 
 
 @app.get(
@@ -122,12 +129,15 @@ async def api_info():
         "service": settings.app_name,
         "endpoints": {
             "auth": "/api/v1/auth",
+            "journals": "/api/v1/journals",
             "health": "/health",
             "docs": "/docs"
         },
         "features": {
             "authentication": "JWT-based authentication",
             "user_management": "Multi-role user system",
+            "mood_tracking": "AI-powered journal with sentiment analysis",
+            "ai_analysis": "Local GPU-accelerated sentiment analysis",
             "roles": ["patient", "psychiatrist", "admin"],
             "database": "MongoDB with async operations"
         }

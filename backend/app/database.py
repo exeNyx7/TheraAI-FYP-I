@@ -4,6 +4,7 @@ Database Configuration and Connection Management for TheraAI
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from typing import Optional
+from datetime import datetime
 from .config import get_settings
 
 settings = get_settings()
@@ -59,6 +60,12 @@ async def get_users_collection():
     return db.users
 
 
+async def get_journals_collection():
+    """Get journals collection"""
+    db = await get_database()
+    return db.journals
+
+
 async def init_database():
     """Initialize database with indexes and constraints"""
     try:
@@ -82,7 +89,25 @@ async def init_database():
         # Compound index for email + role
         await users_collection.create_index([("email", 1), ("role", 1)])
         
-        print("✅ Database indexes created successfully")
+        # Create indexes for journals collection
+        journals_collection = db.journals
+        
+        # Compound index for user_id + created_at (for efficient user queries sorted by date)
+        await journals_collection.create_index([("user_id", 1), ("created_at", -1)])
+        
+        # Index on user_id for filtering
+        await journals_collection.create_index("user_id")
+        
+        # Index on mood for statistics
+        await journals_collection.create_index("mood")
+        
+        # Index on sentiment_label for statistics
+        await journals_collection.create_index("sentiment_label")
+        
+        # Index on created_at for sorting
+        await journals_collection.create_index("created_at")
+        
+        print("✅ Database indexes created successfully (users + journals)")
         
     except Exception as e:
         print(f"❌ Failed to initialize database: {e}")
@@ -100,15 +125,18 @@ async def check_database_health() -> dict:
         # Get server info
         server_info = await db_manager.client.server_info()
         
-        # Count users
+        # Count users and journals
         users_count = await db.users.count_documents({})
+        journals_count = await db.journals.count_documents({})
         
         return {
             "status": "healthy",
             "mongodb_version": server_info.get("version", "unknown"),
             "database_name": settings.mongodb_database,
             "users_count": users_count,
-            "connection_url": settings.mongodb_url.split("@")[-1] if "@" in settings.mongodb_url else settings.mongodb_url
+            "journals_count": journals_count,
+            "connection_url": settings.mongodb_url.split("@")[-1] if "@" in settings.mongodb_url else settings.mongodb_url,
+            "timestamp": datetime.utcnow().isoformat()
         }
         
     except Exception as e:

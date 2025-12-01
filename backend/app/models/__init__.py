@@ -16,7 +16,20 @@ from .user import (
     PyObjectId
 )
 
+from .journal import (
+    MoodType,
+    SentimentLabel,
+    AIAnalysisResult,
+    JournalBase,
+    JournalCreate,
+    JournalOut,
+    JournalInDB,
+    JournalUpdate,
+    MoodStatistics
+)
+
 __all__ = [
+    # User models
     "UserBase",
     "UserIn", 
     "UserLogin",
@@ -27,5 +40,15 @@ __all__ = [
     "TokenData",
     "PasswordChange",
     "UserRole",
-    "PyObjectId"
+    "PyObjectId",
+    # Journal models
+    "MoodType",
+    "SentimentLabel",
+    "AIAnalysisResult",
+    "JournalBase",
+    "JournalCreate",
+    "JournalOut",
+    "JournalInDB",
+    "JournalUpdate",
+    "MoodStatistics"
 ]

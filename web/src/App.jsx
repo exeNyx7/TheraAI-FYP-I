@@ -6,6 +6,8 @@ import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import Login from './components/Auth/LoginModern';
 import Signup from './components/Auth/Signup';
 import Dashboard from './pages/Dashboard/ModernDashboard';
+import Journal from './pages/Journal/Journal';
+import MoodTracker from './pages/MoodTracker/MoodTracker';
 import './App.css';
 
 function App() {
@@ -93,6 +95,25 @@ function App() {
             />
 
             {/* Placeholder Protected Routes */}
+            {/* Journal & Mood Tracking Routes */}
+            <Route
+              path="/journal"
+              element={
+                <ProtectedRoute>
+                  <Journal />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/mood-tracker"
+              element={
+                <ProtectedRoute>
+                  <MoodTracker />
+                </ProtectedRoute>
+              }
+            />
+
             <Route
               path="/progress"
               element={

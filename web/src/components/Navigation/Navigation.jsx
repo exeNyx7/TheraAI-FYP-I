@@ -5,6 +5,23 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { 
+  Home, 
+  MessageSquare, 
+  TrendingUp, 
+  BookOpen, 
+  Users, 
+  Calendar, 
+  FileText, 
+  Library, 
+  User, 
+  BarChart3, 
+  Settings, 
+  Shield, 
+  Activity,
+  LogOut,
+  Brain
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import './Navigation.css';
@@ -43,39 +60,41 @@ function Navigation() {
   // Define navigation items based on user role
   const getNavigationItems = () => {
     const commonItems = [
-      { path: '/dashboard', label: 'Dashboard', icon: '🏠' }
+      { path: '/dashboard', label: 'Dashboard', icon: Home }
     ];
 
     if (isMember()) {
       return [
         ...commonItems,
-        { path: '/sessions', label: 'My Sessions', icon: '💬' },
-        { path: '/progress', label: 'My Progress', icon: '📈' },
-        { path: '/resources', label: 'Wellness Resources', icon: '📚' },
-        { path: '/community', label: 'Community', icon: '🤝' },
-        { path: '/profile', label: 'My Profile', icon: '👤' }
+        { path: '/journal', label: 'Journal', icon: BookOpen },
+        { path: '/mood-tracker', label: 'Mood Tracker', icon: BarChart3 },
+        { path: '/sessions', label: 'My Sessions', icon: MessageSquare },
+        { path: '/progress', label: 'My Progress', icon: TrendingUp },
+        { path: '/resources', label: 'Wellness Resources', icon: Library },
+        { path: '/community', label: 'Community', icon: Users },
+        { path: '/profile', label: 'My Profile', icon: User }
       ];
     }
 
     if (isPsychiatrist()) {
       return [
         ...commonItems,
-        { path: '/patients', label: 'Patients', icon: '👥' },
-        { path: '/appointments', label: 'Appointments', icon: '📅' },
-        { path: '/notes', label: 'Clinical Notes', icon: '📝' },
-        { path: '/resources', label: 'Resources', icon: '📚' },
-        { path: '/profile', label: 'Profile', icon: '👤' }
+        { path: '/patients', label: 'Patients', icon: Users },
+        { path: '/appointments', label: 'Appointments', icon: Calendar },
+        { path: '/notes', label: 'Clinical Notes', icon: FileText },
+        { path: '/resources', label: 'Resources', icon: Library },
+        { path: '/profile', label: 'Profile', icon: User }
       ];
     }
 
     if (isAdmin()) {
       return [
         ...commonItems,
-        { path: '/users', label: 'User Management', icon: '👥' },
-        { path: '/analytics', label: 'Analytics', icon: '📊' },
-        { path: '/system', label: 'System Settings', icon: '⚙️' },
-        { path: '/security', label: 'Security', icon: '🔐' },
-        { path: '/profile', label: 'Profile', icon: '👤' }
+        { path: '/users', label: 'User Management', icon: Users },
+        { path: '/analytics', label: 'Analytics', icon: Activity },
+        { path: '/system', label: 'System Settings', icon: Settings },
+        { path: '/security', label: 'Security', icon: Shield },
+        { path: '/profile', label: 'Profile', icon: User }
       ];
     }
 
@@ -106,7 +125,7 @@ function Navigation() {
       <nav className={`navigation ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="navigation-header">
           <div className="logo">
-            <span className="logo-icon">🧠</span>
+            <Brain className="logo-icon" size={28} />
             <span className="logo-text">TheraAI</span>
           </div>
         </div>
@@ -125,24 +144,27 @@ function Navigation() {
 
           {/* Navigation Menu */}
           <div className="navigation-menu">
-            {navigationItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`nav-item ${isActiveRoute(item.path) ? 'active' : ''}`}
-                onClick={closeMobileMenu}
-              >
-                <span className="nav-icon">{item.icon}</span>
-                <span className="nav-label">{item.label}</span>
-              </Link>
-            ))}
+            {navigationItems.map((item) => {
+              const IconComponent = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`nav-item ${isActiveRoute(item.path) ? 'active' : ''}`}
+                  onClick={closeMobileMenu}
+                >
+                  <IconComponent className="nav-icon" size={20} />
+                  <span className="nav-label">{item.label}</span>
+                </Link>
+              );
+            })}
           </div>
         </div>
 
         {/* Navigation Footer */}
         <div className="navigation-footer">
           <button className="logout-btn" onClick={handleLogout}>
-            <span className="nav-icon">🚪</span>
+            <LogOut className="nav-icon" size={20} />
             <span className="nav-label">Logout</span>
           </button>
         </div>

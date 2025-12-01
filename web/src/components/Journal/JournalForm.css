@@ -1,0 +1,36 @@
+/* JournalForm Component Styles */
+
+.journal-form {
+  width: 100%;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.journal-form textarea {
+  font-family: inherit;
+  line-height: 1.75;
+}
+
+.journal-form textarea:focus {
+  outline: none;
+}
+
+.journal-form textarea::placeholder {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Smooth transitions */
+.journal-form .transition-all {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+  .journal-form .p-6 {
+    padding: 1rem;
+  }
+
+  .journal-form textarea {
+    font-size: 0.9375rem;
+  }
+}

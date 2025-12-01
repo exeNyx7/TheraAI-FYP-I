@@ -1,0 +1,39 @@
+/* MoodSelector Component Styles */
+
+.mood-selector {
+  width: 100%;
+}
+
+.mood-option {
+  position: relative;
+  user-select: none;
+}
+
+.mood-option:active {
+  transform: scale(0.98);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .mood-selector .grid {
+    gap: 0.5rem;
+  }
+  
+  .mood-option span {
+    font-size: 0.7rem;
+  }
+}
+
+/* Animation for mood selection */
+@keyframes moodPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.mood-option.selected {
+  animation: moodPulse 0.3s ease-in-out;
+}

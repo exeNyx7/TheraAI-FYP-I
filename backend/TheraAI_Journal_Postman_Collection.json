@@ -1,0 +1,774 @@
+{
+	"info": {
+		"_postman_id": "journal-module-collection-2025",
+		"name": "TheraAI - Journal & Mood Tracking API",
+		"description": "Complete API testing for TheraAI Journal Module with AI-powered sentiment analysis\n\n## Features Tested:\n- User Authentication (prerequisite)\n- Journal Entry CRUD operations\n- AI Sentiment Analysis\n- Mood Statistics\n- Pagination\n- Authorization checks\n\n## Setup:\n1. Ensure backend is running: `uvicorn app.main:app --reload`\n2. MongoDB should be running on localhost:27017\n3. Run tests in order (authentication first)\n4. The auth token is automatically saved to collection variables\n\n## Environment Variables Used:\n- `base_url`: http://localhost:8000\n- `auth_token`: Automatically set after login\n- `journal_id`: Automatically set after creating a journal",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. Health & Info",
+			"item": [
+				{
+					"name": "Root - Welcome",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": ["{{base_url}}"],
+							"path": [""]
+						},
+						"description": "Get basic API information and welcome message"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Check system health including database status and journal count"
+					},
+					"response": []
+				},
+				{
+					"name": "API Version Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1"]
+						},
+						"description": "Get API v1 information including available endpoints and features"
+					},
+					"response": []
+				}
+			],
+			"description": "Basic health and information endpoints"
+		},
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Signup - Create Test User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    pm.collectionVariables.set('user_id', pm.response.json().id);",
+									"    pm.test('User created successfully', () => {",
+									"        pm.expect(pm.response.code).to.equal(201);",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"journal_test@theraai.com\",\n  \"password\": \"TestPass123\",\n  \"confirm_password\": \"TestPass123\",\n  \"full_name\": \"Journal Test User\",\n  \"role\": \"patient\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/signup",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "signup"]
+						},
+						"description": "Create a test user for journal testing"
+					},
+					"response": []
+				},
+				{
+					"name": "Login - Get Auth Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('auth_token', response.access_token);",
+									"    pm.collectionVariables.set('user_id', response.user.id);",
+									"    pm.test('Login successful', () => {",
+									"        pm.expect(response.access_token).to.be.a('string');",
+									"        pm.expect(response.token_type).to.equal('bearer');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"journal_test@theraai.com\",\n  \"password\": \"TestPass123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						},
+						"description": "Login and get JWT token (automatically saved to collection variables)"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints (prerequisite for journal access)"
+		},
+		{
+			"name": "2. Journal Entries - Create",
+			"item": [
+				{
+					"name": "Create Journal - Happy Mood",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('journal_id', response.id);",
+									"    pm.test('Journal created successfully', () => {",
+									"        pm.expect(response.mood).to.equal('happy');",
+									"        pm.expect(response.sentiment_label).to.be.a('string');",
+									"        pm.expect(response.sentiment_score).to.be.a('number');",
+									"        pm.expect(response.empathy_response).to.be.a('string');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Today was absolutely wonderful! I accomplished all my goals and felt incredibly productive. Everything went smoothly and I'm feeling very optimistic about the future.\",\n  \"mood\": \"happy\",\n  \"title\": \"Productive and Happy Day\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Create a journal entry with positive content (should trigger positive sentiment analysis)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Journal - Anxious Mood",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"I'm feeling really anxious about the upcoming presentation. I can't stop worrying about all the things that could go wrong. My mind keeps racing and I find it hard to focus on anything else.\",\n  \"mood\": \"anxious\",\n  \"title\": \"Pre-presentation Anxiety\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Create a journal entry with anxious content (should trigger negative sentiment and anxiety-specific empathy)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Journal - Sad Mood",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Feeling down today. Things didn't go as planned and I'm disappointed with the outcome. It's hard to stay motivated when everything feels so difficult.\",\n  \"mood\": \"sad\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Create a journal entry with sad content (no title)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Journal - Calm & Grateful",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"I'm grateful for all the support I've received from my friends and family. Taking time to meditate and reflect has helped me feel more centered and calm. I appreciate the small moments of peace.\",\n  \"mood\": \"calm\",\n  \"title\": \"Gratitude and Peace\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Create a journal entry with grateful content"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Journal - Stressed",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Feeling overwhelmed with all the deadlines and responsibilities. There's so much pressure and I don't know how to manage everything at once. Need to find a way to cope with this stress.\",\n  \"mood\": \"stressed\",\n  \"title\": \"Overwhelmed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Create a journal entry with stressed content"
+					},
+					"response": []
+				}
+			],
+			"description": "Create journal entries with different moods to test AI analysis"
+		},
+		{
+			"name": "3. Journal Entries - Read",
+			"item": [
+				{
+					"name": "Get All Journals (Default Pagination)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Returns array of journals', () => {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.be.an('array');",
+									"    if (response.length > 0) {",
+									"        pm.expect(response[0]).to.have.property('id');",
+									"        pm.expect(response[0]).to.have.property('content');",
+									"        pm.expect(response[0]).to.have.property('mood');",
+									"        pm.expect(response[0]).to.have.property('sentiment_label');",
+									"        pm.expect(response[0]).to.have.property('empathy_response');",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Get all journal entries for the authenticated user (default: skip=0, limit=50)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Journals with Pagination",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/?skip=0&limit=3",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "3"
+								}
+							]
+						},
+						"description": "Get journals with custom pagination (skip=0, limit=3)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single Journal by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/{{journal_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", "{{journal_id}}"]
+						},
+						"description": "Get a specific journal entry by ID (uses the ID from the first created journal)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Mood Statistics",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Returns valid statistics', () => {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property('total_entries');",
+									"    pm.expect(response).to.have.property('mood_counts');",
+									"    pm.expect(response).to.have.property('sentiment_distribution');",
+									"    pm.expect(response).to.have.property('most_common_mood');",
+									"    pm.expect(response.total_entries).to.be.a('number');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", "stats"]
+						},
+						"description": "Get comprehensive mood and sentiment statistics"
+					},
+					"response": []
+				}
+			],
+			"description": "Read journal entries and statistics"
+		},
+		{
+			"name": "4. Journal Entries - Update",
+			"item": [
+				{
+					"name": "Update Journal Content",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Updated: Today turned out even better than I expected! I received great feedback on my work and celebrated with friends. Feeling blessed and happy!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/{{journal_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", "{{journal_id}}"]
+						},
+						"description": "Update journal content (AI analysis will be re-run automatically)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Journal Mood Only",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mood\": \"excited\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/{{journal_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", "{{journal_id}}"]
+						},
+						"description": "Update only the mood (sentiment analysis not re-run)"
+					},
+					"response": []
+				}
+			],
+			"description": "Update journal entries"
+		},
+		{
+			"name": "5. Journal Entries - Delete",
+			"item": [
+				{
+					"name": "Delete Journal Entry",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/{{journal_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", "{{journal_id}}"]
+						},
+						"description": "Delete a journal entry (returns 204 No Content on success)"
+					},
+					"response": []
+				}
+			],
+			"description": "Delete journal entries"
+		},
+		{
+			"name": "6. Error Cases & Validation",
+			"item": [
+				{
+					"name": "Create Journal - No Auth (401)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"This should fail without authentication.\",\n  \"mood\": \"neutral\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Try to create journal without authentication (should return 401)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Journal - Content Too Short (422)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Short\",\n  \"mood\": \"happy\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Try to create journal with content less than 10 characters (should return 422)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Journal - Invalid Mood (422)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"This has an invalid mood type that doesn't exist.\",\n  \"mood\": \"invalid_mood\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", ""]
+						},
+						"description": "Try to create journal with invalid mood (should return 422)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Journal - Invalid ID Format (400)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/invalid-id-format",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", "invalid-id-format"]
+						},
+						"description": "Try to get journal with invalid ObjectId format (should return 400)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Journal - Not Found (404)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/journals/507f1f77bcf86cd799439011",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "journals", "507f1f77bcf86cd799439011"]
+						},
+						"description": "Try to get non-existent journal (should return 404)"
+					},
+					"response": []
+				}
+			],
+			"description": "Test error cases and validation"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "journal_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
