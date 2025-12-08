@@ -10,6 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import db_manager, init_database, check_database_health
 from .api import auth_router, journal_router
+from .api import chatbot
+from .api.chatbot import router as chat_router
+from .api import chatbot
+
 
 # Load settings
 settings = get_settings()
@@ -58,17 +62,25 @@ app = FastAPI(
 )
 
 # Configure CORS for React frontend
+# CORSMiddleware (before routers)
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=settings.cors_allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,   # specify allowed origins
+    allow_credentials=True,
+    allow_methods=["*"],     # allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],     # allow all headers
 )
 
-# Include API routers
+# Routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(journal_router, prefix="/api/v1")
+app.include_router(chatbot.router, prefix="/api/v1")  # final endpoint: /api/v1/chat/...
+
 
 
 @app.get(
