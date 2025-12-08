@@ -9,7 +9,7 @@ import {
   Flame, Trophy, Target, TrendingUp, BookOpen, BarChart3, 
   Calendar, MessageSquare, Heart, Zap, Brain, Award, Star,
   Clock, Activity, Users, Shield, Settings, ChevronRight,
-  Sparkles, Plus, ArrowRight, Lock
+  Sparkles, Plus, ArrowRight, Lock, BotMessageSquare
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -77,6 +77,14 @@ function ModernDashboard() {
       icon: BarChart3,
       gradient: 'from-purple-500 to-pink-500',
       link: '/mood-tracker',
+      badge: null
+    },
+    {
+      title: 'AI Chatbot',
+      description: 'Talk to Chatbot',
+      icon: BotMessageSquare,
+      gradient: 'from-purple-500 to-pink-500',
+      link: '/chatbot',
       badge: null
     },
     {
@@ -323,7 +331,10 @@ function ModernDashboard() {
             </div>
           </div>
         </Card>
+        
       </section>
+      {/* AI Chatbot Floating Button */}
+    {/* <ChatUI /> */}
     </div>
   );
 }
