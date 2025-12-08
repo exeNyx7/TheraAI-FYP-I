@@ -1,0 +1,118 @@
+.modern-chat-wrapper {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100vh;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f7f7fb;
+}
+
+/* Sidebar */
+.chat-sidebar {
+  height: 100%;
+}
+
+.chat-list-scroll {
+  height: calc(100vh - 210px);
+}
+
+.chat-list-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: 0.2s ease;
+  font-size: 14px;
+  color: #444;
+}
+
+.chat-list-item:hover {
+  background: #eee;
+}
+
+.chat-list-item.active {
+  background: #4f46e5;
+  color: white;
+}
+
+/* Chat Window */
+.chat-main {
+  height: 100%;
+}
+
+.chat-window {
+  display: flex;
+  position: absolute;
+  width: 70%;
+  left: 350px;
+  top: 100px;
+  flex-direction: column;
+  height: 70%;
+}
+
+.messages-area {
+  flex: 1;
+  height: calc(100vh - 220px);
+  padding-right: 10px;
+}
+
+.chat-bubble {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 9px;
+  margin-top: 5px;
+  align-items: flex-start;
+  margin-right: 5px;
+}
+
+/* USER messages aligned right */
+.chat-bubble.user {
+  justify-content: flex-end;
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+/* Make the text bubble stick to the right side */
+.chat-bubble.user .bubble-text {
+  background: #4f46e5;
+  color: white;
+  margin-left: auto;      /* Important */
+}
+
+
+.chat-bubble.bot {
+  justify-content: flex-start;
+}
+
+.bubble-text {
+  padding: 10px 14px;
+  background: #e5e5ff;
+  border-radius: 12px;
+  max-width: 60%;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+
+.bubble-icon {
+  padding: 6px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0px 0px 5px #ddd;
+}
+
+/* Input */
+.chat-input-box {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.chat-input {
+  flex: 1;
+  border: 1px solid #ddd;
+  padding: 10px 14px;
+  border-radius: 8px;
+  outline: none;
+}
