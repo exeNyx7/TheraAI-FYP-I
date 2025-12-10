@@ -4,33 +4,36 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Flame, Trophy, Target, TrendingUp, BookOpen, BarChart3, 
   Calendar, MessageSquare, Heart, Zap, Brain, Award, Star,
   Clock, Activity, Users, Shield, Settings, ChevronRight,
-  Sparkles, Plus, ArrowRight, Lock
+  Sparkles, Plus, ArrowRight, Lock, LogOut, User, Loader2
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { getUserStats } from '../../services/statsService';
 import './ModernDashboard.css';
 
 function ModernDashboard() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [stats, setStats] = useState({
-    streak: 7,
-    totalPoints: 450,
-    level: 3,
+    streak: 0,
+    totalPoints: 0,
+    level: 1,
     weeklyGoal: 5,
-    weeklyProgress: 3,
-    journalEntries: 12,
-    moodScore: 7.2,
-    achievements: ['🔥 Week Warrior', '📖 Story Teller', '🎯 Goal Setter']
+    weeklyProgress: 0,
+    journalEntries: 0,
+    moodScore: 0,
+    achievements: []
   });
-
+  const [loading, setLoading] = useState(true);
   const [timeOfDay, setTimeOfDay] = useState('morning');
 
   useEffect(() => {
@@ -39,7 +42,32 @@ function ModernDashboard() {
     else if (hour >= 12 && hour < 17) setTimeOfDay('afternoon');
     else if (hour >= 17 && hour < 21) setTimeOfDay('evening');
     else setTimeOfDay('night');
+
+    // Fetch user stats
+    fetchUserStats();
   }, []);
+
+  const fetchUserStats = async () => {
+    try {
+      setLoading(true);
+      const data = await getUserStats();
+      setStats({
+        streak: data.streak,
+        totalPoints: data.total_points,
+        level: data.level,
+        weeklyGoal: data.weekly_goal,
+        weeklyProgress: data.weekly_progress,
+        journalEntries: data.journal_entries,
+        moodScore: data.mood_score,
+        achievements: ['🔥 Week Warrior', '📖 Story Teller', '🎯 Goal Setter'] // Will be replaced with actual achievements API
+      });
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+      // Keep default values on error
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getGreeting = () => {
     const greetings = {
@@ -97,90 +125,181 @@ function ModernDashboard() {
     }
   ];
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <div className="modern-dashboard">
+      {/* Top Navigation Bar */}
+      <div className="dashboard-nav">
+        <div className="nav-content">
+          <div className="nav-left">
+            <div className="app-logo">
+              <Heart size={24} className="text-purple-600" />
+              <span className="app-name">TheraAI</span>
+            </div>
+          </div>
+          
+          <div className="nav-right">
+            <Button
+              variant="outline"
+              className="nav-button wellness-companion-btn"
+              onClick={() => navigate('/chat')}
+            >
+              <MessageSquare size={18} />
+              <span>Wellness Companion</span>
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className="nav-button"
+              onClick={() => navigate('/profile')}
+            >
+              <User size={18} />
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className="nav-button"
+              onClick={() => navigate('/settings')}
+            >
+              <Settings size={18} />
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className="nav-button logout-btn"
+              onClick={handleLogout}
+            >
+              <LogOut size={18} />
+              <span>Logout</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Hero Section */}
       <div className="dashboard-hero">
-        <div className="hero-grid">
-          {/* Welcome Card */}
-          <Card className="welcome-card">
-            <div className="welcome-content">
-              <div className="greeting-section">
-                <h1 className="greeting">{getGreeting()}, {user?.full_name?.split(' ')[0]}!</h1>
-                <p className="motivational-quote">
-                  <Sparkles size={16} className="inline mr-2 text-yellow-500" />
-                  {getMotivationalQuote()}
-                </p>
+        {loading ? (
+          <div className="hero-grid">
+            <Card className="welcome-card">
+              <div className="loading-skeleton">
+                <Loader2 size={32} className="spin text-purple-500" />
+                <p>Loading your stats...</p>
               </div>
-              
-              <div className="level-badge">
-                <Award size={24} className="text-yellow-500" />
-                <div className="level-info">
-                  <span className="level-label">Level {stats.level}</span>
-                  <span className="level-points">{stats.totalPoints} XP</span>
+            </Card>
+            <Card className="stat-card">
+              <div className="loading-skeleton-small">
+                <div className="skeleton-icon"></div>
+                <div className="skeleton-text"></div>
+              </div>
+            </Card>
+            <Card className="stat-card">
+              <div className="loading-skeleton-small">
+                <div className="skeleton-icon"></div>
+                <div className="skeleton-text"></div>
+              </div>
+            </Card>
+            <Card className="stat-card">
+              <div className="loading-skeleton-small">
+                <div className="skeleton-icon"></div>
+                <div className="skeleton-text"></div>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <div className="hero-grid">
+            {/* Welcome Card */}
+            <Card className="welcome-card">
+              <div className="welcome-content">
+                <div className="greeting-section">
+                  <h1 className="greeting">{getGreeting()}, {user?.full_name?.split(' ')[0]}!</h1>
+                  <p className="motivational-quote">
+                    <Sparkles size={16} className="inline mr-2 text-yellow-500" />
+                    {getMotivationalQuote()}
+                  </p>
+                </div>
+                
+                <div className="level-badge">
+                  <Award size={24} className="text-yellow-500" />
+                  <div className="level-info">
+                    <span className="level-label">Level {stats.level}</span>
+                    <span className="level-points">{stats.totalPoints} XP</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="progress-section">
-              <div className="progress-header">
-                <span className="progress-label">Level Progress</span>
-                <span className="progress-percent">
-                  {Math.round((stats.totalPoints % 200) / 2)}%
-                </span>
+              <div className="progress-section">
+                <div className="progress-header">
+                  <span className="progress-label">Level Progress</span>
+                  <span className="progress-percent">
+                    {Math.round((stats.totalPoints % 200) / 2)}%
+                  </span>
+                </div>
+                <Progress 
+                  value={(stats.totalPoints % 200) / 2} 
+                  className="level-progress"
+                />
+                <p className="progress-hint">
+                  {200 - (stats.totalPoints % 200)} XP to Level {stats.level + 1}
+                </p>
               </div>
-              <Progress 
-                value={(stats.totalPoints % 200) / 2} 
-                className="level-progress"
-              />
-              <p className="progress-hint">
-                {200 - (stats.totalPoints % 200)} XP to Level {stats.level + 1}
-              </p>
-            </div>
-          </Card>
+            </Card>
 
-          {/* Streak Card */}
-          <Card className="stat-card streak-card">
-            <div className="stat-icon-wrapper">
-              <Flame size={32} className="text-orange-500" />
-            </div>
-            <div className="stat-details">
-              <div className="stat-value">{stats.streak}</div>
-              <div className="stat-label">Day Streak</div>
-              <p className="stat-sublabel">Keep it going! 🔥</p>
-            </div>
-          </Card>
-
-          {/* Weekly Goal Card */}
-          <Card className="stat-card goal-card">
-            <div className="stat-icon-wrapper">
-              <Target size={32} className="text-green-500" />
-            </div>
-            <div className="stat-details">
-              <div className="stat-value">{stats.weeklyProgress}/{stats.weeklyGoal}</div>
-              <div className="stat-label">Weekly Goal</div>
-              <Progress 
-                value={(stats.weeklyProgress / stats.weeklyGoal) * 100} 
-                className="mini-progress"
-              />
-            </div>
-          </Card>
-
-          {/* Mood Score Card */}
-          <Card className="stat-card mood-card">
-            <div className="stat-icon-wrapper">
-              <Heart size={32} className="text-pink-500" />
-            </div>
-            <div className="stat-details">
-              <div className="stat-value">{stats.moodScore}/10</div>
-              <div className="stat-label">Mood Score</div>
-              <div className="mood-trend">
-                <TrendingUp size={16} className="text-green-500" />
-                <span>Improving</span>
+            {/* Streak Card */}
+            <Card className="stat-card streak-card">
+              <div className="stat-icon-wrapper">
+                <Flame size={32} className="text-orange-500" />
               </div>
-            </div>
-          </Card>
-        </div>
+              <div className="stat-details">
+                <div className="stat-value">{stats.streak}</div>
+                <div className="stat-label">Day Streak</div>
+                <p className="stat-sublabel">{stats.streak > 0 ? 'Keep it going! 🔥' : 'Start your streak today!'}</p>
+              </div>
+            </Card>
+
+            {/* Weekly Goal Card */}
+            <Card className="stat-card goal-card">
+              <div className="stat-icon-wrapper">
+                <Target size={32} className="text-green-500" />
+              </div>
+              <div className="stat-details">
+                <div className="stat-value">{stats.weeklyProgress}/{stats.weeklyGoal}</div>
+                <div className="stat-label">Weekly Goal</div>
+                <Progress 
+                  value={(stats.weeklyProgress / stats.weeklyGoal) * 100} 
+                  className="mini-progress"
+                />
+              </div>
+            </Card>
+
+            {/* Mood Score Card */}
+            <Card className="stat-card mood-card">
+              <div className="stat-icon-wrapper">
+                <Heart size={32} className="text-pink-500" />
+              </div>
+              <div className="stat-details">
+                <div className="stat-value">{stats.moodScore.toFixed(1)}/10</div>
+                <div className="stat-label">Mood Score</div>
+                <div className="mood-trend">
+                  {stats.moodScore >= 7 ? (
+                    <>
+                      <TrendingUp size={16} className="text-green-500" />
+                      <span>Great!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Activity size={16} className="text-blue-500" />
+                      <span>Track more</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Quick Actions */}

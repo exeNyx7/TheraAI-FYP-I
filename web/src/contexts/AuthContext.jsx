@@ -175,6 +175,11 @@ export function AuthProvider({ children }) {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
   }, []);
 
+  // Update user function (for profile updates)
+  const updateUser = useCallback((updatedUser) => {
+    dispatch({ type: AUTH_ACTIONS.SET_USER, payload: updatedUser });
+  }, []);
+
   // Helper functions for role checking
   const hasRole = (role) => {
     return state.user && state.user.role === role;
@@ -198,6 +203,7 @@ export function AuthProvider({ children }) {
     logout,
     clearError,
     loadUser,
+    updateUser,
     
     // Role helpers
     hasRole,

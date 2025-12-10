@@ -20,7 +20,9 @@ import {
   Shield, 
   Activity,
   LogOut,
-  Brain
+  Brain,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -31,6 +33,10 @@ function Navigation() {
   const { showSuccess } = useToast();
   const isMember = isPatient; // Alias for better UX
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebar-collapsed');
+    return saved === 'true';
+  });
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -53,6 +59,12 @@ function Navigation() {
     setIsMobileMenuOpen(false);
   };
 
+  const toggleCollapse = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('sidebar-collapsed', newState);
+  };
+
   const isActiveRoute = (path) => {
     return location.pathname === path;
   };
@@ -67,7 +79,7 @@ function Navigation() {
       return [
         ...commonItems,
         { path: '/journal', label: 'Journal', icon: BookOpen },
-        { path: '/mood-tracker', label: 'Mood Tracker', icon: BarChart3 },
+        { path: '/mood-tracker', label: 'Moods', icon: BarChart3 },
         { path: '/sessions', label: 'My Sessions', icon: MessageSquare },
         { path: '/progress', label: 'My Progress', icon: TrendingUp },
         { path: '/resources', label: 'Wellness Resources', icon: Library },
@@ -122,12 +134,15 @@ function Navigation() {
       )}
 
       {/* Navigation Sidebar */}
-      <nav className={`navigation ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+      <nav className={`navigation ${isMobileMenuOpen ? 'mobile-open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
         <div className="navigation-header">
           <div className="logo">
             <Brain className="logo-icon" size={28} />
             <span className="logo-text">TheraAI</span>
           </div>
+          <button className="collapse-btn" onClick={toggleCollapse} aria-label="Toggle sidebar">
+            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+          </button>
         </div>
 
         <div className="navigation-content">

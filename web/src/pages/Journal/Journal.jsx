@@ -4,10 +4,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   BookOpen, Sparkles, Loader2, AlertCircle, Calendar, Flame, Award, 
   TrendingUp, Filter, Search, Plus, X, ChevronRight, Target, Trophy,
-  Heart, Zap, Moon, Sun, CloudRain, Wind, Check, Lock, Star
+  Heart, Zap, Moon, Sun, CloudRain, Wind, Check, Lock, Star, ArrowLeft
 } from 'lucide-react';
 import JournalForm from '../../components/Journal/JournalForm';
 import JournalCard from '../../components/Journal/JournalCard';
@@ -22,6 +23,7 @@ import { useToast } from '../../contexts/ToastContext';
 import './Journal.css';
 
 const Journal = () => {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [journals, setJournals] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -165,6 +167,15 @@ const Journal = () => {
       {/* Hero Section with Gamification */}
       <div className="journal-hero">
         <div className="hero-content">
+          <Button 
+            variant="ghost" 
+            className="back-button"
+            onClick={() => navigate('/dashboard')}
+          >
+            <ArrowLeft size={20} />
+            <span>Back to Dashboard</span>
+          </Button>
+
           <div className="hero-text">
             <h1 className="hero-title">
               <BookOpen className="inline-block mr-3" size={36} />

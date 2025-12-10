@@ -9,7 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import db_manager, init_database, check_database_health
-from .api import auth_router, journal_router
+from .api import auth_router, journal_router, stats_router, chat_router
+from .api.moods import router as moods_router
+from .api.conversations import router as conversations_router
 
 # Load settings
 settings = get_settings()
@@ -69,6 +71,10 @@ app.add_middleware(
 # Include API routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(journal_router, prefix="/api/v1")
+app.include_router(stats_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
+app.include_router(moods_router, prefix="/api/v1")
+app.include_router(conversations_router, prefix="/api/v1")
 
 
 @app.get(

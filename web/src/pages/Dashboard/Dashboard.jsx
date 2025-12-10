@@ -19,49 +19,55 @@ function Dashboard() {
     return <Loading fullScreen={true} message="Loading your dashboard..." size="large" />;
   }
 
-  const renderDashboardContent = () => {
-    switch (user?.role) {
-      case 'patient':
-        return <PatientDashboard />;
-      case 'psychiatrist':
-        return <PsychiatristDashboard />;
-      case 'admin':
-        return <AdminDashboard />;
-      default:
-        return (
-          <div className="dashboard-error">
-            <h2>Access Error</h2>
-            <p>Unable to load dashboard. Invalid user role.</p>
-          </div>
-        );
-    }
-  };
+  // Render role-specific dashboard directly
+  // Psychiatrist and Admin dashboards have their own layout
+  if (user?.role === 'psychiatrist') {
+    return <PsychiatristDashboard />;
+  }
 
+  if (user?.role === 'admin') {
+    return <AdminDashboard />;
+  }
+
+  // Patient dashboard uses the Navigation wrapper
+  if (user?.role === 'patient') {
+    return (
+      <div className="dashboard-container">
+        <Navigation />
+        <main className="dashboard-main">
+          <div className="dashboard-header">
+            <div className="welcome-section">
+              <h1>Welcome back, {user?.full_name || 'User'}! 👋</h1>
+              <p className="dashboard-subtitle">
+                Your wellness journey continues here. Take it one step at a time.
+              </p>
+            </div>
+            <div className="quick-actions-header">
+              <button className="btn-primary-small">
+                <span>🎯</span> Set Today's Goal
+              </button>
+              <button className="btn-secondary-small">
+                <span>📊</span> View Reports
+              </button>
+            </div>
+          </div>
+          
+          <div className="dashboard-content">
+            <PatientDashboard />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Default error state
   return (
     <div className="dashboard-container">
       <Navigation />
       <main className="dashboard-main">
-        <div className="dashboard-header">
-          <div className="welcome-section">
-            <h1>Welcome back, {user?.full_name || 'User'}! 👋</h1>
-            <p className="dashboard-subtitle">
-              {user?.role === 'patient' && 'Your wellness journey continues here. Take it one step at a time.'}
-              {user?.role === 'psychiatrist' && 'Ready to make a difference today. Your expertise matters.'}
-              {user?.role === 'admin' && 'System overview and management at your fingertips.'}
-            </p>
-          </div>
-          <div className="quick-actions-header">
-            <button className="btn-primary-small">
-              <span>🎯</span> Set Today's Goal
-            </button>
-            <button className="btn-secondary-small">
-              <span>📊</span> View Reports
-            </button>
-          </div>
-        </div>
-        
-        <div className="dashboard-content">
-          {renderDashboardContent()}
+        <div className="dashboard-error">
+          <h2>Access Error</h2>
+          <p>Unable to load dashboard. Invalid user role.</p>
         </div>
       </main>
     </div>

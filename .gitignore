@@ -6,11 +6,19 @@
 # PROJECT-SPECIFIC FILES
 # =============================================================================
 
+# Backup directories and design prototypes
+backups/
+thera-ai-landing-page-design/
+work_logs/
 # Project documentation and planning (keep private during development)
 docs/TODO.md
 docs/PROJECT_TODO.md
 docs/meeting-notes.md
 docs/personal-notes/
+docs/CURRENT_STATUS.md
+docs/JOURNAL_FLOW.md
+docs/TODO-JOURNALPAGE-MODEL.md
+V0_MIGRATION_PLAN.md
 *.private.md
 
 # Local development configuration

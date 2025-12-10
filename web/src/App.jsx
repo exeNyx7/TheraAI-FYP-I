@@ -3,11 +3,18 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
-import Login from './components/Auth/LoginModern';
-import Signup from './components/Auth/Signup';
-import Dashboard from './pages/Dashboard/ModernDashboard';
-import Journal from './pages/Journal/Journal';
-import MoodTracker from './pages/MoodTracker/MoodTracker';
+import LandingPage from './pages/Landing/LandingPageV0';
+import Login from './pages/Auth/LoginV0';
+import Signup from './pages/Auth/SignupV0';
+import Dashboard from './pages/Dashboard/DashboardV0';
+import Journal from './pages/Journal/JournalV0';
+import JournalDetail from './pages/Journal/JournalDetailV0';
+import MoodTracker from './pages/MoodTracker/MoodTrackerV0';
+import Chat from './pages/Chat/ChatV0';
+import Profile from './pages/Profile/ProfileV0';
+import Settings from './pages/Settings/SettingsV0';
+import Assessments from './pages/Assessments/AssessmentsV0';
+import Appointments from './pages/Appointments/AppointmentsV0';
 import './App.css';
 
 function App() {
@@ -17,6 +24,9 @@ function App() {
         <Router>
           <div className="app">
             <Routes>
+            {/* Landing Page - Public, no auth check */}
+            <Route path="/" element={<LandingPage />} />
+
             {/* Public Routes - only accessible when not authenticated */}
             <Route
               path="/login"
@@ -106,10 +116,28 @@ function App() {
             />
 
             <Route
-              path="/mood-tracker"
+              path="/journal/:id"
+              element={
+                <ProtectedRoute>
+                  <JournalDetail />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/mood"
               element={
                 <ProtectedRoute>
                   <MoodTracker />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <Chat />
                 </ProtectedRoute>
               }
             />
@@ -130,10 +158,16 @@ function App() {
               path="/appointments"
               element={
                 <ProtectedRoute>
-                  <div className="page-placeholder">
-                    <h2>Appointments</h2>
-                    <p>Manage your appointments and scheduling.</p>
-                  </div>
+                  <Appointments />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/assessments"
+              element={
+                <ProtectedRoute>
+                  <Assessments />
                 </ProtectedRoute>
               }
             />
@@ -154,10 +188,16 @@ function App() {
               path="/profile"
               element={
                 <ProtectedRoute>
-                  <div className="page-placeholder">
-                    <h2>Profile Settings</h2>
-                    <p>Manage your account settings and preferences.</p>
-                  </div>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
                 </ProtectedRoute>
               }
             />
@@ -175,8 +215,7 @@ function App() {
             />
 
             {/* Default Routes */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </Router>

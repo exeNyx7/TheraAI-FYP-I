@@ -41,7 +41,12 @@ export const createJournal = async (journalData) => {
       throw new Error(error.detail || 'Failed to create journal entry');
     }
 
-    return await response.json();
+    const data = await response.json();
+    // Map _id to id for frontend compatibility
+    return {
+      ...data,
+      id: data._id || data.id
+    };
   } catch (error) {
     console.error('Create journal error:', error);
     throw error;
@@ -69,7 +74,12 @@ export const getJournals = async (skip = 0, limit = 50) => {
       throw new Error(error.detail || 'Failed to fetch journal entries');
     }
 
-    return await response.json();
+    const data = await response.json();
+    // Map _id to id for frontend compatibility
+    return data.map(entry => ({
+      ...entry,
+      id: entry._id || entry.id
+    }));
   } catch (error) {
     console.error('Get journals error:', error);
     throw error;
@@ -82,6 +92,11 @@ export const getJournals = async (skip = 0, limit = 50) => {
  * @returns {Promise<Object>} Journal entry with AI analysis
  */
 export const getJournalById = async (id) => {
+  // Validate ID
+  if (!id || id === 'undefined' || id === 'null') {
+    throw new Error('Invalid journal entry ID format');
+  }
+
   try {
     const response = await fetch(`${API_URL}/api/v1/journals/${id}`, {
       method: 'GET',
@@ -93,7 +108,12 @@ export const getJournalById = async (id) => {
       throw new Error(error.detail || 'Failed to fetch journal entry');
     }
 
-    return await response.json();
+    const data = await response.json();
+    // Map _id to id for frontend compatibility
+    return {
+      ...data,
+      id: data._id || data.id
+    };
   } catch (error) {
     console.error('Get journal by ID error:', error);
     throw error;

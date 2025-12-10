@@ -1,0 +1,150 @@
+/* MoodTracker Page Styles */
+
+.mood-tracker-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dbeafe 100%);
+  padding-bottom: 4rem;
+}
+
+/* Page Header */
+.mood-tracker-page .page-header {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.mood-tracker-page .header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Main Content */
+.mood-tracker-page .tracker-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+/* Statistics Grid */
+.mood-tracker-page .statistics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .mood-tracker-page .statistics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Card Styles */
+.mood-tracker-page .card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.mood-tracker-page .overview-card,
+.mood-tracker-page .trend-card,
+.mood-tracker-page .mood-distribution-card,
+.mood-tracker-page .sentiment-card {
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Stats List */
+.mood-tracker-page .stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mood-tracker-page .stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+}
+
+.mood-tracker-page .stat-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.mood-tracker-page .stat-value {
+  font-size: 1.125rem;
+  color: #111827;
+  font-weight: 700;
+}
+
+/* Trend Content */
+.mood-tracker-page .trend-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Mood List */
+.mood-tracker-page .mood-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mood-tracker-page .mood-item {
+  padding: 0.75rem 0;
+}
+
+.mood-tracker-page .mood-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Sentiment List */
+.mood-tracker-page .sentiment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.mood-tracker-page .sentiment-item {
+  padding: 0.5rem 0;
+}
+
+/* Empty State */
+.mood-tracker-page .empty-state {
+  margin: 3rem 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .mood-tracker-page .page-header {
+    padding: 1.5rem 1rem;
+  }
+
+  .mood-tracker-page .tracker-content {
+    padding: 0 1rem;
+  }
+
+  .mood-tracker-page .statistics-grid {
+    gap: 1rem;
+  }
+
+  .mood-tracker-page .card-header h2 {
+    font-size: 1.125rem;
+  }
+}
+
+/* Smooth animations */
+.mood-tracker-page .transition-all {
+  transition: all 0.2s ease-in-out;
+}
