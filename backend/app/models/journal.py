@@ -77,6 +77,10 @@ class JournalBase(BaseModel):
         max_length=200,
         description="Optional title for the journal entry"
     )
+    day_of_week: Optional[str] = Field(
+        default=None,
+        description="Day of week when journal was created (Monday, Tuesday, etc.)"
+    )
     
     @field_validator("content")
     @classmethod
@@ -109,7 +113,8 @@ class JournalCreate(JournalBase):
             "example": {
                 "content": "Today was a wonderful day! I accomplished all my goals and felt really productive. Everything went smoothly and I'm feeling very optimistic about the future.",
                 "mood": "happy",
-                "title": "Productive and Happy Day"
+                "title": "Productive and Happy Day",
+                "day_of_week": "Wednesday"
             }
         }
     )

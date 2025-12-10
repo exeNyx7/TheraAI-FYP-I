@@ -5,6 +5,7 @@ Handles all journal-related business logic and database operations
 
 from typing import Optional, List
 from datetime import datetime
+import pytz
 from fastapi import HTTPException, status
 from bson import ObjectId
 
@@ -47,12 +48,19 @@ class JournalService:
             ai_service = get_ai_service()
             analysis = ai_service.analyze_text(journal_data.content)
             
+            # Get current time in Pakistan timezone
+            pakistan_tz = pytz.timezone('Asia/Karachi')
+            current_time_pakistan = datetime.now(pakistan_tz)
+            day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            day_of_week = day_names[current_time_pakistan.weekday()]
+            
             # Create journal document
             journal_doc = JournalInDB(
                 user_id=user_id,
                 content=journal_data.content,
                 mood=journal_data.mood,
                 title=journal_data.title,
+                day_of_week=day_of_week,
                 sentiment_label=analysis.label,
                 sentiment_score=analysis.score,
                 empathy_response=analysis.empathy_text,
