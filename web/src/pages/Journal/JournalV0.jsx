@@ -254,6 +254,28 @@ export default function JournalV0() {
                           <p className="text-sm text-foreground/80 line-clamp-2">{journal.content}</p>
                         </Link>
 
+                        {/* Emotion Preview - Show top emotion if available */}
+                        {journal.ai_analysis?.top_emotions && journal.ai_analysis.top_emotions.length > 0 && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {journal.ai_analysis.top_emotions.slice(0, 2).map((emotion, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 bg-pink-500/10 text-pink-700 dark:text-pink-300 rounded-full text-xs flex items-center gap-1"
+                              >
+                                {emotion.label}
+                                <span className="text-[10px] opacity-70">
+                                  {(emotion.score * 100).toFixed(0)}%
+                                </span>
+                              </span>
+                            ))}
+                            {journal.ai_analysis.top_emotions.length > 2 && (
+                              <span className="text-xs text-muted-foreground">
+                                +{journal.ai_analysis.top_emotions.length - 2} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {/* AI Insights Badge */}
                         {journal.ai_analysis && (
                           <div className="flex items-center gap-2">
@@ -499,6 +521,29 @@ export default function JournalV0() {
                             className="px-3 py-1 bg-purple-500/10 text-purple-700 dark:text-purple-300 rounded-full text-sm"
                           >
                             {theme}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Detected Emotions (RoBERTa) */}
+                  {insightsModal.ai_analysis.top_emotions && insightsModal.ai_analysis.top_emotions.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Heart className="h-5 w-5 text-pink-500" />
+                        <h4 className="font-semibold">Detected Emotions</h4>
+                      </div>
+                      <div className="pl-7 flex flex-wrap gap-2">
+                        {insightsModal.ai_analysis.top_emotions.map((emotion, idx) => (
+                          <span
+                            key={idx}
+                            className="px-3 py-1 bg-pink-500/10 text-pink-700 dark:text-pink-300 rounded-full text-sm flex items-center gap-2"
+                          >
+                            {emotion.label}
+                            <span className="text-xs opacity-70">
+                              {(emotion.score * 100).toFixed(0)}%
+                            </span>
                           </span>
                         ))}
                       </div>

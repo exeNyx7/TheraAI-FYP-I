@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { SidebarNav } from '../../components/Dashboard/SidebarNav';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { ArrowLeft, Share2, Trash2, Loader2, Smile, Frown, Heart, Wind, Circle } from 'lucide-react';
+import { ArrowLeft, Share2, Trash2, Loader2, Smile, Frown, Heart, Wind, Circle, Sparkles, TrendingUp } from 'lucide-react';
 import { getJournalById, deleteJournal } from '../../services/journalService';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -140,28 +140,103 @@ export default function JournalDetailV0() {
                 <p className="text-lg leading-relaxed whitespace-pre-wrap">{journal.content}</p>
               </div>
 
-              {/* AI Insights */}
+              {/* AI Insights - Enhanced */}
               {journal.ai_analysis && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-6">
-                  <h3 className="font-semibold mb-3 text-primary" style={{ fontFamily: 'Montserrat' }}>
-                    AI Insights
+                <div className="mt-8 p-6 bg-gradient-to-br from-primary/5 to-blue-500/5 rounded-lg border border-primary/20">
+                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2" style={{ fontFamily: 'Montserrat' }}>
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    AI Analysis
                   </h3>
-                  <div className="space-y-3 text-sm text-foreground/80 leading-relaxed">
+                  
+                  <div className="space-y-4">
+                    {/* Empathy Response */}
                     {journal.ai_analysis.summary && (
-                      <p><strong>Summary:</strong> {journal.ai_analysis.summary}</p>
-                    )}
-                    {journal.ai_analysis.sentiment && (
-                      <p><strong>Sentiment:</strong> {journal.ai_analysis.sentiment}</p>
-                    )}
-                    {journal.ai_analysis.themes && journal.ai_analysis.themes.length > 0 && (
-                      <p><strong>Themes:</strong> {journal.ai_analysis.themes.join(', ')}</p>
-                    )}
-                    {journal.ai_analysis.suggestions && journal.ai_analysis.suggestions.length > 0 && (
                       <div>
-                        <strong>Suggestions:</strong>
-                        <ul className="list-disc list-inside ml-2 mt-1">
+                        <p className="text-foreground/90 leading-relaxed">{journal.ai_analysis.summary}</p>
+                      </div>
+                    )}
+                    
+                    {/* Sentiment with visual bar */}
+                    {journal.ai_analysis.sentiment && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium">
+                            Overall Sentiment: 
+                            <span className="ml-2 capitalize text-primary">{journal.ai_analysis.sentiment}</span>
+                          </p>
+                          {journal.ai_analysis.sentiment_score !== undefined && (
+                            <span className="text-xs text-muted-foreground">
+                              {(journal.ai_analysis.sentiment_score * 100).toFixed(0)}% confidence
+                            </span>
+                          )}
+                        </div>
+                        {journal.ai_analysis.sentiment_score !== undefined && (
+                          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 transition-all"
+                              style={{ width: `${journal.ai_analysis.sentiment_score * 100}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Emotion Themes (RoBERTa) */}
+                    {journal.ai_analysis.themes && journal.ai_analysis.themes.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-purple-500" />
+                          Emotional Themes:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {journal.ai_analysis.themes.map((theme, idx) => (
+                            <span
+                              key={idx}
+                              className="px-3 py-1 bg-purple-500/10 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium"
+                            >
+                              {theme}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Top Emotions (RoBERTa) */}
+                    {journal.ai_analysis.top_emotions && journal.ai_analysis.top_emotions.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Heart className="h-4 w-4 text-pink-500" />
+                          Detected Emotions:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {journal.ai_analysis.top_emotions.map((emotion, idx) => (
+                            <span
+                              key={idx}
+                              className="px-3 py-1 bg-pink-500/10 text-pink-700 dark:text-pink-300 rounded-full text-sm font-medium flex items-center gap-2"
+                            >
+                              {emotion.label}
+                              <span className="text-xs opacity-70">
+                                {(emotion.score * 100).toFixed(0)}%
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* AI Suggestions */}
+                    {journal.ai_analysis.suggestions && journal.ai_analysis.suggestions.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-primary/10">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4 text-blue-500" />
+                          Suggestions:
+                        </p>
+                        <ul className="space-y-1">
                           {journal.ai_analysis.suggestions.map((suggestion, idx) => (
-                            <li key={idx}>{suggestion}</li>
+                            <li key={idx} className="text-sm text-foreground/80 flex items-start gap-2">
+                              <span className="text-primary mt-1">→</span>
+                              <span>{suggestion}</span>
+                            </li>
                           ))}
                         </ul>
                       </div>

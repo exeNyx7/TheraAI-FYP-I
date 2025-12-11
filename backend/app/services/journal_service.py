@@ -61,9 +61,13 @@ class JournalService:
                 mood=journal_data.mood,
                 title=journal_data.title,
                 day_of_week=day_of_week,
+                # DistilBERT sentiment fields
                 sentiment_label=analysis.label,
                 sentiment_score=analysis.score,
                 empathy_response=analysis.empathy_text,
+                # RoBERTa emotion fields
+                emotion_themes=analysis.emotion_themes,
+                top_emotions=analysis.top_emotions,
                 created_at=datetime.utcnow(),
                 updated_at=None
             )
@@ -230,9 +234,13 @@ class JournalService:
             if "content" in update_dict and update_dict["content"]:
                 ai_service = get_ai_service()
                 analysis = ai_service.analyze_text(update_dict["content"])
+                # Update sentiment fields
                 update_dict["sentiment_label"] = analysis.label
                 update_dict["sentiment_score"] = analysis.score
                 update_dict["empathy_response"] = analysis.empathy_text
+                # Update emotion fields
+                update_dict["emotion_themes"] = analysis.emotion_themes
+                update_dict["top_emotions"] = analysis.top_emotions
             
             # Add updated timestamp
             update_dict["updated_at"] = datetime.utcnow()

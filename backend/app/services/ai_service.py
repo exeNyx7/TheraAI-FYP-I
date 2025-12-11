@@ -20,13 +20,17 @@ logger = logging.getLogger(__name__)
 
 class AIService:
     """
-    Singleton AI service for sentiment analysis and conversational AI
+    Dual-Model AI Service:
+    - DistilBERT: Fast sentiment analysis (positive/negative)
+    - RoBERTa GoEmotions: Detailed emotion detection (28 categories)
+    - BlenderBot: Conversational AI for chat support
     Supports both RTX 4060 and RTX 5060 with adaptive configuration
     Loads models once and reuses for all requests
     """
     
     _instance: Optional['AIService'] = None
     _sentiment_model: Optional[Pipeline] = None
+    _emotion_model: Optional[Pipeline] = None  # NEW: RoBERTa GoEmotions
     _chatbot_tokenizer: Optional[AutoTokenizer] = None
     _chatbot_model: Optional[AutoModelForSeq2SeqLM] = None
     _device: Optional[int] = None
@@ -157,7 +161,19 @@ class AIService:
                 device=self._device,
                 framework="pt"
             )
-            logger.info("✅ Sentiment model loaded (~250MB)")
+            logger.info("✅ Sentiment model loaded (~268MB)")
+            
+            # Load emotion detection model (RoBERTa GoEmotions)
+            logger.info("📥 Loading emotion model: SamLowe/roberta-base-go_emotions")
+            logger.info("   ⏳ First-time download may take 1-2 minutes...")
+            self._emotion_model = pipeline(
+                "text-classification",
+                model="SamLowe/roberta-base-go_emotions",
+                device=self._device,
+                framework="pt",
+                top_k=5  # Return top 5 emotions
+            )
+            logger.info("✅ Emotion model loaded (~499MB)")
             
             # Load chatbot model (BlenderBot)
             logger.info("📥 Loading chatbot: facebook/blenderbot-400M-distill (~1.6GB)")
@@ -203,6 +219,11 @@ class AIService:
             # Run test inference to warm up models
             test_sentiment = self._sentiment_model("This is a test.")
             logger.info(f"🧪 Sentiment test: {test_sentiment}")
+            
+            # Emotion test
+            if self._emotion_model:
+                test_emotions = self._emotion_model("I am happy today")
+                logger.info(f"🧪 Emotion test: {test_emotions}")
             
             # Chatbot test
             test_input = self._chatbot_tokenizer("Hello!", return_tensors="pt")
@@ -560,16 +581,113 @@ class AIService:
         else:
             return "Thank you for sharing your thoughts. Whether you're feeling good, bad, or somewhere in between, your feelings are valid. Journaling is a great way to process and understand your emotions better. 📝"
     
-    def analyze_text(self, text: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIAnalysisResult:
+    def analyze_emotions(self, text: str) -> List[Dict[str, float]]:
         """
-        Complete AI analysis: sentiment + empathy response
+        Analyze detailed emotions using RoBERTa GoEmotions
         
         Args:
             text: Journal entry text to analyze
-            conversation_history: Optional conversation context for more personalized responses
             
         Returns:
-            AIAnalysisResult with sentiment and empathy response
+            List of top emotions with scores (up to 5)
+            Example: [
+                {"label": "joy", "score": 0.85},
+                {"label": "optimism", "score": 0.62},
+                ...
+            ]
+            
+        Raises:
+            RuntimeError: If emotion model is not available
+        """
+        if not self._emotion_model:
+            logger.warning("Emotion model not available")
+            return []
+        
+        if not text or not text.strip():
+            raise ValueError("Text cannot be empty")
+        
+        # Truncate if needed
+        text_to_analyze = text[:2000] if len(text) > 2000 else text
+        
+        try:
+            # Get top 5 emotions
+            emotions = self._emotion_model(text_to_analyze)[0]
+            
+            # Filter emotions with score > 0.1 (10% confidence)
+            filtered = [e for e in emotions if e['score'] > 0.1]
+            
+            logger.debug(f"Emotion analysis: {filtered}")
+            return filtered
+            
+        except Exception as e:
+            logger.error(f"Emotion analysis error: {str(e)}")
+            return []  # Return empty list on error, don't fail the whole analysis
+    
+    def get_emotion_themes(self, emotions: List[Dict]) -> List[str]:
+        """
+        Convert emotion labels to user-friendly themes
+        
+        Args:
+            emotions: List of emotion dicts with 'label' and 'score'
+            
+        Returns:
+            List of user-friendly theme strings (max 5)
+        """
+        theme_map = {
+            "joy": "Joy & Happiness",
+            "amusement": "Joy & Happiness",
+            "love": "Love & Connection",
+            "excitement": "Excitement & Energy",
+            "gratitude": "Gratitude & Appreciation",
+            "optimism": "Optimism & Hope",
+            "caring": "Caring & Compassion",
+            "pride": "Pride & Achievement",
+            "relief": "Relief & Comfort",
+            
+            "sadness": "Sadness & Loss",
+            "grief": "Sadness & Loss",
+            "disappointment": "Disappointment",
+            
+            "fear": "Anxiety & Fear",
+            "nervousness": "Anxiety & Fear",
+            
+            "anger": "Frustration & Anger",
+            "annoyance": "Frustration & Anger",
+            "disgust": "Disgust",
+            
+            "curiosity": "Curiosity & Interest",
+            "realization": "Insight & Realization",
+            "approval": "Approval & Validation",
+            "disapproval": "Disapproval",
+            "confusion": "Confusion",
+            "surprise": "Surprise",
+            "embarrassment": "Embarrassment",
+            "remorse": "Remorse & Regret",
+            "desire": "Desire & Longing",
+            
+            "neutral": "Neutral State"
+        }
+        
+        themes = set()
+        for emotion in emotions:
+            label = emotion['label'].lower()
+            theme = theme_map.get(label, label.title())
+            themes.add(theme)
+        
+        return list(themes)[:5]  # Return max 5 themes
+    
+    def analyze_text(self, text: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIAnalysisResult:
+        """
+        Complete AI analysis with dual models:
+        1. DistilBERT: Fast sentiment (POSITIVE/NEGATIVE)
+        2. RoBERTa: Detailed emotions (28 categories)
+        
+        Args:
+            text: Journal entry text to analyze
+            conversation_history: Optional conversation context (unused for journal analysis)
+            
+        Returns:
+            AIAnalysisResult with sentiment, empathy, and emotion themes
             
         Raises:
             RuntimeError: If AI service is not available
@@ -581,18 +699,27 @@ class AIService:
             return AIAnalysisResult(
                 label=SentimentLabel.NEUTRAL,
                 score=0.5,
-                empathy_text="Thank you for sharing your thoughts. Your feelings are important and valid. 💙"
+                empathy_text="Thank you for sharing your thoughts. Your feelings are important and valid. 💙",
+                emotion_themes=[],
+                top_emotions=[]
             )
         
         try:
-            # Get sentiment analysis
+            # 1. Fast sentiment analysis (DistilBERT)
             sentiment_result = self.analyze_sentiment(text)
-            
-            # Map to our enum
             sentiment_label = self._map_label_to_sentiment(sentiment_result["label"])
             sentiment_score = sentiment_result["score"]
             
-            # Generate empathy response (rule-based for now, can use LLM later)
+            # 2. Detailed emotion analysis (RoBERTa)
+            emotions = []
+            themes = []
+            try:
+                emotions = self.analyze_emotions(text)
+                themes = self.get_emotion_themes(emotions)
+            except Exception as e:
+                logger.warning(f"Emotion analysis failed, continuing with sentiment only: {e}")
+            
+            # 3. Generate empathy response
             empathy_text = self.generate_empathy_response(
                 text=text,
                 sentiment=sentiment_label,
@@ -602,7 +729,9 @@ class AIService:
             return AIAnalysisResult(
                 label=sentiment_label,
                 score=sentiment_score,
-                empathy_text=empathy_text
+                empathy_text=empathy_text,
+                emotion_themes=themes,
+                top_emotions=emotions[:3]  # Top 3 emotions only
             )
             
         except Exception as e:
@@ -611,7 +740,9 @@ class AIService:
             return AIAnalysisResult(
                 label=SentimentLabel.NEUTRAL,
                 score=0.5,
-                empathy_text="Thank you for sharing. I'm here to listen and support you. 💙"
+                empathy_text="Thank you for sharing. I'm here to listen and support you. 💙",
+                emotion_themes=[],
+                top_emotions=[]
             )
 
 
