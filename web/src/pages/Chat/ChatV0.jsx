@@ -77,15 +77,37 @@ export default function ChatV0() {
   const loadChatHistory = async () => {
     try {
       setIsFetchingHistory(true);
-      const history = await getChatHistory(50);
+      const historyResponse = await getChatHistory(50);
       
-      if (history && history.length > 0) {
-        setMessages(history);
+      // Backend returns {messages: [...], total: n}
+      const historyMessages = historyResponse.messages || historyResponse || [];
+      
+      if (historyMessages.length > 0) {
+        // Convert backend format to frontend format
+        const formattedMessages = [];
+        historyMessages.forEach(msg => {
+          // Add user message
+          formattedMessages.push({
+            id: `user-${msg.id}`,
+            content: msg.user_message,
+            sender: 'user',
+            timestamp: msg.timestamp
+          });
+          // Add AI response
+          formattedMessages.push({
+            id: `ai-${msg.id}`,
+            content: msg.ai_response,
+            sender: 'ai',
+            timestamp: msg.timestamp,
+            sentiment: msg.sentiment
+          });
+        });
+        setMessages(formattedMessages);
       } else {
         // Show welcome message if no history
         setMessages([{
           id: 'welcome',
-          content: "Hello! I'm your AI mental health companion. How are you feeling today? Feel free to share anything on your mind.",
+          content: "Hello, I'm your AI mental health companion. I'm here to provide professional, empathetic support as you navigate your thoughts and feelings. While I'm not a replacement for a licensed therapist, I can offer a safe space to talk, active listening, and evidence-based guidance. How can I support you today?",
           sender: 'ai',
           timestamp: new Date().toISOString()
         }]);
@@ -95,7 +117,7 @@ export default function ChatV0() {
       // Show welcome message on error
       setMessages([{
         id: 'welcome',
-        content: "Hello! I'm your AI mental health companion. How are you feeling today? Feel free to share anything on your mind.",
+        content: "Hello, I'm your AI mental health companion. I'm here to provide professional, empathetic support as you navigate your thoughts and feelings. While I'm not a replacement for a licensed therapist, I can offer a safe space to talk, active listening, and evidence-based guidance. How can I support you today?",
         sender: 'ai',
         timestamp: new Date().toISOString()
       }]);
@@ -158,7 +180,7 @@ export default function ChatV0() {
       await clearChatHistory();
       setMessages([{
         id: 'welcome',
-        content: "Hello! I'm your AI mental health companion. How are you feeling today? Feel free to share anything on your mind.",
+        content: "Hello, I'm your AI mental health companion. I'm here to provide professional, empathetic support as you navigate your thoughts and feelings. While I'm not a replacement for a licensed therapist, I can offer a safe space to talk, active listening, and evidence-based guidance. How can I support you today?",
         sender: 'ai',
         timestamp: new Date().toISOString()
       }]);
@@ -240,19 +262,22 @@ export default function ChatV0() {
                 {isLoading && (
                   <div className="flex justify-start gap-3">
                     <div className="bg-muted rounded-lg px-4 py-3 border border-border">
-                      <div className="flex gap-2">
-                        <div
-                          className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
-                          style={{ animationDelay: '0s' }}
-                        />
-                        <div
-                          className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
-                          style={{ animationDelay: '0.2s' }}
-                        />
-                        <div
-                          className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
-                          style={{ animationDelay: '0.4s' }}
-                        />
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-2">
+                          <div
+                            className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+                            style={{ animationDelay: '0s' }}
+                          />
+                          <div
+                            className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+                            style={{ animationDelay: '0.2s' }}
+                          />
+                          <div
+                            className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+                            style={{ animationDelay: '0.4s' }}
+                          />
+                        </div>
+                        <span className="text-xs text-muted-foreground">AI is thinking...</span>
                       </div>
                     </div>
                   </div>

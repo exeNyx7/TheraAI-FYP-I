@@ -1,16 +1,18 @@
 """
 Chat API
-AI-powered wellness companion chat endpoints
+AI-powered wellness companion chat endpoints with BlenderBot
 """
 
 from datetime import datetime
 from typing import Optional
+import pytz
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..dependencies.auth import get_current_user
 from ..models.user import UserOut
 from ..database import db_manager
+from ..services.ai_service import get_ai_service
 
 router = APIRouter(prefix="/chat", tags=["AI Chat"])
 
@@ -48,8 +50,9 @@ async def send_chat_message(
     current_user: UserOut = Depends(get_current_user)
 ):
     """
-    Send a message to the AI wellness companion
+    Send a message to the AI wellness companion (BlenderBot)
     
+    Uses conversation history for contextual responses
     Returns AI-generated response with mental health support
     """
     try:
@@ -58,25 +61,70 @@ async def send_chat_message(
         if not user_message:
             raise HTTPException(status_code=400, detail="Message cannot be empty")
         
-        # Generate AI response (placeholder - integrate actual AI later)
-        ai_response = generate_wellness_response(user_message)
+        db = db_manager.get_database()
+        
+        # Get recent conversation history (last 10 messages)
+        history_limit = 10
+        history_records = await db.chat_history.find(
+            {"user_id": current_user.id}
+        ).sort("created_at", -1).limit(history_limit).to_list(length=history_limit)
+        
+        # Reverse to get chronological order (oldest first)
+        history_records.reverse()
+        
+        # Format history for AI service
+        conversation_history = []
+        for record in history_records:
+            conversation_history.append({
+                "role": "user",
+                "message": record["user_message"]
+            })
+            conversation_history.append({
+                "role": "bot",
+                "message": record["ai_response"]
+            })
+        
+        # Generate AI response using BlenderBot
+        ai_service = get_ai_service()
+        
+        try:
+            ai_response = ai_service.generate_response_llm(
+                user_message=user_message,
+                conversation_history=conversation_history if conversation_history else None
+            )
+            
+            # Also get sentiment of user message
+            try:
+                sentiment_result = ai_service.analyze_sentiment(user_message)
+                sentiment = sentiment_result["label"].lower()
+            except Exception:
+                sentiment = "neutral"
+                
+        except Exception as e:
+            # Fallback to rule-based if AI fails
+            ai_response = generate_wellness_response(user_message)
+            sentiment = "supportive"
+        
+        # Get current time in Pakistan timezone (UTC+5)
+        pakistan_tz = pytz.timezone('Asia/Karachi')
+        current_time_pakistan = datetime.now(pakistan_tz)
         
         # Save to database
-        db = db_manager.get_database()
         chat_record = {
             "user_id": current_user.id,
             "user_message": user_message,
             "ai_response": ai_response,
-            "timestamp": datetime.utcnow().isoformat(),
-            "created_at": datetime.utcnow()
+            "sentiment": sentiment,
+            "timestamp": current_time_pakistan.isoformat(),
+            "created_at": datetime.utcnow()  # Keep UTC for database indexing
         }
         
         await db.chat_history.insert_one(chat_record)
         
         return ChatResponse(
             response=ai_response,
-            timestamp=datetime.utcnow().isoformat(),
-            sentiment="supportive"
+            timestamp=current_time_pakistan.isoformat(),
+            sentiment=sentiment
         )
         
     except HTTPException:

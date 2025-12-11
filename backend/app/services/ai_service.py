@@ -1,12 +1,15 @@
 """
 AI Service for Sentiment Analysis and Empathy Generation
-Uses local GPU (NVIDIA RTX 5060) with CUDA 12.8 for inference
-Model: DistilBERT fine-tuned on SST-2 (Stanford Sentiment Treebank)
+Uses local GPU (NVIDIA RTX 4060/5060) with CUDA for inference
+Models: 
+- Sentiment: DistilBERT fine-tuned on SST-2
+- Chatbot: BlenderBot-400M-distill
+Adaptive performance based on GPU detected
 """
 
 import logging
-from typing import Optional
-from transformers import pipeline, Pipeline
+from typing import Optional, List, Dict, Any
+from transformers import pipeline, Pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
 from ..models.journal import AIAnalysisResult, SentimentLabel
@@ -17,13 +20,17 @@ logger = logging.getLogger(__name__)
 
 class AIService:
     """
-    Singleton AI service for sentiment analysis using local GPU
-    Loads model once and reuses for all requests
+    Singleton AI service for sentiment analysis and conversational AI
+    Supports both RTX 4060 and RTX 5060 with adaptive configuration
+    Loads models once and reuses for all requests
     """
     
     _instance: Optional['AIService'] = None
-    _model: Optional[Pipeline] = None
+    _sentiment_model: Optional[Pipeline] = None
+    _chatbot_tokenizer: Optional[AutoTokenizer] = None
+    _chatbot_model: Optional[AutoModelForSeq2SeqLM] = None
     _device: Optional[int] = None
+    _gpu_config: Optional[Dict[str, Any]] = None
     
     def __new__(cls):
         """Singleton pattern - only one instance of AIService"""
@@ -32,76 +39,228 @@ class AIService:
             cls._instance._initialize_model()
         return cls._instance
     
+    def _detect_gpu_config(self) -> Dict[str, Any]:
+        """
+        Detect GPU model and return optimal configuration
+        
+        Returns:
+            dict with GPU-specific settings (precision, max_history, max_length, etc.)
+        """
+        if not torch.cuda.is_available():
+            logger.info("🖥️  No GPU detected, using CPU configuration")
+            return {
+                "device": "cpu",
+                "device_id": -1,
+                "precision": "fp32",
+                "max_history": 5,
+                "max_response_length": 100,
+                "use_fp16": False,
+                "gradient_checkpointing": False
+            }
+        
+        device_name = torch.cuda.get_device_name(0).lower()
+        memory_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+        compute_capability = torch.cuda.get_device_capability(0)
+        compute_version = f"sm_{compute_capability[0]}{compute_capability[1]}"
+        
+        logger.info(f"🔍 Detected GPU: {device_name} ({memory_gb:.1f} GB VRAM)")
+        logger.info(f"🔍 Compute Capability: {compute_version}")
+        
+        # Check if GPU is compatible with current PyTorch
+        # RTX 5060 has sm_120 which is not supported by PyTorch 2.5.1
+        if compute_capability[0] >= 12:  # sm_120 and above
+            logger.warning(f"⚠️  GPU compute capability {compute_version} is not supported by PyTorch {torch.__version__}")
+            logger.warning("⚠️  Falling back to CPU mode. For GPU support:")
+            logger.warning("   1. Wait for official PyTorch release with sm_120 support")
+            logger.warning("   2. Or use PyTorch nightly: pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128")
+            logger.info("🖥️  Using CPU configuration")
+            return {
+                "device": "cpu",
+                "device_id": -1,
+                "precision": "fp32",
+                "max_history": 5,
+                "max_response_length": 100,
+                "use_fp16": False,
+                "gradient_checkpointing": False,
+                "gpu_incompatible": True,
+                "gpu_model": device_name
+            }
+        
+        # RTX 4060 configuration (8GB VRAM) - Optimized for demo
+        if "4060" in device_name:
+            logger.info("⚙️  Configuring for RTX 4060 (Memory-optimized mode)")
+            return {
+                "device": "cuda",
+                "device_id": 0,
+                "precision": "fp16",
+                "max_history": 6,  # Shorter history to save memory
+                "max_response_length": 120,
+                "use_fp16": True,
+                "gradient_checkpointing": True,
+                "gpu_model": "RTX 4060"
+            }
+        
+        # RTX 5060 configuration (8GB VRAM) - Full performance
+        elif "5060" in device_name:
+            logger.info("⚙️  Configuring for RTX 5060 (Full performance mode)")
+            return {
+                "device": "cuda",
+                "device_id": 0,
+                "precision": "fp32",
+                "max_history": 10,
+                "max_response_length": 150,
+                "use_fp16": False,
+                "gradient_checkpointing": False,
+                "gpu_model": "RTX 5060"
+            }
+        
+        # Other NVIDIA GPUs - Conservative defaults
+        else:
+            logger.info(f"⚙️  Using conservative settings for {device_name}")
+            return {
+                "device": "cuda",
+                "device_id": 0,
+                "precision": "fp32",
+                "max_history": 8,
+                "max_response_length": 130,
+                "use_fp16": False,
+                "gradient_checkpointing": False,
+                "gpu_model": device_name
+            }
+    
     def _initialize_model(self):
         """
-        Initialize the sentiment analysis model
-        Detects GPU availability and loads model accordingly
+        Initialize sentiment analysis and chatbot models
+        Detects GPU and configures accordingly
         """
         try:
-            # Check for CUDA availability
-            cuda_available = torch.cuda.is_available()
+            # Detect GPU and get configuration
+            self._gpu_config = self._detect_gpu_config()
+            self._device = self._gpu_config["device_id"]
             
-            if cuda_available:
-                self._device = 0  # Use first GPU (RTX 5060)
-                device_name = torch.cuda.get_device_name(0)
-                cuda_version = torch.version.cuda
-                logger.info(f"🚀 CUDA detected! Using GPU: {device_name}")
-                logger.info(f"📊 CUDA Version: {cuda_version}")
-                logger.info(f"💾 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+            # Log GPU configuration
+            if self._gpu_config["device"] == "cuda":
+                logger.info(f"🚀 CUDA Configuration:")
+                logger.info(f"   • GPU: {self._gpu_config.get('gpu_model', 'Unknown')}")
+                logger.info(f"   • Precision: {self._gpu_config['precision']}")
+                logger.info(f"   • Max History: {self._gpu_config['max_history']} messages")
+                logger.info(f"   • Max Response: {self._gpu_config['max_response_length']} tokens")
+                logger.info(f"   • CUDA Version: {torch.version.cuda}")
             else:
-                self._device = -1  # Use CPU
-                logger.warning("⚠️  CUDA not available. Using CPU for inference (slower).")
-                logger.warning("💡 To enable GPU: Install PyTorch with CUDA support")
+                logger.warning("⚠️  Using CPU mode - Inference will be slower")
             
-            # Load the sentiment analysis pipeline
-            logger.info("📥 Loading sentiment analysis model: distilbert-base-uncased-finetuned-sst-2-english")
-            
-            self._model = pipeline(
+            # Load sentiment analysis model (DistilBERT)
+            logger.info("📥 Loading sentiment model: distilbert-base-uncased-finetuned-sst-2-english")
+            self._sentiment_model = pipeline(
                 "sentiment-analysis",
                 model="distilbert-base-uncased-finetuned-sst-2-english",
                 device=self._device,
-                framework="pt"  # PyTorch framework
+                framework="pt"
+            )
+            logger.info("✅ Sentiment model loaded (~250MB)")
+            
+            # Load chatbot model (BlenderBot)
+            logger.info("📥 Loading chatbot: facebook/blenderbot-400M-distill (~1.6GB)")
+            logger.info("   ⏳ First-time download may take 2-5 minutes...")
+            
+            self._chatbot_tokenizer = AutoTokenizer.from_pretrained(
+                "facebook/blenderbot-400M-distill"
             )
             
-            logger.info("✅ Model loaded successfully!")
+            self._chatbot_model = AutoModelForSeq2SeqLM.from_pretrained(
+                "facebook/blenderbot-400M-distill"
+            )
             
-            # Run a test inference to warm up the model
-            test_result = self._model("This is a test.")
-            logger.info(f"🧪 Test inference successful: {test_result}")
+            # Move chatbot to GPU/CPU and configure precision
+            if self._gpu_config["device"] == "cuda":
+                try:
+                    self._chatbot_model = self._chatbot_model.to("cuda")
+                    
+                    # Enable FP16 for RTX 4060 memory optimization
+                    if self._gpu_config["use_fp16"]:
+                        logger.info("   • Converting to FP16 (half precision)")
+                        self._chatbot_model = self._chatbot_model.half()
+                    
+                    # Enable gradient checkpointing for memory efficiency
+                    if self._gpu_config["gradient_checkpointing"]:
+                        logger.info("   • Enabling gradient checkpointing")
+                        self._chatbot_model.gradient_checkpointing_enable()
+                    
+                    logger.info("✅ Chatbot model loaded on GPU successfully!")
+                except RuntimeError as gpu_error:
+                    logger.error(f"❌ Failed to load model on GPU: {str(gpu_error)}")
+                    logger.warning("⚠️  Falling back to CPU mode")
+                    # Recreate model on CPU
+                    self._chatbot_model = AutoModelForSeq2SeqLM.from_pretrained(
+                        "facebook/blenderbot-400M-distill"
+                    )
+                    self._gpu_config["device"] = "cpu"
+                    self._gpu_config["device_id"] = -1
+                    logger.info("✅ Chatbot model loaded on CPU successfully!")
+            else:
+                logger.info("✅ Chatbot model loaded on CPU successfully!")
+            
+            # Run test inference to warm up models
+            test_sentiment = self._sentiment_model("This is a test.")
+            logger.info(f"🧪 Sentiment test: {test_sentiment}")
+            
+            # Chatbot test
+            test_input = self._chatbot_tokenizer("Hello!", return_tensors="pt")
+            if self._gpu_config["device"] == "cuda":
+                try:
+                    test_input = {k: v.to("cuda") for k, v in test_input.items()}
+                except RuntimeError as e:
+                    logger.warning(f"⚠️  GPU inference failed: {str(e)}")
+                    logger.warning("⚠️  Switching to CPU mode")
+                    self._gpu_config["device"] = "cpu"
+                    self._gpu_config["device_id"] = -1
+                    # Model already on CPU as fallback
+            
+            with torch.no_grad():
+                test_output = self._chatbot_model.generate(**test_input, max_length=20)
+            test_response = self._chatbot_tokenizer.decode(test_output[0], skip_special_tokens=True)
+            logger.info(f"🧪 Chatbot test: {test_response}")
+            
+            logger.info("🎉 All models initialized and ready!")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize AI model: {str(e)}")
+            logger.error(f"❌ Failed to initialize AI models: {str(e)}")
             logger.error("⚠️  AI features will not be available")
-            self._model = None
+            self._sentiment_model = None
+            self._chatbot_model = None
             raise RuntimeError(f"AI model initialization failed: {str(e)}")
     
     def is_available(self) -> bool:
         """Check if AI service is available"""
-        return self._model is not None
+        return self._sentiment_model is not None and self._chatbot_model is not None
     
     def get_device_info(self) -> dict:
-        """Get information about the device being used"""
+        """Get information about the device and configuration being used"""
         if not self.is_available():
             return {"status": "unavailable", "device": "none"}
         
         info = {
             "status": "available",
-            "device": "cuda" if self._device == 0 else "cpu",
-            "device_id": self._device
+            "device": self._gpu_config["device"],
+            "device_id": self._gpu_config["device_id"],
+            "gpu_model": self._gpu_config.get("gpu_model", "CPU"),
+            "precision": self._gpu_config["precision"],
+            "max_history": self._gpu_config["max_history"],
+            "max_response_length": self._gpu_config["max_response_length"]
         }
         
-        if self._device == 0 and torch.cuda.is_available():
+        if self._gpu_config["device"] == "cuda" and torch.cuda.is_available():
             info.update({
-                "device_name": torch.cuda.get_device_name(0),
                 "cuda_version": torch.version.cuda,
-                "memory_total_gb": round(torch.cuda.get_device_properties(0).total_memory / 1e9, 2)
+                "memory_total_gb": round(torch.cuda.get_device_properties(0).total_memory / 1e9, 2),
+                "fp16_enabled": self._gpu_config["use_fp16"]
             })
         
         return info
     
     def analyze_sentiment(self, text: str) -> dict:
         """
-        Run sentiment analysis on text using the model
+        Run sentiment analysis on text using DistilBERT
         
         Args:
             text: Input text to analyze
@@ -124,7 +283,7 @@ class AIService:
         
         try:
             # Run inference
-            result = self._model(text_to_analyze)[0]
+            result = self._sentiment_model(text_to_analyze)[0]
             
             logger.debug(f"Sentiment analysis result: {result}")
             
@@ -136,6 +295,190 @@ class AIService:
         except Exception as e:
             logger.error(f"Error during sentiment analysis: {str(e)}")
             raise RuntimeError(f"Sentiment analysis failed: {str(e)}")
+    
+    def _format_conversation_history(self, history: List[Dict[str, str]]) -> str:
+        """
+        Format conversation history for BlenderBot
+        
+        Args:
+            history: List of dicts with 'role' and 'message' keys
+                    role can be 'user' or 'bot'
+        
+        Returns:
+            Formatted string with conversation context
+        """
+        if not history:
+            return ""
+        
+        # Take only the most recent messages based on GPU config
+        max_history = self._gpu_config["max_history"]
+        recent_history = history[-max_history:] if len(history) > max_history else history
+        
+        # Format as conversation pairs (cleaner for BlenderBot)
+        formatted = []
+        for msg in recent_history:
+            role = msg.get("role", "user")
+            message = msg.get("message", "").strip()
+            if role == "user" and message:
+                formatted.append(message)
+            elif role == "bot" and message:
+                formatted.append(message)
+        
+        # Join with special separator for BlenderBot
+        return " </s> <s> ".join(formatted) if formatted else ""
+    
+    def generate_response_llm(
+        self, 
+        user_message: str, 
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> str:
+        """
+        Generate conversational response using BlenderBot
+        
+        Args:
+            user_message: Current user message
+            conversation_history: Optional list of previous messages
+                                Each dict should have 'role' and 'message' keys
+        
+        Returns:
+            Generated response text from the chatbot
+            
+        Raises:
+            RuntimeError: If chatbot model is not available
+        """
+        if not self.is_available():
+            raise RuntimeError("Chatbot model is not available")
+        
+        if not user_message or not user_message.strip():
+            raise ValueError("User message cannot be empty")
+        
+        try:
+            # Format conversation history first
+            history_text = ""
+            if conversation_history:
+                history_text = self._format_conversation_history(conversation_history)
+            
+            # Simple direct input works better for BlenderBot
+            if history_text:
+                full_input = f"{history_text} </s> <s> {user_message.strip()}"
+            else:
+                full_input = user_message.strip()
+            
+            # Tokenize input
+            inputs = self._chatbot_tokenizer(
+                full_input, 
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True
+            )
+            
+            # Move to GPU if available
+            if self._gpu_config["device"] == "cuda":
+                inputs = {k: v.to("cuda") for k, v in inputs.items()}
+            
+            # Generate response with parameters tuned for empathetic responses
+            max_length = self._gpu_config["max_response_length"]
+            
+            with torch.no_grad():
+                output_ids = self._chatbot_model.generate(
+                    **inputs,
+                    max_new_tokens=max_length,
+                    min_length=10,
+                    num_beams=3,
+                    early_stopping=True,
+                    no_repeat_ngram_size=3,
+                    temperature=0.9,
+                    do_sample=True,
+                    top_k=50,
+                    top_p=0.9,
+                    repetition_penalty=1.2,
+                    length_penalty=1.0
+                )
+            
+            # Decode response
+            response = self._chatbot_tokenizer.decode(
+                output_ids[0], 
+                skip_special_tokens=True
+            )
+            
+            # Clean up response
+            response = response.strip()
+            
+            # Remove the input from response if it's echoed back
+            if response.startswith(full_input):
+                response = response[len(full_input):].strip()
+            
+            # Remove common prefixes
+            prefixes_to_remove = [
+                "Bot:", "AI:", "Assistant:", "Response:", 
+                user_message.strip() + ":", user_message.strip() + ","
+            ]
+            for prefix in prefixes_to_remove:
+                if response.startswith(prefix):
+                    response = response[len(prefix):].strip()
+            
+            # CRITICAL: Filter out personal experiences
+            response_lower = response.lower()
+            personal_indicators = [
+                "i just got", "i got back from", "i went to", "i was at",
+                "my dog", "my cat", "my pet", "my family", "my gym",
+                "my workout", "my job", "my work", "my home",
+                "when i was", "i remember when", "i used to",
+                "i have a", "i own a", "i've been to", "i've had",
+                "my experience", "in my life", "my friend", "my partner",
+                "i do, but", "i don't have", "i do not have",
+                "i was so", "i felt", "i thought", "i knew"
+            ]
+            
+            has_personal_claim = any(indicator in response_lower for indicator in personal_indicators)
+            
+            # Check if AI is claiming activities/status/abilities
+            problematic_starts = (
+                "i am", "i'm", "i just", "i was", "i have", "i've",
+                "i do,", "i do.", "i don", "i can", "i could",
+                "no, i", "yes, i", "i know", "i think i"
+            )
+            starts_with_personal = response_lower.startswith(problematic_starts)
+            
+            # Check for pronouns suggesting personal experience
+            has_personal_pronouns = any(phrase in response_lower for phrase in [
+                " i ", " my ", " mine ", " myself "
+            ]) and not any(safe in response_lower for safe in [
+                "i'm here", "i understand", "i hear you", "i'm listening",
+                "i hope", "i can help", "i'd like", "i wonder"
+            ])
+            
+            if has_personal_claim or starts_with_personal or has_personal_pronouns:
+                logger.warning(f"Filtered inappropriate response: {response}")
+                # Generate appropriate mental health response based on user message
+                user_lower = user_message.lower()
+                if any(word in user_lower for word in ["hello", "hi", "hey"]):
+                    response = "Hello! I'm here to support you. How are you feeling today?"
+                elif any(word in user_lower for word in ["great", "good", "fine", "well"]):
+                    response = "I'm glad to hear that! What's been going well for you?"
+                elif any(word in user_lower for word in ["sad", "bad", "terrible", "awful", "depressed"]):
+                    response = "I'm sorry you're feeling this way. Would you like to talk about what's troubling you?"
+                elif any(word in user_lower for word in ["what", "who", "do you", "tell me"]):
+                    response = "I'm an AI companion here to support you. What would you like to talk about?"
+                else:
+                    response = "I'm here to listen and support you. What's on your mind?"
+            
+            # Remove if response is just repeating the input
+            if response.lower() == user_message.strip().lower():
+                response = "I hear you. Can you tell me more about that?"
+            
+            # Ensure minimum quality
+            if len(response) < 5 or response in [".", "?", "!", "Yes", "No", "Okay", "Ok"]:
+                response = "I'm listening. Please share what you'd like to talk about."
+            
+            logger.debug(f"Generated response: {response}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error generating chatbot response: {str(e)}")
+            raise RuntimeError(f"Chatbot response generation failed: {str(e)}")
     
     def _map_label_to_sentiment(self, label: str) -> SentimentLabel:
         """
@@ -217,12 +560,13 @@ class AIService:
         else:
             return "Thank you for sharing your thoughts. Whether you're feeling good, bad, or somewhere in between, your feelings are valid. Journaling is a great way to process and understand your emotions better. 📝"
     
-    def analyze_text(self, text: str) -> AIAnalysisResult:
+    def analyze_text(self, text: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIAnalysisResult:
         """
         Complete AI analysis: sentiment + empathy response
         
         Args:
             text: Journal entry text to analyze
+            conversation_history: Optional conversation context for more personalized responses
             
         Returns:
             AIAnalysisResult with sentiment and empathy response
@@ -248,7 +592,7 @@ class AIService:
             sentiment_label = self._map_label_to_sentiment(sentiment_result["label"])
             sentiment_score = sentiment_result["score"]
             
-            # Generate empathy response
+            # Generate empathy response (rule-based for now, can use LLM later)
             empathy_text = self.generate_empathy_response(
                 text=text,
                 sentiment=sentiment_label,
