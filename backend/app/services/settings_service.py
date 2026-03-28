@@ -6,6 +6,7 @@ All updates use upsert so the document is auto-created on first save.
 
 from datetime import datetime, timezone
 from typing import Optional
+from bson import ObjectId
 
 from ..database import get_database
 from ..models.settings import UserSettingsOut, UserSettingsUpdate, NotificationPreferences, PrivacyPreferences
@@ -118,4 +119,4 @@ class SettingsService:
         await db.chat_history.delete_many({"user_id": user_id})
         await db.conversations.delete_many({"user_id": user_id})
         await db.assessment_results.delete_many({"user_id": user_id})
-        await db.users.delete_one({"_id": user_id})
+        await db.users.delete_one({"_id": ObjectId(user_id)})
