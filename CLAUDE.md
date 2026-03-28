@@ -74,7 +74,8 @@ TheraAI-FYP-I/
 │   │   ├── config.py       # Settings (env vars)
 │   │   └── main.py         # FastAPI app + router registration
 │   └── scripts/
-│       └── seed_assessments.py
+│       ├── seed_assessments.py
+│       └── seed_therapist_profiles.py
 └── web/
     └── src/
         ├── apiClient.js        # Axios instance with JWT interceptor
@@ -116,23 +117,25 @@ All endpoints: `http://localhost:8000/api/v1/`
 - `Assessments.jsx` — full assessment taking form (one question at a time), results view, history view
 - `SidebarNav.jsx` — role-based navigation (patient / psychiatrist / admin)
 
-### 🔲 Phase 2 — NEXT
+### ✅ Phase 2 — COMPLETE
 **Appointments API:**
-- Collections: `therapist_profiles`, `appointments`
-- `GET/POST /appointments` — list & book
-- `GET /appointments/{id}`, `PATCH /appointments/{id}/status`, `POST /appointments/{id}/cancel`
-- `GET /therapists`, `GET /therapists/{id}`, `GET /therapists/{id}/slots`
+- `models/appointments.py` — all schemas (TherapistProfile, Appointment, Slot, Payment)
+- `services/appointments_service.py` — CRUD + slot generation + status machine
+- `api/appointments.py` — `GET/POST /appointments`, `GET /appointments/{id}`, `PATCH .../status`, `POST .../cancel`, `GET /therapists`, `GET /therapists/{id}`, `GET /therapists/{id}/slots`
 
 **Therapist Dashboard API:**
-- `GET /therapist/dashboard` — aggregate stats
-- `GET /therapist/patients` — assigned patients
-- `GET /therapist/patients/{id}/history` — patient timeline
-- `GET /therapist/alerts` — AI-flagged at-risk patients
-- `PUT/POST /therapist/profile` — therapist profile management
+- `services/therapist_service.py` — dashboard stats, patient list, patient history, alerts, profile management
+- `api/therapist.py` — `GET /therapist/dashboard`, `/patients`, `/patients/{id}/history`, `/alerts`, `GET/POST/PUT /therapist/profile`
 
-**Frontend (when backend is ready — remove all hardcoded data):**
-- `Appointments.jsx` — wire to API
-- `TherapistDashboard.jsx` — wire to API
+**Seed script:**
+- `scripts/seed_therapist_profiles.py` — 4 Pakistani therapist accounts (Dr. Ayesha Khan, Dr. Usman Sheikh, Dr. Sana Mirza, Dr. Bilal Chaudhry)
+- Default password: `TheraAI@2024!`
+- Run: `python -m scripts.seed_therapist_profiles`
+
+**Frontend (all hardcoded data removed):**
+- `TherapistSelector.jsx` — fetches `/therapists`, loading + error states
+- `Appointments.jsx` — fetches `/appointments`, books via POST, cancels via POST, slot picker integrated
+- `TherapistDashboard.jsx` — fetches dashboard stats, patients, upcoming appointments, alerts
 
 ### 🔲 Phase 3 — Real-Time (WebSocket)
 - Chat: `/ws/chat/{conversation_id}`
@@ -167,8 +170,8 @@ All endpoints: `http://localhost:8000/api/v1/`
 | `user_settings` | ✅ Phase 1 | User preferences |
 | `assessments` | ✅ Phase 1 | Assessment templates (seeded) |
 | `assessment_results` | ✅ Phase 1 | User submissions + scores |
-| `therapist_profiles` | 🔲 Phase 2 | Therapist bio, availability, rates |
-| `appointments` | 🔲 Phase 2 | Booking records |
+| `therapist_profiles` | ✅ Phase 2 | Therapist bio, availability, rates |
+| `appointments` | ✅ Phase 2 | Booking records |
 | `messages` | 🔲 Phase 3 | Real-time chat messages |
 
 ---
@@ -182,6 +185,9 @@ uvicorn app.main:app --reload --port 8000
 
 # Seed assessments (first time only)
 python -m scripts.seed_assessments
+
+# Seed therapist profiles (first time only)
+python -m scripts.seed_therapist_profiles
 
 # Frontend
 cd web

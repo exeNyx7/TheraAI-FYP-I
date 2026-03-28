@@ -14,6 +14,8 @@ from .api.moods import router as moods_router
 from .api.conversations import router as conversations_router
 from .api.settings import router as settings_router
 from .api.assessments import router as assessments_router
+from .api.appointments import appointments_router, therapists_router
+from .api.therapist import router as therapist_router
 
 # Load settings
 settings = get_settings()
@@ -98,6 +100,9 @@ app.include_router(moods_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(assessments_router, prefix="/api/v1")
+app.include_router(appointments_router, prefix="/api/v1")
+app.include_router(therapists_router, prefix="/api/v1")
+app.include_router(therapist_router, prefix="/api/v1")
 
 
 @app.get(

@@ -123,7 +123,18 @@ async def init_database():
         await results_col.create_index("assessment_id")
         await results_col.create_index("user_id")
 
-        print("✅ Database indexes created successfully (users + journals + settings + assessments)")
+        # ---- therapist_profiles ----
+        therapist_col = db.therapist_profiles
+        await therapist_col.create_index("user_id", unique=True)
+        await therapist_col.create_index("is_accepting_patients")
+
+        # ---- appointments ----
+        appts_col = db.appointments
+        await appts_col.create_index([("patient_id", 1), ("scheduled_at", -1)])
+        await appts_col.create_index([("therapist_id", 1), ("scheduled_at", -1)])
+        await appts_col.create_index("status")
+
+        print("✅ Database indexes created successfully (users + journals + settings + assessments + appointments)")
 
     except Exception as e:
         print(f"❌ Failed to initialize database: {e}")
