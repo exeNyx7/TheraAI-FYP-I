@@ -1,7 +1,15 @@
 import axios from 'axios';
 
 // Get base URL from environment or fallback to proxy target
-const baseURL = import.meta.env.VITE_API_URL || '/api/v1';
+let baseURL = import.meta.env.VITE_API_URL || '/api/v1';
+
+// Ensure /api/v1 is included in the URL
+if (baseURL && baseURL.startsWith('http')) {
+  // If it's an absolute URL, ensure /api/v1 is at the end
+  if (!baseURL.includes('/api/v1')) {
+    baseURL = baseURL.replace(/\/$/, '') + '/api/v1';
+  }
+}
 
 // Create standardized axios instance
 const apiClient = axios.create({
