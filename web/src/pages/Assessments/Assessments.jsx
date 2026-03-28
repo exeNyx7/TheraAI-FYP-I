@@ -11,6 +11,7 @@ import apiClient from '../../apiClient';
 
 const TAB_LIBRARY = 'library';
 const TAB_HISTORY = 'history';
+const TAB_TAKING = 'taking';
 
 export default function Assessments() {
   const { user } = useAuth();
@@ -46,10 +47,24 @@ export default function Assessments() {
     }
   };
 
-  const handleSelectAssessment = (assessment) => {
-    setActiveAssessment(assessment);
-    showInfo(`Starting: ${assessment.name}`);
-    navigate(`/assessment/${assessment.slug}`, { state: { assessment } });
+  const handleSelectAssessment = async (assessment) => {
+    try {
+      // Fetch the full assessment template with questions
+      const response = await apiClient.get(`/assessments/${assessment.slug}`);
+      setActiveAssessment(response.data);
+      setStep(0);
+      setActiveTab('taking');
+      showInfo(`Starting: ${assessment.name}`);
+    } catch (err) {
+      console.error('Failed to load assessment:', err);
+      showInfo('Failed to load assessment');
+    }
+  };
+
+  const handleBackFromAssessment = () => {
+    setActiveAssessment(null);
+    setStep(0);
+    setActiveTab('library');
   };
 
   if (!user) return null;
@@ -74,27 +89,62 @@ export default function Assessments() {
             </div>
 
             {/* Tab bar */}
-            <div className="flex border-b border-border">
-              {[{ key: TAB_LIBRARY, label: 'Assessment Library' }, { key: TAB_HISTORY, label: 'Your History' }].map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setActiveTab(t.key)}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-all ${
-                    activeTab === t.key
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            {!activeAssessment && (
+              <div className="flex border-b border-border">
+                {[{ key: TAB_LIBRARY, label: 'Assessment Library' }, { key: TAB_HISTORY, label: 'Your History' }].map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setActiveTab(t.key)}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-all ${
+                      activeTab === t.key
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {activeTab === TAB_LIBRARY && (
+            {activeAssessment && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold">{activeAssessment.name}</h2>
+                  <Button variant="outline" onClick={handleBackFromAssessment}>
+                    Back
+                  </Button>
+                </div>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-muted-foreground mb-6">{activeAssessment.description}</p>
+                    <div className="space-y-6">
+                      {activeAssessment.questions && activeAssessment.questions.length > 0 ? (
+                        <>
+                          <p className="text-sm font-medium">
+                            Question {step + 1} of {activeAssessment.questions.length}
+                          </p>
+                          {/* Assessment form will be implemented here */}
+                          <p className="text-center py-8 text-muted-foreground">
+                            Assessment taking form coming soon...
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-center py-8 text-red-500">
+                          Failed to load assessment questions
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {!activeAssessment && activeTab === TAB_LIBRARY && (
               <AssessmentSelector onSelect={handleSelectAssessment} />
             )}
 
-            {activeTab === TAB_HISTORY && (
+            {!activeAssessment && activeTab === TAB_HISTORY && (
               <div className="space-y-4">
                 {historyLoading ? (
                   <div className="flex items-center justify-center py-12">
@@ -165,3 +215,4 @@ export default function Assessments() {
     </div>
   );
 }
+
