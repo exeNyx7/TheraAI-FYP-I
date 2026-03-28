@@ -3,7 +3,7 @@ import { SidebarNav } from '../../components/Dashboard/SidebarNav';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { AssessmentSelector } from '../../components/Assessments/AssessmentSelector';
-import { Trophy, Loader2 } from 'lucide-react';
+import { Trophy, Loader2, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
@@ -11,26 +11,39 @@ import apiClient from '../../apiClient';
 
 const TAB_LIBRARY = 'library';
 const TAB_HISTORY = 'history';
-const TAB_TAKING = 'taking';
+
+const severityColors = {
+  low: 'text-green-600 bg-green-50 border-green-200',
+  medium: 'text-yellow-600 bg-yellow-50 border-yellow-200',
+  high: 'text-orange-600 bg-orange-50 border-orange-200',
+  critical: 'text-red-600 bg-red-50 border-red-200',
+};
 
 export default function Assessments() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { showInfo } = useToast();
+  const { showInfo, showSuccess } = useToast();
+
   const [activeTab, setActiveTab] = useState(TAB_LIBRARY);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Assessment taking state
   const [activeAssessment, setActiveAssessment] = useState(null);
-  const [step, setStep] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  // Result detail view
+  const [detailResult, setDetailResult] = useState(null);
 
   useEffect(() => {
     if (!user) navigate('/login');
   }, [user, navigate]);
 
   useEffect(() => {
-    if (activeTab === TAB_HISTORY) {
-      fetchHistory();
-    }
+    if (activeTab === TAB_HISTORY) fetchHistory();
   }, [activeTab]);
 
   const fetchHistory = async () => {
@@ -41,7 +54,6 @@ export default function Assessments() {
     } catch (err) {
       console.error('Failed to fetch assessment history:', err);
       setHistory([]);
-      showInfo('Failed to load assessment history');
     } finally {
       setHistoryLoading(false);
     }
@@ -49,33 +61,306 @@ export default function Assessments() {
 
   const handleSelectAssessment = async (assessment) => {
     try {
-      // Fetch the full assessment template with questions
       const response = await apiClient.get(`/assessments/${assessment.slug}`);
       setActiveAssessment(response.data);
-      setStep(0);
-      setActiveTab('taking');
-      showInfo(`Starting: ${assessment.name}`);
+      setCurrentQuestion(0);
+      setAnswers({});
+      setResult(null);
     } catch (err) {
       console.error('Failed to load assessment:', err);
-      showInfo('Failed to load assessment');
+      showInfo('Failed to load assessment. Please try again.');
     }
   };
 
-  const handleBackFromAssessment = () => {
+  const handleAnswer = (questionId, value) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  };
+
+  const handleNext = () => {
+    setCurrentQuestion(prev => prev + 1);
+  };
+
+  const handlePrev = () => {
+    setCurrentQuestion(prev => prev - 1);
+  };
+
+  const handleSubmit = async () => {
+    const questions = activeAssessment.questions;
+    const unanswered = questions.filter(q => answers[q.id] === undefined);
+    if (unanswered.length > 0) {
+      showInfo(`Please answer all questions before submitting.`);
+      // Jump to first unanswered question
+      setCurrentQuestion(questions.indexOf(unanswered[0]));
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const payload = {
+        answers: questions.map(q => ({ question_id: q.id, value: answers[q.id] })),
+      };
+      const response = await apiClient.post(`/assessments/${activeAssessment.slug}/submit`, payload);
+      setResult(response.data);
+      showSuccess('Assessment completed!');
+    } catch (err) {
+      console.error('Failed to submit assessment:', err);
+      showInfo('Failed to submit assessment. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBackToLibrary = () => {
     setActiveAssessment(null);
-    setStep(0);
-    setActiveTab('library');
+    setResult(null);
+    setAnswers({});
+    setCurrentQuestion(0);
+    setDetailResult(null);
+  };
+
+  const handleViewResultDetail = async (resultId) => {
+    try {
+      const response = await apiClient.get(`/assessments/history/${resultId}`);
+      setDetailResult(response.data);
+    } catch (err) {
+      console.error('Failed to fetch result detail:', err);
+      showInfo('Failed to load result details.');
+    }
   };
 
   if (!user) return null;
 
+  // ── Result detail overlay ──────────────────────────────────────────────
+  if (detailResult) {
+    const pct = detailResult.max_possible_score > 0
+      ? Math.round((detailResult.total_score / detailResult.max_possible_score) * 100)
+      : 0;
+    return (
+      <div className="flex">
+        <SidebarNav />
+        <main className="flex-1 pt-16 md:pt-0">
+          <div className="bg-background min-h-screen">
+            <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold">{detailResult.assessment_name} — Results</h2>
+                <Button variant="outline" onClick={() => setDetailResult(null)}>Back</Button>
+              </div>
+              <Card className={`border-2 ${severityColors[detailResult.severity_level]}`}>
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-lg font-semibold">{detailResult.severity_label}</p>
+                      <p className="text-sm opacity-80">
+                        Completed on {new Date(detailResult.completed_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-4xl font-bold">{detailResult.total_score}</p>
+                      <p className="text-sm opacity-80">/ {detailResult.max_possible_score}</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-white/50 rounded-full h-3">
+                    <div
+                      className="bg-current h-3 rounded-full transition-all duration-700"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <p className="text-sm font-semibold text-muted-foreground mb-2">AI Recommendation</p>
+                  <p className="text-foreground leading-relaxed">{detailResult.ai_recommendation}</p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ── Assessment result view (after submit) ─────────────────────────────
+  if (result) {
+    const pct = result.max_possible_score > 0
+      ? Math.round((result.total_score / result.max_possible_score) * 100)
+      : 0;
+    return (
+      <div className="flex">
+        <SidebarNav />
+        <main className="flex-1 pt-16 md:pt-0">
+          <div className="bg-background min-h-screen">
+            <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-8 w-8 text-green-500" />
+                <h2 className="text-2xl font-bold">Assessment Complete</h2>
+              </div>
+
+              <Card className={`border-2 ${severityColors[result.severity_level]}`}>
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-lg font-semibold">{result.severity_label}</p>
+                      <p className="text-sm opacity-80">{result.assessment_name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-4xl font-bold">{result.total_score}</p>
+                      <p className="text-sm opacity-80">/ {result.max_possible_score}</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-white/50 rounded-full h-3">
+                    <div
+                      className="bg-current h-3 rounded-full transition-all duration-700"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <p className="text-sm font-semibold text-muted-foreground mb-2">AI Recommendation</p>
+                  <p className="text-foreground leading-relaxed">{result.ai_recommendation}</p>
+                </CardContent>
+              </Card>
+
+              <div className="flex gap-3">
+                <Button onClick={handleBackToLibrary}>Back to Library</Button>
+                <Button variant="outline" onClick={() => { handleBackToLibrary(); setActiveTab(TAB_HISTORY); }}>
+                  View History
+                </Button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ── Assessment taking view ────────────────────────────────────────────
+  if (activeAssessment) {
+    const questions = activeAssessment.questions || [];
+    const q = questions[currentQuestion];
+    const isLast = currentQuestion === questions.length - 1;
+    const answeredCount = Object.keys(answers).length;
+    const progressPct = questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0;
+
+    return (
+      <div className="flex">
+        <SidebarNav />
+        <main className="flex-1 pt-16 md:pt-0">
+          <div className="bg-background min-h-screen">
+            <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">{activeAssessment.name}</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Question {currentQuestion + 1} of {questions.length} · {answeredCount} answered
+                  </p>
+                </div>
+                <Button variant="outline" onClick={handleBackToLibrary}>Exit</Button>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-muted rounded-full h-2">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+
+              {/* Question card */}
+              {q && (
+                <Card>
+                  <CardContent className="p-6 space-y-6">
+                    <p className="text-lg font-medium leading-relaxed">{q.text}</p>
+                    <div className="space-y-3">
+                      {q.options.map((option) => {
+                        const isSelected = answers[q.id] === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            onClick={() => handleAnswer(q.id, option.value)}
+                            className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? 'border-primary bg-primary/10 text-primary font-medium'
+                                : 'border-border hover:border-primary/40 hover:bg-muted/50'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Navigation */}
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  onClick={handlePrev}
+                  disabled={currentQuestion === 0}
+                  className="gap-2"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Previous
+                </Button>
+
+                {isLast ? (
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="gap-2"
+                  >
+                    {submitting ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
+                    ) : (
+                      'Submit Assessment'
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleNext}
+                    disabled={answers[q?.id] === undefined}
+                    className="gap-2"
+                  >
+                    Next <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Question dots */}
+              <div className="flex flex-wrap gap-2 justify-center">
+                {questions.map((question, idx) => (
+                  <button
+                    key={question.id}
+                    onClick={() => setCurrentQuestion(idx)}
+                    className={`h-3 w-3 rounded-full transition-all ${
+                      idx === currentQuestion
+                        ? 'bg-primary scale-125'
+                        : answers[question.id] !== undefined
+                        ? 'bg-primary/40'
+                        : 'bg-muted-foreground/30'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ── Library / History tabs ────────────────────────────────────────────
   return (
     <div className="flex">
       <SidebarNav />
       <main className="flex-1 pt-16 md:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
-            {/* Header */}
             <div>
               <h1
                 className="text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent"
@@ -88,63 +373,27 @@ export default function Assessments() {
               </p>
             </div>
 
-            {/* Tab bar */}
-            {!activeAssessment && (
-              <div className="flex border-b border-border">
-                {[{ key: TAB_LIBRARY, label: 'Assessment Library' }, { key: TAB_HISTORY, label: 'Your History' }].map(t => (
-                  <button
-                    key={t.key}
-                    onClick={() => setActiveTab(t.key)}
-                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-all ${
-                      activeTab === t.key
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex border-b border-border">
+              {[{ key: TAB_LIBRARY, label: 'Assessment Library' }, { key: TAB_HISTORY, label: 'Your History' }].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key)}
+                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-all ${
+                    activeTab === t.key
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-            {activeAssessment && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">{activeAssessment.name}</h2>
-                  <Button variant="outline" onClick={handleBackFromAssessment}>
-                    Back
-                  </Button>
-                </div>
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-muted-foreground mb-6">{activeAssessment.description}</p>
-                    <div className="space-y-6">
-                      {activeAssessment.questions && activeAssessment.questions.length > 0 ? (
-                        <>
-                          <p className="text-sm font-medium">
-                            Question {step + 1} of {activeAssessment.questions.length}
-                          </p>
-                          {/* Assessment form will be implemented here */}
-                          <p className="text-center py-8 text-muted-foreground">
-                            Assessment taking form coming soon...
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-center py-8 text-red-500">
-                          Failed to load assessment questions
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {!activeAssessment && activeTab === TAB_LIBRARY && (
+            {activeTab === TAB_LIBRARY && (
               <AssessmentSelector onSelect={handleSelectAssessment} />
             )}
 
-            {!activeAssessment && activeTab === TAB_HISTORY && (
+            {activeTab === TAB_HISTORY && (
               <div className="space-y-4">
                 {historyLoading ? (
                   <div className="flex items-center justify-center py-12">
@@ -160,10 +409,9 @@ export default function Assessments() {
                     <h2 className="text-2xl font-bold">Completed Assessments</h2>
                     <div className="space-y-4">
                       {history.map((a) => {
-                        const percentage = a.max_possible_score > 0
+                        const pct = a.max_possible_score > 0
                           ? Math.round((a.total_score / a.max_possible_score) * 100)
                           : 0;
-
                         return (
                           <Card key={a.id} className="hover:shadow-md transition-all">
                             <CardContent className="p-6">
@@ -183,7 +431,7 @@ export default function Assessments() {
                                 <div className="w-full bg-muted rounded-full h-2.5">
                                   <div
                                     className="bg-primary h-2.5 rounded-full transition-all duration-700"
-                                    style={{ width: `${percentage}%` }}
+                                    style={{ width: `${pct}%` }}
                                   />
                                 </div>
                                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -195,7 +443,7 @@ export default function Assessments() {
                                   size="sm"
                                   variant="outline"
                                   className="bg-transparent"
-                                  onClick={() => navigate(`/assessment/results/${a.id}`, { state: { result: a } })}
+                                  onClick={() => handleViewResultDetail(a.id)}
                                 >
                                   View Results
                                 </Button>
@@ -215,4 +463,3 @@ export default function Assessments() {
     </div>
   );
 }
-
