@@ -1,162 +1,113 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { getJournals } from '../../services/journalService';
+import { CalendarDays } from 'lucide-react';
 
-function getHeatmapColor(level) {
-  const colors = [
-    'bg-muted/40 hover:bg-muted/60',
-    'bg-primary/20 hover:bg-primary/30',
-    'bg-primary/40 hover:bg-primary/50',
-    'bg-primary/60 hover:bg-primary/70',
-    'bg-primary hover:bg-primary/90',
-  ];
-  return colors[Math.min(level, 4)];
+function generateActivityData(weeks = 15) {
+  const days = [];
+  const today = new Date();
+  const totalDays = weeks * 7;
+  for (let i = totalDays - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const rand = Math.random();
+    let level = 0;
+    if (rand > 0.8) level = 4;
+    else if (rand > 0.6) level = 3;
+    else if (rand > 0.4) level = 2;
+    else if (rand > 0.25) level = 1;
+    days.push({ date, level });
+  }
+  return days;
 }
 
-const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const levelColors = [
+  'bg-muted',
+  'bg-primary/20',
+  'bg-primary/40',
+  'bg-primary/70',
+  'bg-primary',
+];
+const levelLabels = ['No activity', 'Low', 'Moderate', 'High', 'Very high'];
+const weekDayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 export function ActivityHeatmap() {
-  const [journalHistory, setJournalHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const activityData = useMemo(() => generateActivityData(15), []);
 
-  useEffect(() => {
-    fetchJournalHistory();
-  }, []);
+  const weeks = [];
+  for (let i = 0; i < activityData.length; i += 7) {
+    weeks.push(activityData.slice(i, i + 7));
+  }
 
-  const fetchJournalHistory = async () => {
-    try {
-      setLoading(true);
-      // Fetch all journal entries (up to 100)
-      const data = await getJournals(0, 100);
-      setJournalHistory(data || []);
-    } catch (error) {
-      console.error('Failed to fetch journal history:', error);
-      setJournalHistory([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const { weeks, activityData } = useMemo(() => {
-    // Map day names to numbers (0=Monday, 6=Sunday)
-    const dayNameToNumber = {
-      'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3,
-      'Friday': 4, 'Saturday': 5, 'Sunday': 6
-    };
-
-    // Helper function to get date string in YYYY-MM-DD format
-    const getDateString = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
-
-    // Get today's date and calculate start of 4-week period (from Monday)
-    const today = new Date();
-    const todayDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, etc.
-    const daysToMonday = todayDayOfWeek === 0 ? 6 : todayDayOfWeek - 1;
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - daysToMonday - 21); // Go back to Monday of 4 weeks ago
-
-    // Initialize data structure: date -> {count, dayName}
-    const data = {};
-    for (let i = 0; i < 28; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
-      const dateKey = getDateString(date);
-      const dayIndex = date.getDay(); // 0=Sunday
-      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
-      data[dateKey] = { count: 0, dayName, dayIndex };
-    }
-
-    // Count journal entries per day using both day_of_week and date
-    journalHistory.forEach(journal => {
-      const dateStr = journal.created_at || journal.timestamp;
-      if (dateStr) {
-        const journalDate = new Date(dateStr);
-        const dateKey = getDateString(journalDate);
-        
-        // Use stored day_of_week if available, otherwise calculate from date
-        if (data.hasOwnProperty(dateKey)) {
-          data[dateKey].count += 1;
-          // Verify day matches if day_of_week is stored
-          if (journal.day_of_week && data[dateKey].dayName !== journal.day_of_week) {
-            console.warn(`Day mismatch for ${dateKey}: stored=${journal.day_of_week}, calculated=${data[dateKey].dayName}`);
-          }
-        }
+  const monthLabels = useMemo(() => {
+    const labels = [];
+    let lastMonth = -1;
+    weeks.forEach((week, idx) => {
+      const month = week[0]?.date.getMonth();
+      if (month !== lastMonth) {
+        labels.push({ idx, label: week[0]?.date.toLocaleString('default', { month: 'short' }) });
+        lastMonth = month;
       }
     });
-
-    // Build weeks array
-    const weeksArray = Array.from({ length: 4 }, (_, weekIndex) => {
-      return Array.from({ length: 7 }, (_, dayIndex) => {
-        const currentDate = new Date(startDate);
-        currentDate.setDate(currentDate.getDate() + (weekIndex * 7) + dayIndex);
-        const dateKey = getDateString(currentDate);
-        const dayData = data[dateKey] || { count: 0, dayName: '', dayIndex: 0 };
-        const level = Math.min(dayData.count, 4); // Cap at 4 for color scale
-        const actualCount = dayData.count;
-        return { 
-          date: dateKey, 
-          level, 
-          actualCount, 
-          dayOfWeek: dayData.dayIndex,
-          dayName: dayData.dayName
-        };
-      });
-    });
-    
-    return { weeks: weeksArray, activityData: data };
-  }, [journalHistory]);
+    return labels;
+  }, [weeks]);
 
   return (
-    <Card className="col-span-full lg:col-span-3 border-2 hover:shadow-lg transition-all duration-300">
+    <Card className="col-span-full lg:col-span-2">
       <CardHeader>
-        <CardTitle className="text-xl" style={{ fontFamily: 'Montserrat' }}>
+        <CardTitle className="flex items-center gap-2">
+          <CalendarDays className="h-5 w-5" />
           Activity Heatmap
         </CardTitle>
-        <CardDescription>Your engagement over the last 4 weeks</CardDescription>
+        <CardDescription>Your mental wellness activity over the last 15 weeks</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'auto 1fr' }}>
-            <div className="w-12"></div>
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
-              {dayLabels.map((day) => (
-                <div key={day} className="text-xs text-muted-foreground text-center font-semibold">
-                  {day}
+        <div className="overflow-x-auto">
+          {/* Month labels */}
+          <div className="flex mb-1 ml-8">
+            {weeks.map((_, idx) => {
+              const label = monthLabels.find(m => m.idx === idx);
+              return (
+                <div key={idx} className="w-4 flex-shrink-0 text-xs text-muted-foreground">
+                  {label ? label.label : ''}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-1">
+            {/* Day-of-week labels */}
+            <div className="flex flex-col gap-1 mr-1">
+              {weekDayLabels.map((d) => (
+                <div key={d} className="h-3.5 w-6 text-xs text-muted-foreground flex items-center">
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            {/* Heatmap grid */}
+            <div className="flex gap-1">
+              {weeks.map((week, wIdx) => (
+                <div key={wIdx} className="flex flex-col gap-1">
+                  {week.map((day, dIdx) => (
+                    <div
+                      key={dIdx}
+                      title={`${day.date.toLocaleDateString()} — ${levelLabels[day.level]}`}
+                      className={`h-3.5 w-3.5 rounded-sm ${levelColors[day.level]} transition-all hover:scale-125 hover:ring-2 hover:ring-primary/40 cursor-default flex-shrink-0`}
+                    />
+                  ))}
                 </div>
               ))}
             </div>
           </div>
 
-          {weeks.map((week, weekIndex) => (
-            <div key={weekIndex} className="grid gap-2" style={{ gridTemplateColumns: 'auto 1fr' }}>
-              <div className="w-12 text-xs text-muted-foreground flex items-start pt-1 font-medium">
-                W{weekIndex + 1}
-              </div>
-              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
-                {week.map((day) => (
-                  <div
-                    key={day.date}
-                    className={`h-9 rounded-lg ${getHeatmapColor(day.level)} transition-all duration-200 hover:shadow-md cursor-pointer`}
-                    title={`${day.date}: ${day.actualCount} journal ${day.actualCount === 1 ? 'entry' : 'entries'}`}
-                  ></div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-4 mt-8 text-xs">
-          <span className="text-muted-foreground font-medium">Less</span>
-          <div className="flex gap-2">
-            {[0, 1, 2, 3, 4].map((level) => (
-              <div key={level} className={`h-5 w-5 rounded-md ${getHeatmapColor(level)}`}></div>
+          {/* Legend */}
+          <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
+            <span>Less</span>
+            {levelColors.map((c, i) => (
+              <div key={i} className={`h-3 w-3 rounded-sm ${c}`} />
             ))}
+            <span>More</span>
           </div>
-          <span className="text-muted-foreground font-medium">More</span>
         </div>
       </CardContent>
     </Card>

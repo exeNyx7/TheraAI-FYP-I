@@ -31,11 +31,19 @@ async def lifespan(app: FastAPI):
         # Initialize database (create indexes)
         await init_database()
         
-        # Initialize AI service (loads model)
+        # Initialize AI service (loads model) in background
+        import threading
         from .services.ai_service import get_ai_service
-        ai = get_ai_service()
-        device_info = ai.get_device_info()
-        print(f"🤖 AI Service: {device_info}")
+        
+        def load_ai_background():
+            try:
+                ai = get_ai_service()
+                device_info = ai.get_device_info()
+                print(f"🤖 AI Service Loaded in background: {device_info}")
+            except Exception as e:
+                print(f"❌ AI Service Load Error: {e}")
+                
+        threading.Thread(target=load_ai_background, daemon=True).start()
         
         print("✅ Application startup complete")
     except Exception as e:
@@ -50,14 +58,25 @@ async def lifespan(app: FastAPI):
     print("✅ Application shutdown complete")
 
 
+from .dependencies.rate_limit import limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 # Create FastAPI application
 app = FastAPI(
     title=settings.app_name,
     description=settings.app_description,
     version=settings.app_version,
     debug=settings.debug,
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
+    redirect_slashes=False,  # Prevent 307 redirects that drop POST bodies
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS for React frontend
 app.add_middleware(

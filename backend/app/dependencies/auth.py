@@ -10,9 +10,13 @@ from typing import Optional
 from ..utils.auth import decode_token
 from ..services.user_service import UserService
 from ..models.user import UserOut, TokenData, UserRole
+from cachetools import TTLCache
 
 # HTTP Bearer token security scheme
 security = HTTPBearer()
+
+# Cache for user lookups to reduce database load
+_user_cache = TTLCache(maxsize=1024, ttl=60)
 
 
 async def get_current_user(
@@ -40,8 +44,15 @@ async def get_current_user(
         # Decode token
         token_data: TokenData = decode_token(credentials.credentials)
         
-        # Get user from database
-        user = await UserService.get_user_by_id(token_data.user_id)
+        # Check cache first
+        if token_data.user_id in _user_cache:
+            user = _user_cache[token_data.user_id]
+        else:
+            # Get user from database
+            user = await UserService.get_user_by_id(token_data.user_id)
+            if user:
+                _user_cache[token_data.user_id] = user
+                
         if user is None:
             raise credentials_exception
             

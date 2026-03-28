@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -10,25 +11,22 @@ export default function LoginV0() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const { login } = useAuth();
+  const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
   // Check for success message from signup
   useEffect(() => {
     if (location.state?.message) {
-      setSuccessMessage(location.state.message);
-      // Clear the message after 5 seconds
-      const timer = setTimeout(() => setSuccessMessage(''), 5000);
-      return () => clearTimeout(timer);
+      showSuccess(location.state.message);
+      // Clean up the location state so it doesn't reappear on reload
+      window.history.replaceState({}, document.title);
     }
-  }, [location]);
+  }, [location, showSuccess]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
     setIsLoading(true);
 
     try {
@@ -36,7 +34,7 @@ export default function LoginV0() {
       // AuthContext handles navigation based on role
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+      showError(err.response?.data?.detail || err.message || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -83,20 +81,6 @@ export default function LoginV0() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
-              {/* Success message from signup */}
-              {successMessage && (
-                <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg text-sm text-primary flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                  {successMessage}
-                </div>
-              )}
-
-              {/* Error display */}
-              {error && (
-                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
-                  {error}
-                </div>
-              )}
 
               {/* Email field */}
               <div className="space-y-2">

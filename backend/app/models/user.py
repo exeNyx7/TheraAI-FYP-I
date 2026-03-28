@@ -141,6 +141,11 @@ class UserUpdate(BaseModel):
         return v.strip() if v else v
 
 
+class UserProfileUpdate(BaseModel):
+    """User profile update schema intended for frontend use"""
+    full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+
+
 class Token(BaseModel):
     """JWT token response schema"""
     access_token: str

@@ -7,15 +7,43 @@ services:
     container_name: theraai-mongodb
     restart: unless-stopped
     environment:
+      # These credentials match your connection strings
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: password123
       MONGO_INITDB_DATABASE: theraai
     ports:
       - "27017:27017"
     volumes:
+      # Persistent storage for database
       - mongodb_data:/data/db
+      # If you have an initialization script:
+      # - ./backend/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     networks:
       - theraai-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Redis Cache (Future proofing for Rate Limiting / Token Blacklist)
+  redis:
+    image: redis:7-alpine
+    container_name: theraai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      # Persistent storage for cache/sessions
+      - redis_data:/data
+    networks:
+      - theraai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # FastAPI Backend
   backend:
@@ -27,15 +55,26 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
+      # Hot-reloading for local development
       - ./backend:/app
+      # HUGE timesaver: Cache HuggingFace models so they don't re-download on every docker restart!
+      - hf_models_cache:/root/.cache/huggingface
     networks:
       - theraai-network
     env_file:
-      - .env.docker
+      - ./backend/.env
     environment:
+      # Docker network DNS resolves 'mongodb' to the DB container
       - MONGODB_URL=mongodb://admin:password123@mongodb:27017/theraai?authSource=admin
+      - REDIS_URL=redis://redis:6379/0
+      # Ensure Swagger and auto-reloading work smoothly in docker dev mode
+      - DEBUG=True
+    # Host must be 0.0.0.0 to be accessible outside the container
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # React Frontend with Vite
@@ -50,21 +89,31 @@ services:
     depends_on:
       - backend
     volumes:
+      # Hot-reloading for local UI development
       - ./web:/app
+      # Prevent local node_modules folder from overriding the container's linux dependencies
       - /app/node_modules
     networks:
       - theraai-network
     env_file:
       - ./web/.env
     environment:
-      - VITE_API_URL=http://backend:8000
+      # CRITICAL BUG FIX: The browser makes these API requests, not the container!
+      # It must be localhost:8000 instead of backend:8000 for local development.
+      - VITE_API_URL=http://localhost:8000/api/v1
       - VITE_ENVIRONMENT=docker
     stdin_open: true
     tty: true
-    command: npm run dev -- --host
+    command: npm run dev -- --host 0.0.0.0
 
 volumes:
+  # Database volumes
   mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  # Machine Learning Cache
+  hf_models_cache:
     driver: local
 
 networks:

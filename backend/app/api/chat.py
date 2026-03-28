@@ -3,7 +3,7 @@ Chat API
 AI-powered wellness companion chat endpoints with BlenderBot
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import pytz
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,9 +17,11 @@ from ..services.ai_service import get_ai_service
 router = APIRouter(prefix="/chat", tags=["AI Chat"])
 
 
+from pydantic import BaseModel, Field
+
 class ChatMessage(BaseModel):
     """Chat message request"""
-    message: str
+    message: str = Field(..., min_length=1, max_length=2000)
 
 
 class ChatResponse(BaseModel):
@@ -88,14 +90,23 @@ async def send_chat_message(
         ai_service = get_ai_service()
         
         try:
-            ai_response = ai_service.generate_response_llm(
-                user_message=user_message,
-                conversation_history=conversation_history if conversation_history else None
+            import asyncio
+            loop = asyncio.get_running_loop()
+            
+            ai_response = await loop.run_in_executor(
+                None,
+                lambda: ai_service.generate_response_llm(
+                    user_message=user_message,
+                    conversation_history=conversation_history if conversation_history else None
+                )
             )
             
             # Also get sentiment of user message
             try:
-                sentiment_result = ai_service.analyze_sentiment(user_message)
+                sentiment_result = await loop.run_in_executor(
+                    None, 
+                    lambda: ai_service.analyze_sentiment(user_message)
+                )
                 sentiment = sentiment_result["label"].lower()
             except Exception:
                 sentiment = "neutral"
@@ -116,7 +127,7 @@ async def send_chat_message(
             "ai_response": ai_response,
             "sentiment": sentiment,
             "timestamp": current_time_pakistan.isoformat(),
-            "created_at": datetime.utcnow()  # Keep UTC for database indexing
+            "created_at": datetime.now(timezone.utc)  # Keep UTC for database indexing
         }
         
         await db.chat_history.insert_one(chat_record)

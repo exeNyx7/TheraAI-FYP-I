@@ -7,14 +7,16 @@ import LandingPage from './pages/Landing/LandingPageV0';
 import Login from './pages/Auth/LoginV0';
 import Signup from './pages/Auth/SignupV0';
 import Dashboard from './pages/Dashboard/DashboardV0';
-import Journal from './pages/Journal/JournalV0';
+import Journal from './pages/Journal/Journal';
 import JournalDetail from './pages/Journal/JournalDetailV0';
-import MoodTracker from './pages/MoodTracker/MoodTrackerV0';
-import Chat from './pages/Chat/ChatV0';
-import Profile from './pages/Profile/ProfileV0';
-import Settings from './pages/Settings/SettingsV0';
-import Assessments from './pages/Assessments/AssessmentsV0';
-import Appointments from './pages/Appointments/AppointmentsV0';
+import MoodTracker from './pages/MoodTracker/MoodTracker';
+import Chat from './pages/Chat/Chat';
+import Profile from './pages/Profile/Profile';
+import Settings from './pages/Settings/Settings';
+import Assessments from './pages/Assessments/Assessments';
+import Appointments from './pages/Appointments/Appointments';
+import Achievements from './pages/Achievements/Achievements';
+import TherapistDashboard from './pages/Therapist/TherapistDashboard';
 import './App.css';
 
 function App() {
@@ -57,15 +59,17 @@ function App() {
 
             {/* Role-based Protected Routes */}
             <Route
-              path="/patients"
+              path="/therapist-dashboard"
               element={
-                <ProtectedRoute roles={['psychiatrist', 'admin']}>
-                  <div className="page-placeholder">
-                    <h2>Patients Management</h2>
-                    <p>This page is available for psychiatrists and admins.</p>
-                  </div>
+                <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
+                  <TherapistDashboard />
                 </ProtectedRoute>
               }
+            />
+
+            <Route
+              path="/patients"
+              element={<Navigate to="/therapist-dashboard" replace />}
             />
 
             <Route
@@ -146,10 +150,16 @@ function App() {
               path="/progress"
               element={
                 <ProtectedRoute>
-                  <div className="page-placeholder">
-                    <h2>Progress Tracking</h2>
-                    <p>Track your mental health progress over time.</p>
-                  </div>
+                  <Assessments />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/achievements"
+              element={
+                <ProtectedRoute>
+                  <Achievements />
                 </ProtectedRoute>
               }
             />

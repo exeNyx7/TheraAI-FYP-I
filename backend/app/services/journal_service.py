@@ -4,7 +4,7 @@ Handles all journal-related business logic and database operations
 """
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 from fastapi import HTTPException, status
 from bson import ObjectId
@@ -68,7 +68,7 @@ class JournalService:
                 # RoBERTa emotion fields
                 emotion_themes=analysis.emotion_themes,
                 top_emotions=analysis.top_emotions,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 updated_at=None
             )
             
@@ -243,7 +243,7 @@ class JournalService:
                 update_dict["top_emotions"] = analysis.top_emotions
             
             # Add updated timestamp
-            update_dict["updated_at"] = datetime.utcnow()
+            update_dict["updated_at"] = datetime.now(timezone.utc)
             
             # Update in database
             await journals_collection.update_one(

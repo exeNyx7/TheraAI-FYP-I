@@ -59,7 +59,7 @@ async def get_moods(
 
 @router.get("/stats")
 async def get_mood_stats(
-    period: str = Query("7d", regex="^(7d|30d|90d|all)$"),
+    period: str = Query("7d", pattern="^(7d|30d|90d|all)$"),
     current_user: UserOut = Depends(get_current_user)
 ):
     """Get mood statistics for the current user"""

@@ -13,17 +13,18 @@ import {
   Settings,
   LogOut,
   ChevronRight,
-  ChevronLeft,
   Menu,
   X,
+  Zap,
 } from 'lucide-react';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: BookOpen, label: 'Journal', href: '/journal' },
   { icon: MessageCircle, label: 'Mindful Chat', href: '/chat' },
-  { icon: TrendingUp, label: 'Moods', href: '/mood' },
+  { icon: TrendingUp, label: 'Mood Tracking', href: '/mood' },
   { icon: Trophy, label: 'Assessments', href: '/assessments' },
+  { icon: Zap, label: 'Achievements', href: '/achievements' },
   { icon: Calendar, label: 'Appointments', href: '/appointments' },
   { icon: User, label: 'Profile', href: '/profile' },
   { icon: Settings, label: 'Settings', href: '/settings' },
@@ -34,36 +35,29 @@ export function SidebarNav() {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  // Collapse functionality - temporarily disabled
-  // const [isCollapsed, setIsCollapsed] = useState(() => {
-  //   const saved = localStorage.getItem('sidebar-collapsed');
-  //   return saved === 'true';
-  // });
-  const isCollapsed = false; // Always expanded for now
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebar-collapsed');
+    return saved === 'true';
+  });
 
-  // Update body class when collapsed state changes
   React.useEffect(() => {
-    // Always set to expanded since collapse is disabled
-    document.body.classList.add('sidebar-expanded');
-    document.body.classList.remove('sidebar-collapsed');
-    
-    // Cleanup function
+    if (isCollapsed) {
+      document.body.classList.add('sidebar-collapsed');
+      document.body.classList.remove('sidebar-expanded');
+    } else {
+      document.body.classList.add('sidebar-expanded');
+      document.body.classList.remove('sidebar-collapsed');
+    }
+    localStorage.setItem('sidebar-collapsed', isCollapsed);
     return () => {
       document.body.classList.remove('sidebar-collapsed', 'sidebar-expanded');
     };
-  }, []); // Empty dependency array since isCollapsed is always false
+  }, [isCollapsed]);
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
-
-  // Collapse toggle function - temporarily disabled
-  // const toggleCollapse = () => {
-  //   const newState = !isCollapsed;
-  //   setIsCollapsed(newState);
-  //   localStorage.setItem('sidebar-collapsed', newState);
-  // };
 
   return (
     <>
@@ -71,8 +65,19 @@ export function SidebarNav() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg"
+        aria-label="Toggle navigation"
       >
         {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+      </button>
+
+      {/* Desktop collapse button */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        style={{ left: isCollapsed ? '4.5rem' : '15.5rem' }}
+        className="hidden lg:flex fixed top-1/2 z-50 -translate-y-1/2 items-center justify-center h-10 w-5 bg-primary/10 hover:bg-primary/20 rounded-r-lg transition-all duration-300 border-r border-primary/20"
+        aria-label="Collapse sidebar"
+      >
+        <ChevronRight className={`h-4 w-4 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`} />
       </button>
 
       {/* Sidebar */}
@@ -81,9 +86,12 @@ export function SidebarNav() {
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } ${isCollapsed ? 'w-20' : 'w-64'}`}
       >
-        {/* Logo and Collapse Button */}
-        <div className="flex items-center justify-between mb-10">
-        <Link to="/dashboard" className={`flex items-center gap-3 group ${isCollapsed ? 'justify-center' : ''}`}>
+        {/* Logo */}
+        <Link
+          to="/dashboard"
+          className={`flex items-center gap-3 mb-10 group ${isCollapsed ? 'justify-center' : ''}`}
+          onClick={() => setIsOpen(false)}
+        >
           <div className="h-11 w-11 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300 flex-shrink-0">
             <span className="text-sm font-bold text-primary-foreground" style={{ fontFamily: 'Montserrat' }}>
               T
@@ -95,32 +103,13 @@ export function SidebarNav() {
             </span>
           )}
         </Link>
-        {/* Collapse buttons - temporarily disabled */}
-        {/* {!isCollapsed && (
-          <button
-            onClick={toggleCollapse}
-            className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg bg-sidebar-accent/40 hover:bg-sidebar-accent/60 text-sidebar-foreground transition-all duration-200"
-            aria-label="Collapse sidebar"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-        )}
-        {isCollapsed && (
-          <button
-            onClick={toggleCollapse}
-            className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg bg-sidebar-accent/40 hover:bg-sidebar-accent/60 text-sidebar-foreground transition-all duration-200 absolute right-2 top-6"
-            aria-label="Expand sidebar"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        )} */}
-        </div>
 
         {/* Navigation items */}
-        <nav className="flex-1 space-y-2 mb-8">
+        <nav className="flex-1 space-y-1 mb-8 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+            const isActive = location.pathname === item.href ||
+              (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
             return (
               <Link
                 key={item.href}
@@ -128,14 +117,14 @@ export function SidebarNav() {
                 onClick={() => setIsOpen(false)}
                 title={isCollapsed ? item.label : ''}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
+                  isCollapsed ? 'justify-center px-0' : ''
+                } ${
                   isActive
                     ? 'bg-gradient-to-r from-primary/30 to-primary/10 text-primary border-l-4 border-primary shadow-md'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent/40 hover:text-sidebar-foreground'
-                } ${isCollapsed ? 'justify-center' : ''}`}
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+                }`}
               >
-                <Icon
-                  className={`h-5 w-5 transition-transform duration-200 flex-shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`}
-                />
+                <Icon className={`h-5 w-5 transition-transform duration-200 flex-shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
                 {!isCollapsed && (
                   <>
                     <span className="font-medium">{item.label}</span>
@@ -168,6 +157,9 @@ export function SidebarNav() {
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
         />
       )}
+
+      {/* Spacer to offset main content on desktop */}
+      <div className={`hidden md:block flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`} />
     </>
   );
 }

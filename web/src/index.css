@@ -1,16 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  * {
-    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
-  }
-
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -32,7 +26,17 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 262 83% 58%;
     --radius: 0.75rem;
-    
+
+    /* Sidebar variables */
+    --sidebar: 210 40% 96%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 92%;
+    --sidebar-accent-foreground: 222.2 84% 4.9%;
+    --sidebar-border: 214.3 31.8% 88%;
+    --sidebar-ring: 262 83% 58%;
+
     /* TheraAI Custom Variables */
     --therapy-primary: 262 83% 58%;
     --therapy-secondary: 204 100% 97%;
@@ -46,11 +50,11 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 222.2 47% 8%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222.2 47% 8%;
     --popover-foreground: 210 40% 98%;
-    --primary: 262 83% 58%;
+    --primary: 262 83% 68%;
     --primary-foreground: 222.2 84% 4.9%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -62,27 +66,34 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 262 83% 58%;
-  }
-}
+    --ring: 262 83% 68%;
 
-@layer base {
+    /* Sidebar variables dark */
+    --sidebar: 222.2 47% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 262 83% 68%;
+    --sidebar-primary-foreground: 222.2 84% 4.9%;
+    --sidebar-accent: 217.2 32.6% 15%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 262 83% 68%;
+  }
+
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: 'Montserrat', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
+
   code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-      monospace;
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
   }
 }
 
@@ -91,78 +102,73 @@
   .therapy-gradient {
     background: linear-gradient(135deg, hsl(var(--therapy-primary)) 0%, hsl(var(--therapy-info)) 100%);
   }
-  
+
   .therapy-card {
     @apply bg-card border border-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200;
   }
-  
+
   .therapy-button {
     @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
   }
-  
+
   .therapy-button-primary {
     @apply therapy-button bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2;
   }
-  
+
   .therapy-button-secondary {
     @apply therapy-button bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2;
   }
-  
+
   .therapy-input {
     @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
-}
 
-.App {
-  text-align: center;
-}
-
-.App-header {
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
-}
-
-.App-main {
-  padding: 20px;
-}
-
-/* Utility classes */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-.text-center {
-  text-align: center;
-}
-
-.mt-20 {
-  margin-top: 20px;
-}
-
-.mb-20 {
-  margin-bottom: 20px;
-}
-
-/* Sidebar-aware main content */
-@media (min-width: 768px) {
-  /* When sidebar is expanded (default) */
-  body.sidebar-expanded main.sidebar-content {
-    margin-left: 16rem; /* 256px */
+  /* Sidebar-aware main content layout */
+  .sidebar-layout {
+    @apply flex min-h-screen;
   }
-  
-  /* When sidebar is collapsed */
-  body.sidebar-collapsed main.sidebar-content {
-    margin-left: 5rem; /* 80px */
+
+  .sidebar-main {
+    @apply flex-1 pt-16 md:pt-0 transition-all duration-300;
   }
 }
 
-/* Mobile: no margin */
-@media (max-width: 767px) {
-  main.sidebar-content {
-    margin-left: 0;
-    padding-top: 4rem; /* Account for mobile menu button */
-  }
+/* Sidebar-aware layout removed (using flex wrapper instead) */
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
+
+/* Animate-in utility classes */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
 }

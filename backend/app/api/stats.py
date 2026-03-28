@@ -3,7 +3,7 @@ User Statistics API
 Endpoints for user stats, achievements, and activity feed
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -97,7 +97,7 @@ async def get_user_stats(current_user: UserOut = Depends(get_current_user)):
         level = (total_points // 100) + 1  # Level up every 100 points
         
         # Weekly progress
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
         weekly_entries = 0
         for entry in entries:
             try:
@@ -123,7 +123,7 @@ async def get_user_stats(current_user: UserOut = Depends(get_current_user)):
             mood_score=avg_mood,
             weekly_goal=5,  # Default goal
             weekly_progress=weekly_entries,
-            member_since=current_user.created_at.isoformat() if hasattr(current_user, 'created_at') else datetime.utcnow().isoformat(),
+            member_since=current_user.created_at.isoformat() if hasattr(current_user, 'created_at') else datetime.now(timezone.utc).isoformat(),
             last_entry_date=last_entry_date
         )
         
@@ -334,7 +334,7 @@ async def calculate_streak(entries: list) -> int:
         
         # Check if last entry was today or yesterday
         last_entry_date = parse_datetime(sorted_entries[0].get("created_at", "")).date()
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         
         if (today - last_entry_date).days > 1:
             return 0  # Streak broken
@@ -365,7 +365,7 @@ async def calculate_streak(entries: list) -> int:
 def parse_datetime(date_str: str) -> datetime:
     """Safely parse datetime string"""
     if not date_str:
-        return datetime.utcnow()
+        return datetime.now(timezone.utc)
     
     try:
         # Handle ISO format with Z
@@ -376,4 +376,4 @@ def parse_datetime(date_str: str) -> datetime:
             return date_str
         return datetime.fromisoformat(date_str)
     except Exception:
-        return datetime.utcnow()
+        return datetime.now(timezone.utc)

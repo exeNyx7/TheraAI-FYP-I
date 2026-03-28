@@ -15,7 +15,7 @@ router = APIRouter(prefix="/journals", tags=["Journals"])
 
 
 @router.post(
-    "/",
+    "",
     response_model=JournalOut,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new journal entry",
@@ -50,14 +50,16 @@ async def create_journal_entry(
     except HTTPException:
         raise
     except Exception as e:
+        import logging
+        logging.exception("Failed to create journal entry")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create journal entry: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
 @router.get(
-    "/",
+    "",
     response_model=List[JournalOut],
     summary="Get user's journal entries",
     description="Retrieve all journal entries for the authenticated user with pagination"
@@ -90,9 +92,11 @@ async def get_journal_entries(
     except HTTPException:
         raise
     except Exception as e:
+        import logging
+        logging.exception("Failed to fetch journal entries")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch journal entries: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 

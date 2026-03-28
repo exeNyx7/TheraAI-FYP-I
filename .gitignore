@@ -54,10 +54,14 @@ backend/*$py.class
 
 # Virtual environments
 backend/venv/
+backend/.venv/
 backend/env/
 backend/ENV/
 backend/env.bak/
 backend/venv.bak/
+.venv/
+venv/
+env/
 
 # Python distribution / packaging
 backend/build/
@@ -217,12 +221,12 @@ containers/
 
 # Environment files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-backend/.env*
-web/.env*
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+web/.env
+web/.env.*
 
 # API keys and secrets
 backend/secrets/

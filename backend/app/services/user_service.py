@@ -4,7 +4,7 @@ Handles all user-related business logic and database operations
 """
 
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from bson import ObjectId
 
@@ -94,7 +94,7 @@ class UserService:
         user = UserInDB.from_doc(user_doc)
         
         # Check if account is locked
-        if user.locked_until and user.locked_until > datetime.utcnow():
+        if user.locked_until and user.locked_until > datetime.now(timezone.utc):
             return None
         
         # Verify password
@@ -167,7 +167,7 @@ class UserService:
             # Prepare update data
             update_data = user_data.dict(exclude_unset=True)
             if update_data:
-                update_data["updated_at"] = datetime.utcnow()
+                update_data["updated_at"] = datetime.now(timezone.utc)
                 
                 # Update user
                 result = await users_collection.update_one(
@@ -202,7 +202,7 @@ class UserService:
         try:
             result = await users_collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
+                {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}}
             )
             return result.modified_count > 0
             
@@ -291,7 +291,7 @@ class UserService:
             
             # Lock account after 5 failed attempts for 15 minutes
             if attempts >= 5:
-                update_data["locked_until"] = datetime.utcnow() + timedelta(minutes=15)
+                update_data["locked_until"] = datetime.now(timezone.utc) + timedelta(minutes=15)
             
             await users_collection.update_one(
                 {"_id": user_id},
@@ -315,5 +315,5 @@ class UserService:
         
         await users_collection.update_one(
             {"_id": user_id},
-            {"$set": {"last_login": datetime.utcnow(), "updated_at": datetime.utcnow()}}
+            {"$set": {"last_login": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}}
         )

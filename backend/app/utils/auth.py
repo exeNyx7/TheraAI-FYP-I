@@ -3,9 +3,9 @@ Authentication Utilities for TheraAI Backend
 Handles password hashing, JWT tokens, and user authentication
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from passlib.context import CryptContext
+import bcrypt
 from jose import JWTError, jwt
 from fastapi import HTTPException, status
 from ..config import get_settings
@@ -13,9 +13,7 @@ from ..models.user import TokenData, UserRole
 
 settings = get_settings()
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+# Password hashing context removed, using raw bcrypt directly
 
 def hash_password(password: str) -> str:
     """
@@ -27,7 +25,9 @@ def hash_password(password: str) -> str:
     Returns:
         str: Hashed password
     """
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -41,7 +41,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         bool: True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -58,9 +58,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
     
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
@@ -97,7 +97,7 @@ def decode_token(token: str) -> TokenData:
             raise credentials_exception
             
         # Check if token is expired
-        if exp and datetime.utcfromtimestamp(exp) < datetime.utcnow():
+        if exp and datetime.fromtimestamp(exp, tz=timezone.utc) < datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired",
@@ -108,7 +108,7 @@ def decode_token(token: str) -> TokenData:
             user_id=user_id,
             email=email, 
             role=role,
-            exp=datetime.utcfromtimestamp(exp) if exp else None
+            exp=datetime.fromtimestamp(exp, tz=timezone.utc) if exp else None
         )
         return token_data
         
@@ -132,7 +132,7 @@ def create_token_payload(user_id: str, email: str, role: UserRole) -> dict:
         "sub": user_id,
         "email": email,
         "role": role,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "type": "access_token"
     }
 
@@ -159,7 +159,7 @@ def is_token_expired(token_data: TokenData) -> bool:
     """
     if not token_data.exp:
         return False
-    return datetime.utcnow() > token_data.exp
+    return datetime.now(timezone.utc) > token_data.exp
 
 
 def generate_password_reset_token(email: str) -> str:
@@ -176,7 +176,7 @@ def generate_password_reset_token(email: str) -> str:
     data = {
         "sub": email,
         "type": "password_reset",
-        "iat": datetime.utcnow()
+        "iat": datetime.now(timezone.utc)
     }
     return create_access_token(data, expires_delta)
 
@@ -201,7 +201,7 @@ def verify_password_reset_token(token: str) -> Optional[str]:
             return None
             
         # Check if token is expired
-        if exp and datetime.utcfromtimestamp(exp) < datetime.utcnow():
+        if exp and datetime.utcfromtimestamp(exp) < datetime.now(timezone.utc):
             return None
             
         return email

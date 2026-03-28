@@ -1,405 +1,229 @@
-/**
- * Settings Page
- * User preferences, notifications, privacy, and account settings
- */
-
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import {
-  ArrowLeft, Bell, Lock, Eye, Palette, Download, Trash2,
-  Shield, Mail, Moon, Sun, Globe, Check, X
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { SidebarNav } from '../../components/Dashboard/SidebarNav';
 import { Button } from '../../components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
-import './Settings.css';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Input } from '../../components/ui/input';
+import { Bell, Moon, Lock, Trash2, Shield, Key } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { useToast } from '../../contexts/ToastContext';
 
-function Settings() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  
-  const [settings, setSettings] = useState({
-    // Notifications
-    emailNotifications: true,
-    weeklyDigest: true,
-    achievementAlerts: true,
-    reminderNotifications: false,
-    
-    // Privacy
-    profileVisibility: 'private',
-    dataSharing: false,
-    analyticsTracking: true,
-    
-    // Appearance
-    theme: 'light',
-    fontSize: 'medium',
-    compactMode: false,
-    
-    // Data & Privacy
-    autoSave: true,
-    dataRetention: '1year'
-  });
-
-  const [hasChanges, setHasChanges] = useState(false);
-
-  const handleToggle = (key) => {
-    setSettings({
-      ...settings,
-      [key]: !settings[key]
-    });
-    setHasChanges(true);
-  };
-
-  const handleSelect = (key, value) => {
-    setSettings({
-      ...settings,
-      [key]: value
-    });
-    setHasChanges(true);
-  };
-
-  const handleSave = () => {
-    // TODO: Implement settings save API call
-    console.log('Saving settings:', settings);
-    setHasChanges(false);
-  };
-
-  const handleExportData = () => {
-    // TODO: Implement data export
-    console.log('Exporting user data...');
-  };
-
-  const handleDeleteAccount = () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      // TODO: Implement account deletion
-      console.log('Deleting account...');
-    }
-  };
-
+function Toggle({ checked, onChange }) {
   return (
-    <div className="settings-page">
-      {/* Header */}
-      <div className="settings-header">
-        <button className="back-button" onClick={() => navigate('/dashboard')}>
-          <ArrowLeft size={20} />
-          <span>Back to Dashboard</span>
-        </button>
-        <h1 className="page-title">Settings</h1>
-        {hasChanges && (
-          <Button className="save-button" onClick={handleSave}>
-            <Check size={18} />
-            Save Changes
-          </Button>
-        )}
-      </div>
-
-      <div className="settings-container">
-        {/* Notifications Section */}
-        <Card className="settings-card">
-          <CardHeader>
-            <div className="card-header-content">
-              <Bell size={24} className="section-icon" />
-              <div>
-                <CardTitle>Notifications</CardTitle>
-                <p className="section-description">
-                  Manage how you receive updates and reminders
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="settings-list">
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Mail size={18} />
-                  <div>
-                    <div className="setting-label">Email Notifications</div>
-                    <div className="setting-hint">Receive important updates via email</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.emailNotifications ? 'active' : ''}`}
-                  onClick={() => handleToggle('emailNotifications')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Globe size={18} />
-                  <div>
-                    <div className="setting-label">Weekly Digest</div>
-                    <div className="setting-hint">Weekly summary of your progress</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.weeklyDigest ? 'active' : ''}`}
-                  onClick={() => handleToggle('weeklyDigest')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Bell size={18} />
-                  <div>
-                    <div className="setting-label">Achievement Alerts</div>
-                    <div className="setting-hint">Get notified when you unlock achievements</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.achievementAlerts ? 'active' : ''}`}
-                  onClick={() => handleToggle('achievementAlerts')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Bell size={18} />
-                  <div>
-                    <div className="setting-label">Journal Reminders</div>
-                    <div className="setting-hint">Daily reminders to journal</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.reminderNotifications ? 'active' : ''}`}
-                  onClick={() => handleToggle('reminderNotifications')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Privacy Section */}
-        <Card className="settings-card">
-          <CardHeader>
-            <div className="card-header-content">
-              <Lock size={24} className="section-icon" />
-              <div>
-                <CardTitle>Privacy & Security</CardTitle>
-                <p className="section-description">
-                  Control your data and privacy preferences
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="settings-list">
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Eye size={18} />
-                  <div>
-                    <div className="setting-label">Profile Visibility</div>
-                    <div className="setting-hint">Who can see your profile</div>
-                  </div>
-                </div>
-                <select
-                  className="setting-select"
-                  value={settings.profileVisibility}
-                  onChange={(e) => handleSelect('profileVisibility', e.target.value)}
-                >
-                  <option value="public">Public</option>
-                  <option value="friends">Friends Only</option>
-                  <option value="private">Private</option>
-                </select>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Shield size={18} />
-                  <div>
-                    <div className="setting-label">Data Sharing</div>
-                    <div className="setting-hint">Share anonymized data for research</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.dataSharing ? 'active' : ''}`}
-                  onClick={() => handleToggle('dataSharing')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Globe size={18} />
-                  <div>
-                    <div className="setting-label">Analytics Tracking</div>
-                    <div className="setting-hint">Help us improve with usage data</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.analyticsTracking ? 'active' : ''}`}
-                  onClick={() => handleToggle('analyticsTracking')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Appearance Section */}
-        <Card className="settings-card">
-          <CardHeader>
-            <div className="card-header-content">
-              <Palette size={24} className="section-icon" />
-              <div>
-                <CardTitle>Appearance</CardTitle>
-                <p className="section-description">
-                  Customize how TheraAI looks and feels
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="settings-list">
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Moon size={18} />
-                  <div>
-                    <div className="setting-label">Theme</div>
-                    <div className="setting-hint">Choose your preferred theme</div>
-                  </div>
-                </div>
-                <div className="theme-buttons">
-                  <button
-                    className={`theme-btn ${settings.theme === 'light' ? 'active' : ''}`}
-                    onClick={() => handleSelect('theme', 'light')}
-                  >
-                    <Sun size={16} />
-                    Light
-                  </button>
-                  <button
-                    className={`theme-btn ${settings.theme === 'dark' ? 'active' : ''}`}
-                    onClick={() => handleSelect('theme', 'dark')}
-                  >
-                    <Moon size={16} />
-                    Dark
-                  </button>
-                </div>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Palette size={18} />
-                  <div>
-                    <div className="setting-label">Font Size</div>
-                    <div className="setting-hint">Adjust text size for readability</div>
-                  </div>
-                </div>
-                <select
-                  className="setting-select"
-                  value={settings.fontSize}
-                  onChange={(e) => handleSelect('fontSize', e.target.value)}
-                >
-                  <option value="small">Small</option>
-                  <option value="medium">Medium</option>
-                  <option value="large">Large</option>
-                  <option value="xlarge">Extra Large</option>
-                </select>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Palette size={18} />
-                  <div>
-                    <div className="setting-label">Compact Mode</div>
-                    <div className="setting-hint">Reduce spacing for more content</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.compactMode ? 'active' : ''}`}
-                  onClick={() => handleToggle('compactMode')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Data & Privacy Section */}
-        <Card className="settings-card">
-          <CardHeader>
-            <div className="card-header-content">
-              <Download size={24} className="section-icon" />
-              <div>
-                <CardTitle>Data & Privacy</CardTitle>
-                <p className="section-description">
-                  Manage your data and account information
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="settings-list">
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Download size={18} />
-                  <div>
-                    <div className="setting-label">Auto-Save</div>
-                    <div className="setting-hint">Automatically save journal entries</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle ${settings.autoSave ? 'active' : ''}`}
-                  onClick={() => handleToggle('autoSave')}
-                >
-                  <div className="toggle-thumb"></div>
-                </button>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <Lock size={18} />
-                  <div>
-                    <div className="setting-label">Data Retention</div>
-                    <div className="setting-hint">How long to keep your data</div>
-                  </div>
-                </div>
-                <select
-                  className="setting-select"
-                  value={settings.dataRetention}
-                  onChange={(e) => handleSelect('dataRetention', e.target.value)}
-                >
-                  <option value="3months">3 Months</option>
-                  <option value="6months">6 Months</option>
-                  <option value="1year">1 Year</option>
-                  <option value="forever">Forever</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="action-buttons">
-              <Button
-                variant="outline"
-                className="action-btn"
-                onClick={handleExportData}
-              >
-                <Download size={18} />
-                Export My Data
-              </Button>
-              <Button
-                variant="outline"
-                className="action-btn danger"
-                onClick={handleDeleteAccount}
-              >
-                <Trash2 size={18} />
-                Delete Account
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onChange}
+      className={`h-6 w-11 rounded-full transition-colors duration-300 ${checked ? 'bg-primary' : 'bg-muted'}`}
+    >
+      <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform duration-300 ${checked ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
+    </button>
   );
 }
 
-export default Settings;
+export default function Settings() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { showSuccess, showError } = useToast();
+
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system');
+  const [notifications, setNotifications] = useState({
+    email: true, push: true, appointments: true, insights: true,
+  });
+  const [privacy, setPrivacy] = useState({ shareWithTherapist: true });
+  const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!user) navigate('/login');
+  }, [user, navigate]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else if (theme === 'light') {
+      root.classList.remove('dark');
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      prefersDark ? root.classList.add('dark') : root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleNotification = (key) => {
+    setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (passwords.newPass !== passwords.confirm) {
+      showError('New passwords do not match.');
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_AUTH_TOKEN_KEY || 'theraai_auth_token');
+      const res = await fetch('/api/v1/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: passwords.current, new_password: passwords.newPass }),
+      });
+      if (!res.ok) throw new Error();
+      showSuccess('Password changed successfully!');
+      setPasswords({ current: '', newPass: '', confirm: '' });
+    } catch {
+      showError('Failed to change password. Check current password.');
+    } finally { setIsChangingPassword(false); }
+  };
+
+  const notificationItems = [
+    { key: 'email', label: 'Email Notifications', desc: 'Get updates via email' },
+    { key: 'push', label: 'Push Notifications', desc: 'Browser notifications' },
+    { key: 'appointments', label: 'Appointment Reminders', desc: 'Reminders before appointments' },
+    { key: 'insights', label: 'Wellness Insights', desc: 'Tips and insights about your wellbeing' },
+  ];
+
+  if (!user) return null;
+
+  return (
+    <div className="flex">
+      <SidebarNav />
+      <main className="flex-1 pt-16 md:pt-0">
+        <div className="bg-background min-h-screen">
+          <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-8">
+            <div>
+              <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>Settings</h1>
+              <p className="text-muted-foreground mt-2">Customize your experience</p>
+            </div>
+
+            {/* Appearance */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Moon className="h-5 w-5" /> Appearance</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Theme</label>
+                  <Select value={theme} onValueChange={setTheme}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="dark">Dark</SelectItem>
+                      <SelectItem value="system">System Default</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Notifications */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5" /> Notifications</CardTitle>
+                <CardDescription>Choose what notifications you'd like to receive</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {notificationItems.map(item => (
+                  <div key={item.key} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                    <div>
+                      <p className="font-medium">{item.label}</p>
+                      <p className="text-sm text-muted-foreground">{item.desc}</p>
+                    </div>
+                    <Toggle checked={notifications[item.key]} onChange={() => toggleNotification(item.key)} />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Privacy */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> Privacy</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div>
+                    <p className="font-medium">Share Mood with Therapist</p>
+                    <p className="text-sm text-muted-foreground">Allow your assigned therapist to view your mood data</p>
+                  </div>
+                  <Toggle checked={privacy.shareWithTherapist} onChange={() => setPrivacy(p => ({ ...p, shareWithTherapist: !p.shareWithTherapist }))} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Change Password */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Key className="h-5 w-5" /> Security</CardTitle>
+                <CardDescription>Update your account password</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Current Password</label>
+                    <Input
+                      type="password"
+                      placeholder="Enter current password"
+                      value={passwords.current}
+                      onChange={e => setPasswords(p => ({ ...p, current: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">New Password</label>
+                    <Input
+                      type="password"
+                      placeholder="Enter new password"
+                      value={passwords.newPass}
+                      onChange={e => setPasswords(p => ({ ...p, newPass: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Confirm New Password</label>
+                    <Input
+                      type="password"
+                      placeholder="Confirm new password"
+                      value={passwords.confirm}
+                      onChange={e => setPasswords(p => ({ ...p, confirm: e.target.value }))}
+                    />
+                  </div>
+                  <Button type="submit" disabled={isChangingPassword || !passwords.current || !passwords.newPass} className="bg-primary hover:bg-primary/90">
+                    {isChangingPassword ? 'Changing...' : 'Change Password'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Danger Zone */}
+            <Card className="border-destructive/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive"><Trash2 className="h-5 w-5" /> Danger Zone</CardTitle>
+                <CardDescription>Irreversible and destructive actions</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!showDeleteConfirm ? (
+                  <Button variant="outline" onClick={() => setShowDeleteConfirm(true)} className="w-full justify-start text-destructive hover:text-destructive bg-transparent">
+                    Delete Account
+                  </Button>
+                ) : (
+                  <div className="p-4 border border-destructive/30 rounded-lg space-y-3 bg-destructive/5">
+                    <p className="text-sm font-medium text-destructive">Are you sure? This action cannot be undone.</p>
+                    <div className="flex gap-3">
+                      <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-transparent">Cancel</Button>
+                      <Button variant="destructive" onClick={() => { logout(); navigate('/'); }} className="flex-1">
+                        Yes, Delete
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

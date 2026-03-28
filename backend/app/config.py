@@ -19,7 +19,7 @@ class Settings(BaseSettings):
         default="AI-powered therapy assistance platform backend", 
         alias="APP_DESCRIPTION"
     )
-    debug: bool = Field(default=True, alias="DEBUG")
+    debug: bool = Field(default=False, alias="DEBUG")
     environment: str = Field(default="development", alias="ENVIRONMENT")
     
     # Server Configuration
@@ -33,10 +33,7 @@ class Settings(BaseSettings):
     mongodb_test_database: str = Field(default="theraai_test", alias="MONGODB_TEST_DATABASE")
     
     # Security & Authentication
-    secret_key: str = Field(
-        default="dev-secret-key-change-in-production-12345", 
-        alias="SECRET_KEY"
-    )
+    secret_key: str = Field(alias="SECRET_KEY")
     algorithm: str = Field(default="HS256", alias="ALGORITHM")
     access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=7, alias="REFRESH_TOKEN_EXPIRE_DAYS")

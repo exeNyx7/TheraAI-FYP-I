@@ -81,11 +81,11 @@ Write-Host "📋 Step 4: Installing PyTorch..." -ForegroundColor Yellow
 Write-Host "   This may take 5-10 minutes..." -ForegroundColor Gray
 
 if ($torchIndex) {
-    Write-Host "   Command: pip install torch torchvision torchaudio --index-url $torchIndex" -ForegroundColor Gray
-    pip install torch torchvision torchaudio --index-url $torchIndex
+    Write-Host "   Command: pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url $torchIndex" -ForegroundColor Gray
+    pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url $torchIndex
 } else {
-    Write-Host "   Command: pip install torch torchvision torchaudio" -ForegroundColor Gray
-    pip install torch torchvision torchaudio
+    Write-Host "   Command: pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1" -ForegroundColor Gray
+    pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 }
 
 if ($LASTEXITCODE -ne 0) {
@@ -121,12 +121,12 @@ if torch.cuda.is_available():
     compute_cap = torch.cuda.get_device_capability(0)
     print(f'✅ Compute capability: sm_{compute_cap[0]}{compute_cap[1]}')
     
-    # Check for RTX 5060 compatibility issue
+    # Check for very new GPU architecture compatibility issue
     if compute_cap[0] >= 12:
         print(f'\n⚠️  WARNING: Your GPU has compute capability sm_{compute_cap[0]}{compute_cap[1]}')
         print(f'⚠️  PyTorch {torch.__version__} does not support this GPU (max sm_90)')
         print(f'⚠️  The AI service will automatically fall back to CPU mode')
-        print(f'\n💡 To enable GPU support for RTX 5060:')
+        print(f'\n💡 To enable GPU support for this GPU:')
         print(f'   pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128')
         print(f'\n📝 Note: CPU mode works but is slower (10-30s per response)')
 "@
@@ -161,8 +161,8 @@ Write-Host "      http://localhost:8000/docs`n" -ForegroundColor Gray
 
 if ($hasGPU) {
     Write-Host "🎮 GPU Configuration:" -ForegroundColor Cyan
-    Write-Host "   • System will auto-detect RTX 4060 or RTX 5060" -ForegroundColor Gray
-    Write-Host "   • RTX 5060: Full precision (FP32), 10 message history" -ForegroundColor Gray
+    Write-Host "   • System will auto-detect RTX 4060 or RTX 3070" -ForegroundColor Gray
+    Write-Host "   • RTX 3070: Mixed precision (FP16), 10 message history" -ForegroundColor Gray
     Write-Host "   • RTX 4060: Half precision (FP16), 6 message history" -ForegroundColor Gray
     Write-Host "   • No manual configuration needed`n" -ForegroundColor Gray
 } else {

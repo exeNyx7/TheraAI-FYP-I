@@ -20,8 +20,8 @@ class ConversationService:
         conversation_dict = {
             "user_id": user_id,
             "title": conversation_data.title or "New Conversation",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
             "message_count": 0
         }
         
@@ -79,7 +79,7 @@ class ConversationService:
             if not update_data:
                 return await ConversationService.get_conversation_by_id(conversation_id, user_id)
             
-            update_data["updated_at"] = datetime.utcnow()
+            update_data["updated_at"] = datetime.now(timezone.utc)
             
             result = await db.conversations.find_one_and_update(
                 {"_id": ObjectId(conversation_id), "user_id": user_id},
@@ -157,7 +157,7 @@ class ConversationService:
             "user_id": user_id,
             "content": content,
             "sender": sender,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
         
         result = await db.chat_messages.insert_one(message_dict)
@@ -167,7 +167,7 @@ class ConversationService:
         await db.conversations.update_one(
             {"_id": ObjectId(conversation_id)},
             {
-                "$set": {"updated_at": datetime.utcnow()},
+                "$set": {"updated_at": datetime.now(timezone.utc)},
                 "$inc": {"message_count": 1}
             }
         )

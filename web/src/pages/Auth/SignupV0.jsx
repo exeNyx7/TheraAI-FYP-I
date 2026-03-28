@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -14,28 +15,27 @@ export default function SignupV0() {
   const [selectedRole, setSelectedRole] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const [error, setError] = useState('');
   const { signup } = useAuth();
+  const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    setError('');
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      showError('Passwords do not match');
       return;
     }
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      showError('Password must be at least 8 characters');
       return;
     }
     if (!agreeToTerms) {
-      setError('Please agree to the terms and privacy policy');
+      showError('Please agree to the terms and privacy policy');
       return;
     }
     if (!selectedRole) {
-      setError('Please select your role');
+      showError('Please select your role');
       return;
     }
 
@@ -53,21 +53,19 @@ export default function SignupV0() {
       const result = await signup(userData);
       
       if (result.success) {
-        // Show success message
+        showSuccess('Account created successfully!');
         if (result.requiresLogin) {
-          // Backend returns user but no token, redirect to login
           navigate('/login', { 
             state: { message: 'Account created successfully! Please log in.' }
           });
         } else {
-          // Navigate based on role
           navigate(selectedRole === 'psychiatrist' ? '/therapist-dashboard' : '/dashboard');
         }
       } else {
-        setError(result.error || 'Signup failed. Please try again.');
+        showError(result.error || 'Signup failed. Please try again.');
       }
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Signup failed. Please try again.');
+      showError(err.response?.data?.detail || err.message || 'Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -115,12 +113,6 @@ export default function SignupV0() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignup} className="space-y-4">
-              {/* Error display */}
-              {error && (
-                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
-                  {error}
-                </div>
-              )}
 
               {/* Name field */}
               <div className="space-y-2">

@@ -2,7 +2,7 @@
 Mood Service - Business logic for mood tracking
 """
 from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
 from app.database import get_database
@@ -21,8 +21,8 @@ class MoodService:
             "user_id": user_id,
             "mood": mood_data.mood,
             "notes": mood_data.notes or "",
-            "timestamp": mood_data.timestamp or datetime.utcnow(),
-            "created_at": datetime.utcnow()
+            "timestamp": mood_data.timestamp or datetime.now(timezone.utc),
+            "created_at": datetime.now(timezone.utc)
         }
         
         result = await db.moods.insert_one(mood_dict)
@@ -122,7 +122,7 @@ class MoodService:
         if period.endswith('d'):
             days = int(period[:-1])
         
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
         
         # Get all moods in the period
         moods = await db.moods.find({

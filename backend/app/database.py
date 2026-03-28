@@ -125,23 +125,17 @@ async def check_database_health() -> dict:
         # Get server info
         server_info = await db_manager.client.server_info()
         
-        # Count users and journals
-        users_count = await db.users.count_documents({})
-        journals_count = await db.journals.count_documents({})
+        # Count users and journals to check table availability (avoiding returning the counts publicly to prevent infra scraping)
+        await db.users.count_documents({})
+        await db.journals.count_documents({})
         
         return {
             "status": "healthy",
-            "mongodb_version": server_info.get("version", "unknown"),
-            "database_name": settings.mongodb_database,
-            "users_count": users_count,
-            "journals_count": journals_count,
-            "connection_url": settings.mongodb_url.split("@")[-1] if "@" in settings.mongodb_url else settings.mongodb_url,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
     except Exception as e:
         return {
             "status": "unhealthy",
-            "error": str(e),
-            "database_name": settings.mongodb_database
+            "error": "Database connection failed"
         }

@@ -1,6 +1,6 @@
 """
 AI Service for Sentiment Analysis and Empathy Generation
-Uses local GPU (NVIDIA RTX 4060/5060) with CUDA for inference
+Uses local GPU (NVIDIA RTX 3070) with CUDA for inference
 Models: 
 - Sentiment: DistilBERT fine-tuned on SST-2
 - Chatbot: BlenderBot-400M-distill
@@ -8,7 +8,13 @@ Adaptive performance based on GPU detected
 """
 
 import logging
+import os
 from typing import Optional, List, Dict, Any
+
+# Increase Hugging Face Hub timeouts for large model downloads (e.g., BlenderBot 1.6GB)
+os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = "300"
+os.environ["HF_HUB_ETAG_TIMEOUT"] = "30"
+
 from transformers import pipeline, Pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
@@ -24,7 +30,7 @@ class AIService:
     - DistilBERT: Fast sentiment analysis (positive/negative)
     - RoBERTa GoEmotions: Detailed emotion detection (28 categories)
     - BlenderBot: Conversational AI for chat support
-    Supports both RTX 4060 and RTX 5060 with adaptive configuration
+    Configured for NVIDIA RTX 3070 locally
     Loads models once and reuses for all requests
     """
     
@@ -70,8 +76,7 @@ class AIService:
         logger.info(f"🔍 Detected GPU: {device_name} ({memory_gb:.1f} GB VRAM)")
         logger.info(f"🔍 Compute Capability: {compute_version}")
         
-        # Check if GPU is compatible with current PyTorch
-        # RTX 5060 has sm_120 which is not supported by PyTorch 2.5.1
+        # Guard against newer GPU architectures unsupported by installed PyTorch builds
         if compute_capability[0] >= 12:  # sm_120 and above
             logger.warning(f"⚠️  GPU compute capability {compute_version} is not supported by PyTorch {torch.__version__}")
             logger.warning("⚠️  Falling back to CPU mode. For GPU support:")
@@ -90,32 +95,18 @@ class AIService:
                 "gpu_model": device_name
             }
         
-        # RTX 4060 configuration (8GB VRAM) - Optimized for demo
-        if "4060" in device_name:
-            logger.info("⚙️  Configuring for RTX 4060 (Memory-optimized mode)")
+        # RTX 3070 configuration (typically 8GB VRAM) - Full performance
+        if "3070" in device_name:
+            logger.info("⚙️  Configuring for RTX 3070 (Full performance mode)")
             return {
                 "device": "cuda",
                 "device_id": 0,
                 "precision": "fp16",
-                "max_history": 6,  # Shorter history to save memory
-                "max_response_length": 120,
-                "use_fp16": True,
-                "gradient_checkpointing": True,
-                "gpu_model": "RTX 4060"
-            }
-        
-        # RTX 5060 configuration (8GB VRAM) - Full performance
-        elif "5060" in device_name:
-            logger.info("⚙️  Configuring for RTX 5060 (Full performance mode)")
-            return {
-                "device": "cuda",
-                "device_id": 0,
-                "precision": "fp32",
                 "max_history": 10,
                 "max_response_length": 150,
-                "use_fp16": False,
+                "use_fp16": True,
                 "gradient_checkpointing": False,
-                "gpu_model": "RTX 5060"
+                "gpu_model": "RTX 3070"
             }
         
         # Other NVIDIA GPUs - Conservative defaults

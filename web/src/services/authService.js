@@ -101,6 +101,11 @@ class AuthService {
         } else if (response.status === 409) {
           throw new Error('An account with this email already exists');
         } else if (response.status === 422) {
+          if (Array.isArray(data.detail) && data.detail.length > 0) {
+            const firstError = data.detail[0];
+            const msg = firstError.msg.replace('Value error, ', '');
+            throw new Error(msg);
+          }
           throw new Error('Please fill in all required fields correctly');
         }
         throw new Error(data.detail || 'Registration failed');
@@ -135,6 +140,11 @@ class AuthService {
         if (response.status === 401) {
           throw new Error('Invalid email or password');
         } else if (response.status === 422) {
+          if (Array.isArray(data.detail) && data.detail.length > 0) {
+            const firstError = data.detail[0];
+            const msg = firstError.msg.replace('Value error, ', '');
+            throw new Error(msg);
+          }
           throw new Error('Please enter a valid email and password');
         }
         throw new Error(data.detail || 'Login failed');

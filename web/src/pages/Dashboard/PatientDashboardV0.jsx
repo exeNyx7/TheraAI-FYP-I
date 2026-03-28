@@ -76,7 +76,7 @@ export default function PatientDashboardV0() {
   return (
     <div className="flex">
       <SidebarNav />
-      <main className="flex-1 sidebar-content">
+      <main className="flex-1">
         <div className="bg-background min-h-screen">
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
             <DashboardHeader stats={stats} />

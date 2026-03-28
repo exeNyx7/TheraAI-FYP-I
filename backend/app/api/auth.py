@@ -7,10 +7,12 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
-from ..models.user import UserIn, UserLogin, UserOut, Token, PasswordChange
+from ..models.user import UserIn, UserLogin, UserOut, Token, PasswordChange, UserProfileUpdate
 from ..services.user_service import UserService
 from ..utils.auth import create_access_token, create_token_payload, get_token_expiry_time, verify_password, hash_password
 from ..dependencies.auth import get_current_user, security
+from ..dependencies.rate_limit import limiter
+from fastapi import Request
 from ..config import get_settings
 
 settings = get_settings()
@@ -24,7 +26,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     summary="Register a new user",
     description="Register a new user account with email, password, and role"
 )
-async def signup(user_data: UserIn) -> UserOut:
+@limiter.limit("5/minute")
+async def signup(request: Request, user_data: UserIn) -> UserOut:
     """
     Register a new user account
     
@@ -43,9 +46,11 @@ async def signup(user_data: UserIn) -> UserOut:
     except HTTPException:
         raise
     except Exception as e:
+        import logging
+        logging.exception("Failed to create user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create user: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
@@ -55,7 +60,8 @@ async def signup(user_data: UserIn) -> UserOut:
     summary="User login", 
     description="Authenticate user and return JWT access token"
 )
-async def login(login_data: UserLogin) -> Token:
+@limiter.limit("10/minute")
+async def login(request: Request, login_data: UserLogin) -> Token:
     """
     Authenticate user and return JWT token
     
@@ -130,7 +136,7 @@ async def get_current_user_info(
     description="Update current authenticated user information"
 )
 async def update_current_user(
-    user_data: UserIn,
+    update_data: UserProfileUpdate,
     current_user: UserOut = Depends(get_current_user)
 ) -> UserOut:
     """
@@ -140,13 +146,11 @@ async def update_current_user(
     """
     from ..models.user import UserUpdate
     
-    # Convert UserIn to UserUpdate (excluding password fields)
-    update_data = UserUpdate(
-        full_name=user_data.full_name,
-        is_active=user_data.is_active
-    )
+    # Convert UserProfileUpdate to UserUpdate
+    update_dict = update_data.model_dump(exclude_unset=True)
+    internal_update_data = UserUpdate(**update_dict)
     
-    updated_user = await UserService.update_user(str(current_user.id), update_data)
+    updated_user = await UserService.update_user(str(current_user.id), internal_update_data)
     if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -174,17 +178,27 @@ async def change_password(
     
     Requires valid JWT token in Authorization header
     """
-    # Get user from database to verify current password
-    user_with_password = await UserService.get_user_by_id(str(current_user.id))
-    if not user_with_password:
+    from bson import ObjectId
+    from ..database import get_users_collection
+    from datetime import datetime, timezone
+    
+    users_collection = await get_users_collection()
+    user_doc = await users_collection.find_one({"_id": ObjectId(str(current_user.id))})
+    
+    if not user_doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+        
+    if not verify_password(password_data.current_password, user_doc["hashed_password"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
     
-    # This would need the actual hashed password from UserInDB
-    # For now, we'll implement a basic version
-    # TODO: Enhance this to properly verify current password and update
+    new_hash = hash_password(password_data.new_password)
+    await users_collection.update_one(
+        {"_id": ObjectId(str(current_user.id))},
+        {"$set": {"hashed_password": new_hash, "updated_at": datetime.now(timezone.utc)}}
+    )
     
     return {"message": "Password changed successfully"}
 
