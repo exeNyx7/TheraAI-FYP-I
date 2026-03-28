@@ -4,7 +4,7 @@ Database Configuration and Connection Management for TheraAI
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from .config import get_settings
 
 settings = get_settings()
@@ -107,8 +107,24 @@ async def init_database():
         # Index on created_at for sorting
         await journals_collection.create_index("created_at")
         
-        print("✅ Database indexes created successfully (users + journals)")
-        
+        # ---- user_settings ----
+        settings_col = db.user_settings
+        await settings_col.create_index("user_id", unique=True)
+
+        # ---- assessments (templates — seeded separately) ----
+        assessments_col = db.assessments
+        await assessments_col.create_index("slug", unique=True)
+        await assessments_col.create_index("category")
+        await assessments_col.create_index("is_active")
+
+        # ---- assessment_results ----
+        results_col = db.assessment_results
+        await results_col.create_index([("user_id", 1), ("completed_at", -1)])
+        await results_col.create_index("assessment_id")
+        await results_col.create_index("user_id")
+
+        print("✅ Database indexes created successfully (users + journals + settings + assessments)")
+
     except Exception as e:
         print(f"❌ Failed to initialize database: {e}")
         raise e

@@ -12,6 +12,8 @@ from .database import db_manager, init_database, check_database_health
 from .api import auth_router, journal_router, stats_router, chat_router
 from .api.moods import router as moods_router
 from .api.conversations import router as conversations_router
+from .api.settings import router as settings_router
+from .api.assessments import router as assessments_router
 
 # Load settings
 settings = get_settings()
@@ -94,6 +96,8 @@ app.include_router(stats_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(moods_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+app.include_router(assessments_router, prefix="/api/v1")
 
 
 @app.get(
