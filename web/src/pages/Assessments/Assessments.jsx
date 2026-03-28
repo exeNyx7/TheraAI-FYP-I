@@ -3,26 +3,22 @@ import { SidebarNav } from '../../components/Dashboard/SidebarNav';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { AssessmentSelector } from '../../components/Assessments/AssessmentSelector';
-import { Trophy } from 'lucide-react';
+import { Trophy, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import apiClient from '../../apiClient';
 
 const TAB_LIBRARY = 'library';
 const TAB_HISTORY = 'history';
-
-const mockHistory = [
-  { id: '1', name: 'Stress Level Assessment', category: 'Clinical', score: 72, date: '2026-03-20' },
-  { id: '2', name: 'Anxiety Screening (GAD-7)', category: 'Clinical', score: 58, date: '2026-03-10' },
-  { id: '3', name: 'Depression Screening (PHQ-9)', category: 'Clinical', score: 45, date: '2026-03-01' },
-];
 
 export default function Assessments() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { showInfo } = useToast();
   const [activeTab, setActiveTab] = useState(TAB_LIBRARY);
-  const [history, setHistory] = useState(mockHistory);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState(null);
   const [step, setStep] = useState(0);
 
@@ -30,10 +26,30 @@ export default function Assessments() {
     if (!user) navigate('/login');
   }, [user, navigate]);
 
+  useEffect(() => {
+    if (activeTab === TAB_HISTORY) {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const fetchHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const response = await apiClient.get('/assessments/history');
+      setHistory(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch assessment history:', err);
+      setHistory([]);
+      showInfo('Failed to load assessment history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const handleSelectAssessment = (assessment) => {
     setActiveAssessment(assessment);
     showInfo(`Starting: ${assessment.name}`);
-    // In the future, navigate to a dedicated assessment flow page
+    navigate(`/assessment/${assessment.slug}`, { state: { assessment } });
   };
 
   if (!user) return null;
@@ -80,7 +96,11 @@ export default function Assessments() {
 
             {activeTab === TAB_HISTORY && (
               <div className="space-y-4">
-                {history.length === 0 ? (
+                {historyLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : history.length === 0 ? (
                   <div className="text-center py-16 text-muted-foreground">
                     <Trophy className="h-16 w-16 mx-auto mb-4 opacity-30" />
                     <p>No assessments completed yet. Start one from the Library tab.</p>
@@ -89,36 +109,51 @@ export default function Assessments() {
                   <>
                     <h2 className="text-2xl font-bold">Completed Assessments</h2>
                     <div className="space-y-4">
-                      {history.map((a) => (
-                        <Card key={a.id} className="hover:shadow-md transition-all">
-                          <CardContent className="p-6">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <p className="font-semibold">{a.name}</p>
-                                <p className="text-sm text-muted-foreground">{a.category} · {new Date(a.date).toLocaleDateString()}</p>
+                      {history.map((a) => {
+                        const percentage = a.max_possible_score > 0
+                          ? Math.round((a.total_score / a.max_possible_score) * 100)
+                          : 0;
+
+                        return (
+                          <Card key={a.id} className="hover:shadow-md transition-all">
+                            <CardContent className="p-6">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <p className="font-semibold">{a.assessment_name}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {a.severity_label} · {new Date(a.completed_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-3xl font-bold text-primary">{a.total_score}</p>
+                                  <p className="text-xs text-muted-foreground">/{a.max_possible_score}</p>
+                                </div>
                               </div>
-                              <div className="text-right">
-                                <p className="text-3xl font-bold text-primary">{a.score}</p>
-                                <p className="text-xs text-muted-foreground">Score</p>
+                              <div className="mt-4 space-y-1">
+                                <div className="w-full bg-muted rounded-full h-2.5">
+                                  <div
+                                    className="bg-primary h-2.5 rounded-full transition-all duration-700"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                  <span>0</span><span>{a.max_possible_score}</span>
+                                </div>
                               </div>
-                            </div>
-                            <div className="mt-4 space-y-1">
-                              <div className="w-full bg-muted rounded-full h-2.5">
-                                <div
-                                  className="bg-primary h-2.5 rounded-full transition-all duration-700"
-                                  style={{ width: `${a.score}%` }}
-                                />
+                              <div className="mt-4">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-transparent"
+                                  onClick={() => navigate(`/assessment/results/${a.id}`, { state: { result: a } })}
+                                >
+                                  View Results
+                                </Button>
                               </div>
-                              <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>0</span><span>100</span>
-                              </div>
-                            </div>
-                            <div className="mt-4">
-                              <Button size="sm" variant="outline" className="bg-transparent">View Results</Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </>
                 )}
