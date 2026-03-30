@@ -4,7 +4,7 @@
  * Uses the shared apiClient (axios instance with auth interceptors).
  */
 
-import apiClient from './apiClient';
+import apiClient from '../apiClient';
 
 /**
  * Get user statistics
