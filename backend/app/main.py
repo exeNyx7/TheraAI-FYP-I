@@ -126,25 +126,38 @@ async def root():
 @app.get(
     "/health",
     summary="Health check",
-    description="Comprehensive health check including database status"
+    description="Comprehensive health check including database and Ollama LLM status"
 )
 async def health_check():
     """Comprehensive health check endpoint"""
     try:
         # Check database health
         db_health = await check_database_health()
-        
+
+        # Check Ollama / ModelService health
+        from .services.model_service import ModelService
+        model_health = await ModelService.check_health()
+
+        # Overall status: healthy only if both DB and model are up
+        db_ok = db_health["status"] == "healthy"
+        model_ok = model_health.get("status") == "healthy"
+        overall = "healthy" if (db_ok and model_ok) else "degraded"
+
         return {
-            "status": "healthy" if db_health["status"] == "healthy" else "degraded",
+            "status": overall,
             "service": settings.app_name,
             "version": settings.app_version,
             "environment": settings.environment,
             "timestamp": db_health.get("timestamp"),
             "database": db_health,
+            "chat_ai": model_health,
             "features": {
                 "authentication": "enabled",
                 "user_roles": ["patient", "psychiatrist", "admin"],
-                "jwt_auth": "enabled"
+                "jwt_auth": "enabled",
+                "sentiment_analysis": "distilbert-base-uncased-finetuned-sst-2-english",
+                "emotion_detection": "SamLowe/roberta-base-go_emotions",
+                "chat_llm": model_health.get("model", "llama3.1:8b"),
             }
         }
     except Exception as e:
