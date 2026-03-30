@@ -3,7 +3,7 @@ Chat Conversation Models
 """
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ConversationModel(BaseModel):
@@ -11,8 +11,8 @@ class ConversationModel(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id")
     user_id: str = Field(..., description="User ID who owns the conversation")
     title: str = Field(default="New Conversation", description="Conversation title")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     message_count: int = Field(default=0, description="Number of messages in conversation")
 
     class Config:
@@ -46,7 +46,7 @@ class MessageModel(BaseModel):
     user_id: str = Field(..., description="User ID")
     content: str = Field(..., description="Message content")
     sender: str = Field(..., description="'user' or 'ai'")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         populate_by_name = True
