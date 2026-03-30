@@ -1,10 +1,16 @@
 """
 AI Service for Sentiment Analysis and Empathy Generation
 Uses local GPU (NVIDIA RTX 3070) with CUDA for inference
-Models: 
-- Sentiment: DistilBERT fine-tuned on SST-2
-- Chatbot: BlenderBot-400M-distill
-Adaptive performance based on GPU detected
+
+ACTIVE Models:
+  - DistilBERT fine-tuned on SST-2    → sentiment analysis (journals)
+  - RoBERTa GoEmotions (28 categories) → emotion detection (journals)
+
+DEPRECATED / COMMENTED OUT:
+  - BlenderBot-400M-distill → chat responses
+    REASON: Incompatible with RTX 5060 (sm_120 compute capability).
+    Ran on CPU only, producing slow (10-30s) and low-quality responses.
+    REPLACEMENT: See services/model_service.py (Ollama + Llama 3.1 8B)
 """
 
 import logging
@@ -15,7 +21,9 @@ from typing import Optional, List, Dict, Any
 os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = "300"
 os.environ["HF_HUB_ETAG_TIMEOUT"] = "30"
 
-from transformers import pipeline, Pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import pipeline, Pipeline
+# DEPRECATED: AutoTokenizer, AutoModelForSeq2SeqLM were used for BlenderBot
+# from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
 from ..models.journal import AIAnalysisResult, SentimentLabel
@@ -36,9 +44,10 @@ class AIService:
     
     _instance: Optional['AIService'] = None
     _sentiment_model: Optional[Pipeline] = None
-    _emotion_model: Optional[Pipeline] = None  # NEW: RoBERTa GoEmotions
-    _chatbot_tokenizer: Optional[AutoTokenizer] = None
-    _chatbot_model: Optional[AutoModelForSeq2SeqLM] = None
+    _emotion_model: Optional[Pipeline] = None   # RoBERTa GoEmotions
+    # DEPRECATED: BlenderBot tokenizer/model — replaced by ModelService (Ollama)
+    # _chatbot_tokenizer: Optional[AutoTokenizer] = None
+    # _chatbot_model: Optional[AutoModelForSeq2SeqLM] = None
     _device: Optional[int] = None
     _gpu_config: Optional[Dict[str, Any]] = None
     
@@ -166,74 +175,42 @@ class AIService:
             )
             logger.info("✅ Emotion model loaded (~499MB)")
             
-            # Load chatbot model (BlenderBot)
-            logger.info("📥 Loading chatbot: facebook/blenderbot-400M-distill (~1.6GB)")
-            logger.info("   ⏳ First-time download may take 2-5 minutes...")
-            
-            self._chatbot_tokenizer = AutoTokenizer.from_pretrained(
-                "facebook/blenderbot-400M-distill"
-            )
-            
-            self._chatbot_model = AutoModelForSeq2SeqLM.from_pretrained(
-                "facebook/blenderbot-400M-distill"
-            )
-            
-            # Move chatbot to GPU/CPU and configure precision
-            if self._gpu_config["device"] == "cuda":
-                try:
-                    self._chatbot_model = self._chatbot_model.to("cuda")
-                    
-                    # Enable FP16 for RTX 4060 memory optimization
-                    if self._gpu_config["use_fp16"]:
-                        logger.info("   • Converting to FP16 (half precision)")
-                        self._chatbot_model = self._chatbot_model.half()
-                    
-                    # Enable gradient checkpointing for memory efficiency
-                    if self._gpu_config["gradient_checkpointing"]:
-                        logger.info("   • Enabling gradient checkpointing")
-                        self._chatbot_model.gradient_checkpointing_enable()
-                    
-                    logger.info("✅ Chatbot model loaded on GPU successfully!")
-                except RuntimeError as gpu_error:
-                    logger.error(f"❌ Failed to load model on GPU: {str(gpu_error)}")
-                    logger.warning("⚠️  Falling back to CPU mode")
-                    # Recreate model on CPU
-                    self._chatbot_model = AutoModelForSeq2SeqLM.from_pretrained(
-                        "facebook/blenderbot-400M-distill"
-                    )
-                    self._gpu_config["device"] = "cpu"
-                    self._gpu_config["device_id"] = -1
-                    logger.info("✅ Chatbot model loaded on CPU successfully!")
-            else:
-                logger.info("✅ Chatbot model loaded on CPU successfully!")
-            
-            # Run test inference to warm up models
+            # ── DEPRECATED: BlenderBot loading ────────────────────────────────
+            # facebook/blenderbot-400M-distill has been replaced by Ollama + Llama 3.1 8B.
+            # Reason: incompatible with RTX 5060 (sm_120); ran on CPU; poor quality.
+            # See: backend/app/services/model_service.py
+            #
+            # logger.info("📥 Loading chatbot: facebook/blenderbot-400M-distill (~1.6GB)")
+            # self._chatbot_tokenizer = AutoTokenizer.from_pretrained(
+            #     "facebook/blenderbot-400M-distill"
+            # )
+            # self._chatbot_model = AutoModelForSeq2SeqLM.from_pretrained(
+            #     "facebook/blenderbot-400M-distill"
+            # )
+            # if self._gpu_config["device"] == "cuda":
+            #     try:
+            #         self._chatbot_model = self._chatbot_model.to("cuda")
+            #         if self._gpu_config["use_fp16"]:
+            #             self._chatbot_model = self._chatbot_model.half()
+            #         logger.info("✅ Chatbot model loaded on GPU successfully!")
+            #     except RuntimeError as gpu_error:
+            #         self._chatbot_model = AutoModelForSeq2SeqLM.from_pretrained(
+            #             "facebook/blenderbot-400M-distill"
+            #         )
+            #         self._gpu_config["device"] = "cpu"
+            #         self._gpu_config["device_id"] = -1
+            # ── END DEPRECATED ────────────────────────────────────────────────
+
+            # Run test inference to warm up active models
             test_sentiment = self._sentiment_model("This is a test.")
             logger.info(f"🧪 Sentiment test: {test_sentiment}")
-            
-            # Emotion test
+
             if self._emotion_model:
                 test_emotions = self._emotion_model("I am happy today")
                 logger.info(f"🧪 Emotion test: {test_emotions}")
-            
-            # Chatbot test
-            test_input = self._chatbot_tokenizer("Hello!", return_tensors="pt")
-            if self._gpu_config["device"] == "cuda":
-                try:
-                    test_input = {k: v.to("cuda") for k, v in test_input.items()}
-                except RuntimeError as e:
-                    logger.warning(f"⚠️  GPU inference failed: {str(e)}")
-                    logger.warning("⚠️  Switching to CPU mode")
-                    self._gpu_config["device"] = "cpu"
-                    self._gpu_config["device_id"] = -1
-                    # Model already on CPU as fallback
-            
-            with torch.no_grad():
-                test_output = self._chatbot_model.generate(**test_input, max_length=20)
-            test_response = self._chatbot_tokenizer.decode(test_output[0], skip_special_tokens=True)
-            logger.info(f"🧪 Chatbot test: {test_response}")
-            
-            logger.info("🎉 All models initialized and ready!")
+
+            logger.info("🎉 Sentiment + Emotion models initialized and ready!")
+            logger.info("💬 Chat responses: Ollama + Llama 3.1 8B (see model_service.py)")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize AI models: {str(e)}")
@@ -243,8 +220,10 @@ class AIService:
             raise RuntimeError(f"AI model initialization failed: {str(e)}")
     
     def is_available(self) -> bool:
-        """Check if AI service is available"""
-        return self._sentiment_model is not None and self._chatbot_model is not None
+        """Check if AI service (sentiment + emotion models) is available"""
+        # DEPRECATED check removed: chatbot_model (BlenderBot) no longer needed
+        # Original: return self._sentiment_model is not None and self._chatbot_model is not None
+        return self._sentiment_model is not None
     
     def get_device_info(self) -> dict:
         """Get information about the device and configuration being used"""
@@ -308,189 +287,36 @@ class AIService:
             logger.error(f"Error during sentiment analysis: {str(e)}")
             raise RuntimeError(f"Sentiment analysis failed: {str(e)}")
     
-    def _format_conversation_history(self, history: List[Dict[str, str]]) -> str:
-        """
-        Format conversation history for BlenderBot
-        
-        Args:
-            history: List of dicts with 'role' and 'message' keys
-                    role can be 'user' or 'bot'
-        
-        Returns:
-            Formatted string with conversation context
-        """
-        if not history:
-            return ""
-        
-        # Take only the most recent messages based on GPU config
-        max_history = self._gpu_config["max_history"]
-        recent_history = history[-max_history:] if len(history) > max_history else history
-        
-        # Format as conversation pairs (cleaner for BlenderBot)
-        formatted = []
-        for msg in recent_history:
-            role = msg.get("role", "user")
-            message = msg.get("message", "").strip()
-            if role == "user" and message:
-                formatted.append(message)
-            elif role == "bot" and message:
-                formatted.append(message)
-        
-        # Join with special separator for BlenderBot
-        return " </s> <s> ".join(formatted) if formatted else ""
-    
-    def generate_response_llm(
-        self, 
-        user_message: str, 
-        conversation_history: Optional[List[Dict[str, str]]] = None
-    ) -> str:
-        """
-        Generate conversational response using BlenderBot
-        
-        Args:
-            user_message: Current user message
-            conversation_history: Optional list of previous messages
-                                Each dict should have 'role' and 'message' keys
-        
-        Returns:
-            Generated response text from the chatbot
-            
-        Raises:
-            RuntimeError: If chatbot model is not available
-        """
-        if not self.is_available():
-            raise RuntimeError("Chatbot model is not available")
-        
-        if not user_message or not user_message.strip():
-            raise ValueError("User message cannot be empty")
-        
-        try:
-            # Format conversation history first
-            history_text = ""
-            if conversation_history:
-                history_text = self._format_conversation_history(conversation_history)
-            
-            # Simple direct input works better for BlenderBot
-            if history_text:
-                full_input = f"{history_text} </s> <s> {user_message.strip()}"
-            else:
-                full_input = user_message.strip()
-            
-            # Tokenize input
-            inputs = self._chatbot_tokenizer(
-                full_input, 
-                return_tensors="pt",
-                truncation=True,
-                max_length=512,
-                padding=True
-            )
-            
-            # Move to GPU if available
-            if self._gpu_config["device"] == "cuda":
-                inputs = {k: v.to("cuda") for k, v in inputs.items()}
-            
-            # Generate response with parameters tuned for empathetic responses
-            max_length = self._gpu_config["max_response_length"]
-            
-            with torch.no_grad():
-                output_ids = self._chatbot_model.generate(
-                    **inputs,
-                    max_new_tokens=max_length,
-                    min_length=10,
-                    num_beams=3,
-                    early_stopping=True,
-                    no_repeat_ngram_size=3,
-                    temperature=0.9,
-                    do_sample=True,
-                    top_k=50,
-                    top_p=0.9,
-                    repetition_penalty=1.2,
-                    length_penalty=1.0
-                )
-            
-            # Decode response
-            response = self._chatbot_tokenizer.decode(
-                output_ids[0], 
-                skip_special_tokens=True
-            )
-            
-            # Clean up response
-            response = response.strip()
-            
-            # Remove the input from response if it's echoed back
-            if response.startswith(full_input):
-                response = response[len(full_input):].strip()
-            
-            # Remove common prefixes
-            prefixes_to_remove = [
-                "Bot:", "AI:", "Assistant:", "Response:", 
-                user_message.strip() + ":", user_message.strip() + ","
-            ]
-            for prefix in prefixes_to_remove:
-                if response.startswith(prefix):
-                    response = response[len(prefix):].strip()
-            
-            # CRITICAL: Filter out personal experiences
-            response_lower = response.lower()
-            personal_indicators = [
-                "i just got", "i got back from", "i went to", "i was at",
-                "my dog", "my cat", "my pet", "my family", "my gym",
-                "my workout", "my job", "my work", "my home",
-                "when i was", "i remember when", "i used to",
-                "i have a", "i own a", "i've been to", "i've had",
-                "my experience", "in my life", "my friend", "my partner",
-                "i do, but", "i don't have", "i do not have",
-                "i was so", "i felt", "i thought", "i knew"
-            ]
-            
-            has_personal_claim = any(indicator in response_lower for indicator in personal_indicators)
-            
-            # Check if AI is claiming activities/status/abilities
-            problematic_starts = (
-                "i am", "i'm", "i just", "i was", "i have", "i've",
-                "i do,", "i do.", "i don", "i can", "i could",
-                "no, i", "yes, i", "i know", "i think i"
-            )
-            starts_with_personal = response_lower.startswith(problematic_starts)
-            
-            # Check for pronouns suggesting personal experience
-            has_personal_pronouns = any(phrase in response_lower for phrase in [
-                " i ", " my ", " mine ", " myself "
-            ]) and not any(safe in response_lower for safe in [
-                "i'm here", "i understand", "i hear you", "i'm listening",
-                "i hope", "i can help", "i'd like", "i wonder"
-            ])
-            
-            if has_personal_claim or starts_with_personal or has_personal_pronouns:
-                logger.warning(f"Filtered inappropriate response: {response}")
-                # Generate appropriate mental health response based on user message
-                user_lower = user_message.lower()
-                if any(word in user_lower for word in ["hello", "hi", "hey"]):
-                    response = "Hello! I'm here to support you. How are you feeling today?"
-                elif any(word in user_lower for word in ["great", "good", "fine", "well"]):
-                    response = "I'm glad to hear that! What's been going well for you?"
-                elif any(word in user_lower for word in ["sad", "bad", "terrible", "awful", "depressed"]):
-                    response = "I'm sorry you're feeling this way. Would you like to talk about what's troubling you?"
-                elif any(word in user_lower for word in ["what", "who", "do you", "tell me"]):
-                    response = "I'm an AI companion here to support you. What would you like to talk about?"
-                else:
-                    response = "I'm here to listen and support you. What's on your mind?"
-            
-            # Remove if response is just repeating the input
-            if response.lower() == user_message.strip().lower():
-                response = "I hear you. Can you tell me more about that?"
-            
-            # Ensure minimum quality
-            if len(response) < 5 or response in [".", "?", "!", "Yes", "No", "Okay", "Ok"]:
-                response = "I'm listening. Please share what you'd like to talk about."
-            
-            logger.debug(f"Generated response: {response}")
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Error generating chatbot response: {str(e)}")
-            raise RuntimeError(f"Chatbot response generation failed: {str(e)}")
+    # ── DEPRECATED: BlenderBot conversation methods ───────────────────────────
+    # These methods powered the BlenderBot chat (facebook/blenderbot-400M-distill).
+    # BlenderBot has been replaced by Ollama + Llama 3.1 8B via ModelService.
+    # See: backend/app/services/model_service.py
+    # DO NOT DELETE — kept for reference and potential rollback.
+    #
+    # def _format_conversation_history(self, history):
+    #     """Format conversation history for BlenderBot's </s><s> separator format."""
+    #     if not history:
+    #         return ""
+    #     max_history = self._gpu_config["max_history"]
+    #     recent_history = history[-max_history:]
+    #     formatted = [msg.get("message", "").strip() for msg in recent_history if msg.get("message")]
+    #     return " </s> <s> ".join(formatted) if formatted else ""
+    #
+    # def generate_response_llm(self, user_message, conversation_history=None):
+    #     """
+    #     DEPRECATED — Generate response using BlenderBot.
+    #     Replaced by: await ModelService.generate_response(user_message, history)
+    #
+    #     This method was broken because:
+    #     1. RTX 5060 (sm_120) forced CPU-only inference (10-30s latency)
+    #     2. BlenderBot hallucinated personal experiences constantly
+    #     3. A 40-line personal-claim filter replaced most outputs with hardcoded strings
+    #        making the 1.6GB model effectively useless
+    #     """
+    #     raise NotImplementedError(
+    #         "BlenderBot has been removed. Use ModelService.generate_response() instead."
+    #     )
+    # ── END DEPRECATED ────────────────────────────────────────────────────────
     
     def _map_label_to_sentiment(self, label: str) -> SentimentLabel:
         """
