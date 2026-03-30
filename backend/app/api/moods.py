@@ -15,7 +15,14 @@ async def create_mood(
     current_user: UserOut = Depends(get_current_user)
 ):
     """Create a new mood entry"""
-    # Mood validation is handled by MoodCreate.validate_mood() field validator
+    # Validate mood value
+    valid_moods = ['happy', 'sad', 'anxious', 'angry', 'calm', 'excited', 'stressed', 'neutral']
+    if mood_data.mood not in valid_moods:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid mood. Must be one of: {', '.join(valid_moods)}"
+        )
+    
     mood = await mood_service.create_mood(current_user.id, mood_data)
     
     return MoodResponse(
@@ -91,7 +98,15 @@ async def update_mood(
     current_user: UserOut = Depends(get_current_user)
 ):
     """Update a mood entry"""
-    # Mood validation is handled by MoodUpdate.validate_mood() field validator
+    # Validate mood value if provided
+    if mood_data.mood:
+        valid_moods = ['happy', 'sad', 'anxious', 'angry', 'calm', 'excited', 'stressed', 'neutral']
+        if mood_data.mood not in valid_moods:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid mood. Must be one of: {', '.join(valid_moods)}"
+            )
+    
     mood = await mood_service.update_mood(mood_id, current_user.id, mood_data)
     
     if not mood:

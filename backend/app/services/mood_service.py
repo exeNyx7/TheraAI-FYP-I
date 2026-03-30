@@ -79,7 +79,7 @@ class MoodService:
         db = await get_database()
         
         try:
-            update_data = {k: v for k, v in mood_data.model_dump(exclude_unset=True).items() if v is not None}
+            update_data = {k: v for k, v in mood_data.dict(exclude_unset=True).items() if v is not None}
             
             if not update_data:
                 return await MoodService.get_mood_by_id(mood_id, user_id)

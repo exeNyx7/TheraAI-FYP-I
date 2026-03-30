@@ -10,7 +10,6 @@ import { Send, RotateCcw, Zap, History, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
-import { sendChatMessage } from '../../services/chatService';
 
 
 const suggestedPrompts = [
@@ -47,13 +46,19 @@ export default function Chat() {
     setInputValue('');
     setIsLoading(true);
     try {
-      const data = await sendChatMessage(content);
+      const token = localStorage.getItem(import.meta.env.VITE_AUTH_TOKEN_KEY || 'theraai_auth_token');      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const resp = await fetch(`${API_URL}/api/v1/chat/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: content }),
+      });
+      const data = await resp.json();
       const aiMsg = { id: Date.now().toString() + '_ai', role: 'assistant', content: data.response || "I'm here for you. Could you tell me more?" };
       setMessages(prev => [...prev, aiMsg]);
-    } catch (err) {
-      showError(err.response?.data?.detail || 'Could not reach the AI. Please try again.');
+    } catch {
       const aiMsg = { id: Date.now().toString() + '_ai', role: 'assistant', content: "I'm here to listen. Please tell me more about what you're experiencing." };
       setMessages(prev => [...prev, aiMsg]);
+
     } finally {
       setIsLoading(false);
     }
@@ -76,7 +81,7 @@ export default function Chat() {
             {/* Header */}
             <div className="border-b border-border px-6 py-4 flex items-center justify-between bg-card/50 backdrop-blur-sm">
               <div>
-                <h1 className="text-2xl font-bold font-sans">Mindful Chat</h1>
+                <h1 className="text-2xl font-bold" style={{ fontFamily: 'Montserrat' }}>Mindful Chat</h1>
                 <p className="text-sm text-muted-foreground">Talk with your AI companion</p>
               </div>
               <div className="flex gap-2">

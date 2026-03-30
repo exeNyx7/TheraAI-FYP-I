@@ -1,22 +1,6 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime, timezone
-from enum import Enum
-
-
-VALID_MOODS = ['happy', 'sad', 'anxious', 'angry', 'calm', 'excited', 'stressed', 'neutral']
-
-
-class MoodType(str, Enum):
-    """Valid mood options for mood entries"""
-    HAPPY = "happy"
-    SAD = "sad"
-    ANXIOUS = "anxious"
-    ANGRY = "angry"
-    CALM = "calm"
-    EXCITED = "excited"
-    STRESSED = "stressed"
-    NEUTRAL = "neutral"
+from datetime import datetime
 
 
 class MoodModel(BaseModel):
@@ -24,8 +8,8 @@ class MoodModel(BaseModel):
     user_id: str
     mood: str  # happy, sad, anxious, angry, calm, excited, stressed, neutral
     notes: Optional[str] = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
         populate_by_name = True
@@ -44,13 +28,6 @@ class MoodCreate(BaseModel):
     notes: Optional[str] = None
     timestamp: Optional[datetime] = None
 
-    @field_validator('mood')
-    @classmethod
-    def validate_mood(cls, v: str) -> str:
-        if v not in VALID_MOODS:
-            raise ValueError(f"Invalid mood. Must be one of: {', '.join(VALID_MOODS)}")
-        return v
-
     class Config:
         json_schema_extra = {
             "example": {
@@ -65,13 +42,6 @@ class MoodUpdate(BaseModel):
     mood: Optional[str] = None
     notes: Optional[str] = None
     timestamp: Optional[datetime] = None
-
-    @field_validator('mood')
-    @classmethod
-    def validate_mood(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in VALID_MOODS:
-            raise ValueError(f"Invalid mood. Must be one of: {', '.join(VALID_MOODS)}")
-        return v
 
     class Config:
         json_schema_extra = {
