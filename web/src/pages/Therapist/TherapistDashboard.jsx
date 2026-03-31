@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { TherapistSidebar } from '../../components/Dashboard/TherapistSidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { VideoCallModal } from '../../components/Teletherapy/VideoCallModal';
+import { PreSessionBriefingModal } from '../../components/Therapist/PreSessionBriefingModal';
 import {
-  Users, Calendar, AlertCircle, Activity, Smile, Frown, Heart, Wind, Loader2,
+  Users, Calendar, AlertCircle, Activity, Smile, Frown, Heart, Wind, Loader2, FileText,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -23,6 +24,8 @@ export default function TherapistDashboard() {
   const navigate = useNavigate();
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [briefingAppointmentId, setBriefingAppointmentId] = useState(null);
+  const [briefingPatientName, setBriefingPatientName] = useState('');
 
   const [stats, setStats] = useState(null);
   const [patients, setPatients] = useState([]);
@@ -77,6 +80,12 @@ export default function TherapistDashboard() {
             onClose={() => setShowVideoCall(false)}
             patientName={selectedPatient?.full_name || 'Patient'}
             therapistName={`Dr. ${displayName}`}
+          />
+          <PreSessionBriefingModal
+            isOpen={!!briefingAppointmentId}
+            appointmentId={briefingAppointmentId}
+            patientName={briefingPatientName}
+            onClose={() => { setBriefingAppointmentId(null); setBriefingPatientName(''); }}
           />
 
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
@@ -197,12 +206,26 @@ export default function TherapistDashboard() {
                       ) : (
                         upcoming.map((appt) => {
                           const d = new Date(appt.scheduled_at);
+                          const apptId = appt.id || appt._id;
                           return (
-                            <div key={appt.id || appt._id} className="p-3 border border-border rounded-lg">
-                              <p className="font-medium text-sm">{appt.patient_name || '—'}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {d.toLocaleDateString()} at {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
+                            <div key={apptId} className="flex items-center justify-between p-3 border border-border rounded-lg">
+                              <div>
+                                <p className="font-medium text-sm">{appt.patient_name || '—'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {d.toLocaleDateString()} at {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 bg-transparent text-xs h-8"
+                                onClick={() => {
+                                  setBriefingAppointmentId(apptId);
+                                  setBriefingPatientName(appt.patient_name || 'Patient');
+                                }}
+                              >
+                                <FileText className="h-3.5 w-3.5" /> Briefing
+                              </Button>
                             </div>
                           );
                         })

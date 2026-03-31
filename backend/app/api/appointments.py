@@ -18,6 +18,7 @@ from ..models.appointments import (
     AvailableSlot,
 )
 from ..services.appointments_service import AppointmentsService
+from ..services.email_service import EmailService
 
 # ---------- Appointments router ----------
 appointments_router = APIRouter(prefix="/appointments", tags=["Appointments"])
@@ -43,9 +44,21 @@ async def book_appointment(
     data: AppointmentCreate,
     current_user: UserOut = Depends(require_patient),
 ):
-    """Book a new appointment (patient only)."""
+    """Book a new appointment (patient only). Sends confirmation email."""
+    import asyncio
     try:
-        return await AppointmentsService.book_appointment(current_user.id, data)
+        appt = await AppointmentsService.book_appointment(current_user.id, data)
+        # Fire-and-forget confirmation email
+        if current_user.email:
+            slot_time = str(appt.slot.get("start_time", "")) if isinstance(appt.slot, dict) else str(appt.slot)
+            asyncio.create_task(EmailService.send_appointment_confirmation(
+                patient_email=current_user.email,
+                patient_name=current_user.full_name or "Patient",
+                therapist_name=appt.therapist_name or "Your therapist",
+                appointment_time=slot_time,
+                appointment_id=str(appt.id),
+            ))
+        return appt
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

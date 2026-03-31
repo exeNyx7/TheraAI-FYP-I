@@ -16,6 +16,8 @@ from .api.settings import router as settings_router
 from .api.assessments import router as assessments_router
 from .api.appointments import appointments_router, therapists_router
 from .api.therapist import router as therapist_router
+from .api.ws import router as ws_router
+from .api.admin import router as admin_router
 
 # Load settings
 settings = get_settings()
@@ -103,6 +105,8 @@ app.include_router(assessments_router, prefix="/api/v1")
 app.include_router(appointments_router, prefix="/api/v1")
 app.include_router(therapists_router, prefix="/api/v1")
 app.include_router(therapist_router, prefix="/api/v1")
+app.include_router(ws_router)  # WebSocket — no /api/v1 prefix, path is /ws/chat
+app.include_router(admin_router, prefix="/api/v1")
 
 
 @app.get(

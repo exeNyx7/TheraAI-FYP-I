@@ -41,7 +41,15 @@ async def signup(request: Request, user_data: UserIn) -> UserOut:
     Returns the created user data (without password)
     """
     try:
+        import asyncio
         user = await UserService.create_user(user_data)
+        # Fire-and-forget welcome email (patient only)
+        if user.role == "patient":
+            from ..services.email_service import EmailService
+            asyncio.create_task(EmailService.send_welcome_email(
+                patient_email=user.email,
+                patient_name=user.full_name or "User",
+            ))
         return user
     except HTTPException:
         raise

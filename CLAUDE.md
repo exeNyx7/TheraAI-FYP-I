@@ -285,6 +285,31 @@ Base prefix: `/api/v1`
 | PUT | `/settings` | Yes | Update settings |
 | DELETE | `/settings/account` | Yes | Delete account |
 
+### Admin — `/api/v1/admin` (Admin only)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/admin/dashboard` | Admin | Platform-wide stats |
+| GET | `/admin/users` | Admin | Paginated user list (search, role filter) |
+| GET | `/admin/users/{id}` | Admin | Single user detail |
+| PATCH | `/admin/users/{id}/status` | Admin | Activate / deactivate account |
+| DELETE | `/admin/users/{id}` | Admin | Hard-delete user + cascade data |
+| GET | `/admin/crisis-events` | Admin | All platform crisis events (last 30d) |
+
+### Weekly Summary — `/api/v1/users`
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/users/me/weekly-summary` | Yes | 7-day mood trend + AI insight |
+
+### Pre-Session Briefing — `/api/v1/therapist`
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/therapist/appointments/{id}/briefing` | Therapist | Patient mood, crisis events, journal excerpt + AI notes |
+
+### WebSocket — `/ws`
+| Protocol | Path | Auth | Description |
+|----------|------|------|-------------|
+| WS | `/ws/chat?token=<JWT>` | JWT query param | Real-time AI chat with typing indicator + crisis detection |
+
 ---
 
 ## 7. AI Model Integrations
@@ -330,7 +355,7 @@ Base prefix: `/api/v1`
 | `assessment_results` | ✅ Phase 1 | user_id, slug, answers, score, recommendation |
 | `therapist_profiles` | ✅ Phase 2 | user_id, bio, availability, rates, specializations |
 | `appointments` | ✅ Phase 2 | patient_id, therapist_id, slot, status, payment |
-| `messages` | 🔲 Phase 3 | Real-time chat (WebSocket) |
+| `messages` | ✅ Phase 3 | Real-time chat (WebSocket — ws.py) |
 
 **Indexes:**
 - `users`: `email` (unique), `role`, `is_active`, `created_at`
@@ -448,24 +473,27 @@ See `.env.example` for full reference including Docker vars.
 - `scripts/seed_therapist_profiles.py` — 4 Pakistani therapist accounts
 - Frontend: `TherapistSelector.jsx`, `Appointments.jsx`, `TherapistDashboard.jsx` (all live data, no mocks)
 
-### 🔲 Phase 3 — Real-Time (WebSocket)
-- Chat: `/ws/chat/{conversation_id}`
-- WebRTC signaling: `/ws/call/{appointment_id}`
+### ✅ Phase 3 — Real-Time (WebSocket) — COMPLETE
+- `api/ws.py` — `/ws/chat?token=<JWT>` WebSocket endpoint with crisis detection + memory injection
+- `web/src/hooks/useWebSocketChat.js` — React hook with auto-reconnect + REST fallback
+- Chat.jsx updated: WS-first send, REST fallback, Live/REST indicator badge
 
-### 🔲 Phase 4 — AI Enhancements
-- Weekly mood trend summaries
-- Pre-session therapist briefings
-- Crisis detection in chat
+### ✅ Phase 4 — AI Enhancements — COMPLETE
+- `GET /users/me/weekly-summary` — 7-day mood trend + AI insight string
+- `web/src/components/Dashboard/WeeklyMoodSummary.jsx` — bar chart widget on PatientDashboard
+- `GET /therapist/appointments/{id}/briefing` — pre-session patient briefing
+- `web/src/components/Therapist/PreSessionBriefingModal.jsx` — modal on TherapistDashboard "Briefing" button
+- Crisis detection: backend complete (CrisisService), frontend banner + Book Therapist button in Chat.jsx
 
-### 🔲 Phase 5 — Integrations
-- Google Calendar sync
-- Email notifications (fastapi-mail)
-- Push notifications (FCM)
+### ✅ Phase 5 — Email Notifications — COMPLETE (MAIL_ENABLED=False by default)
+- `services/email_service.py` — EmailService with welcome, confirmation, reminder, crisis alert templates
+- `requirements.txt` — added `fastapi-mail`, `jinja2`
+- `config.py` — MAIL_* env vars
+- Wired: signup welcome, appointment confirmation, crisis alert (high/emergency severity)
 
-### 🔲 Phase 6 — Admin Dashboard
-- `GET/PATCH/DELETE /admin/users`
-- `GET /admin/dashboard`
-- Full seed script with faker
+### ✅ Phase 6 — Admin Dashboard — COMPLETE
+- `api/admin.py` — `/admin/dashboard`, `/admin/users` (paginated+filtered), `/admin/users/{id}/status`, `/admin/users/{id}` DELETE, `/admin/crisis-events`
+- `AdminDashboardV0.jsx` — full rewrite: real API data, tabbed UI (Overview / Users / Crisis Events), search + role filter, activate/deactivate/delete users
 
 ---
 

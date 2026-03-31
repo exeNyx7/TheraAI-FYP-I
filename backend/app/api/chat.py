@@ -3,9 +3,11 @@ Chat API
 AI-powered wellness companion chat endpoints.
 
 Model backend: Ollama + Llama 3.1 8B (via ModelService)
-Replaced: BlenderBot-400M-distill (DEPRECATED — see services/model_service.py for audit)
+AI memory:     MemoryService — cross-session user memory injected into system prompt
+Crisis:        CrisisService — keyword + emotion detection, records events
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -19,16 +21,17 @@ from ..models.user import UserOut
 from ..database import db_manager
 from ..services.ai_service import get_ai_service
 from ..services.model_service import ModelService
+from ..services.memory_service import MemoryService
+from ..services.crisis_service import CrisisService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["AI Chat"])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # REQUEST / RESPONSE SCHEMAS
-# (kept here since they are simple and chat-specific; TODO: move to models/chat.py)
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 
 class ChatMessage(BaseModel):
     """Inbound chat message from the user"""
@@ -40,6 +43,10 @@ class ChatResponse(BaseModel):
     response: str
     timestamp: str
     sentiment: Optional[str] = None
+    # Crisis fields — frontend uses these to show Book Therapist button
+    crisis_detected: bool = False
+    crisis_severity: str = "none"
+    show_book_therapist: bool = False
 
 
 class ChatHistory(BaseModel):
@@ -57,9 +64,9 @@ class ChatHistoryResponse(BaseModel):
     total: int
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # ENDPOINTS
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 
 @router.post("/message", response_model=ChatResponse)
 async def send_chat_message(
@@ -69,11 +76,13 @@ async def send_chat_message(
     """
     Send a message to the AI wellness companion (Llama 3.1 8B via Ollama).
 
-    - Retrieves the last 10 conversation turns from chat_history for context
-    - Calls ModelService.generate_response() with full history
-    - Runs DistilBERT sentiment analysis on the user's message (non-blocking)
-    - Saves the exchange to MongoDB chat_history
-    - Returns the AI response with Pakistan-timezone timestamp
+    - Fetches user demographics + AI memory and injects into system prompt
+    - Runs crisis detection before generating AI response
+    - Retrieves last 10 conversation turns for context
+    - Calls ModelService.generate_response() with user context
+    - Fires off memory update as background task (non-blocking)
+    - Saves exchange + crisis flags to MongoDB
+    - Returns AI response with Pakistan-timezone timestamp + crisis info
     """
     try:
         user_message = chat_message.message.strip()
@@ -82,62 +91,82 @@ async def send_chat_message(
             raise HTTPException(status_code=400, detail="Message cannot be empty")
 
         db = db_manager.get_database()
+        user_id = str(current_user.id)
 
-        # ── Fetch recent conversation history ────────────────────────────
-        history_limit = 10
+        # ── Fetch user document for demographics ─────────────────────────
+        from bson import ObjectId
+        user_doc = await db.users.find_one({"_id": ObjectId(user_id)})
+
+        # ── Build AI memory context (non-blocking, defaults to empty) ─────
+        user_context = ""
+        try:
+            user_context = await MemoryService.build_memory_prompt(user_id, user_doc)
+        except Exception:
+            logger.debug("Memory context unavailable, continuing without it")
+
+        # ── Crisis detection (runs before AI response) ────────────────────
+        # Also run emotion analysis to enrich crisis detection
+        emotions = []
+        try:
+            ai_service = get_ai_service()
+            loop = asyncio.get_running_loop()
+            emotion_result = await loop.run_in_executor(
+                None,
+                lambda: ai_service.analyze_emotions(user_message)
+            )
+            if emotion_result and "emotions" in emotion_result:
+                emotions = emotion_result["emotions"]
+        except Exception:
+            logger.debug("Emotion analysis unavailable for crisis detection")
+
+        crisis_info = CrisisService.detect_crisis(user_message, emotions)
+
+        # ── Record crisis event + check persistent risk ───────────────────
+        if crisis_info["is_crisis"]:
+            asyncio.create_task(
+                CrisisService.record_crisis_event(
+                    user_id=user_id,
+                    message=user_message,
+                    severity=crisis_info["severity"],
+                    keywords_matched=crisis_info["keywords_matched"],
+                    emotions_detected=crisis_info["emotions_detected"],
+                )
+            )
+
+        # Also force show_book_therapist when memory risk is high
+        memory = await MemoryService.get_memory(user_id)
+        if memory.risk_level in ("high", "crisis"):
+            crisis_info["show_book_therapist"] = True
+
+        # ── Fetch recent conversation history ─────────────────────────────
         history_records = await db.chat_history.find(
-            {"user_id": current_user.id}
-        ).sort("created_at", -1).limit(history_limit).to_list(length=history_limit)
-
-        # Reverse to chronological order (oldest first)
+            {"user_id": user_id}
+        ).sort("created_at", -1).limit(10).to_list(length=10)
         history_records.reverse()
 
-        # Build history in the format ModelService expects
-        # (also compatible with the legacy "bot"/"message" keys)
         conversation_history = []
         for record in history_records:
-            conversation_history.append({
-                "role": "user",
-                "content": record["user_message"]
-            })
-            conversation_history.append({
-                "role": "assistant",
-                "content": record["ai_response"]
-            })
+            conversation_history.append({"role": "user", "content": record["user_message"]})
+            conversation_history.append({"role": "assistant", "content": record["ai_response"]})
 
         # ── Generate AI response via Ollama / Llama 3.1 8B ───────────────
-        # ModelService handles its own fallback — this call will never raise.
         ai_response = await ModelService.generate_response(
             user_message=user_message,
-            conversation_history=conversation_history if conversation_history else None
+            conversation_history=conversation_history or None,
+            user_context=user_context or None,
         )
 
-        # ── DEPRECATED (BlenderBot) ───────────────────────────────────────
-        # ai_service = get_ai_service()
-        # import asyncio
-        # loop = asyncio.get_running_loop()
-        # ai_response = await loop.run_in_executor(
-        #     None,
-        #     lambda: ai_service.generate_response_llm(
-        #         user_message=user_message,
-        #         conversation_history=conversation_history if conversation_history else None
-        #     )
-        # )
-        # ─────────────────────────────────────────────────────────────────
-
-        # ── Sentiment analysis on the user's message (best-effort) ───────
+        # ── Sentiment analysis (best-effort) ─────────────────────────────
         sentiment = "neutral"
         try:
-            import asyncio
             ai_service = get_ai_service()
             loop = asyncio.get_running_loop()
             sentiment_result = await loop.run_in_executor(
                 None,
                 lambda: ai_service.analyze_sentiment(user_message)
             )
-            sentiment = sentiment_result["label"].lower()
+            sentiment = sentiment_result.get("label", "neutral").lower()
         except Exception:
-            # Non-critical — don't fail the whole request over sentiment
             logger.debug("Sentiment analysis unavailable, defaulting to 'neutral'")
 
         # ── Persist to database ───────────────────────────────────────────
@@ -145,20 +174,35 @@ async def send_chat_message(
         current_time_pakistan = datetime.now(pakistan_tz)
 
         chat_record = {
-            "user_id": current_user.id,
+            "user_id": user_id,
             "user_message": user_message,
             "ai_response": ai_response,
             "sentiment": sentiment,
+            "crisis_severity": crisis_info["severity"],
             "timestamp": current_time_pakistan.isoformat(),
-            "created_at": datetime.now(timezone.utc)   # UTC for DB indexing
+            "created_at": datetime.now(timezone.utc),
         }
-
         await db.chat_history.insert_one(chat_record)
+
+        # ── Update AI memory (fire-and-forget — never blocks response) ────
+        new_history = conversation_history + [
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": ai_response},
+        ]
+        asyncio.create_task(
+            MemoryService.update_memory_from_conversation(user_id, new_history)
+        )
+
+        # ── Update risk level (fire-and-forget) ───────────────────────────
+        asyncio.create_task(MemoryService.update_risk_level(user_id))
 
         return ChatResponse(
             response=ai_response,
             timestamp=current_time_pakistan.isoformat(),
-            sentiment=sentiment
+            sentiment=sentiment,
+            crisis_detected=crisis_info["is_crisis"],
+            crisis_severity=crisis_info["severity"],
+            show_book_therapist=crisis_info["show_book_therapist"],
         )
 
     except HTTPException:
@@ -176,16 +220,11 @@ async def get_chat_history(
     limit: int = 10,
     current_user: UserOut = Depends(get_current_user)
 ):
-    """
-    Get recent chat history for the authenticated user.
-
-    Returns messages in reverse chronological order (newest first).
-    """
+    """Get recent chat history (newest first)."""
     try:
         db = db_manager.get_database()
-
         history = await db.chat_history.find(
-            {"user_id": current_user.id}
+            {"user_id": str(current_user.id)}
         ).sort("created_at", -1).limit(limit).to_list(length=limit)
 
         messages = [
@@ -194,49 +233,28 @@ async def get_chat_history(
                 user_message=msg["user_message"],
                 ai_response=msg["ai_response"],
                 timestamp=msg["timestamp"],
-                sentiment=msg.get("sentiment", "neutral")
+                sentiment=msg.get("sentiment", "neutral"),
             )
             for msg in history
         ]
-
         return ChatHistoryResponse(messages=messages, total=len(messages))
 
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to fetch chat history")
         raise HTTPException(status_code=500, detail="Failed to get chat history")
 
 
 @router.delete("/history")
 async def clear_chat_history(current_user: UserOut = Depends(get_current_user)):
-    """
-    Permanently delete all chat history for the authenticated user.
-    """
+    """Permanently delete all chat history for the authenticated user."""
     try:
         db = db_manager.get_database()
-        result = await db.chat_history.delete_many({"user_id": current_user.id})
-
+        result = await db.chat_history.delete_many({"user_id": str(current_user.id)})
         return {
             "status": "success",
             "message": f"Deleted {result.deleted_count} messages",
-            "deleted_count": result.deleted_count
+            "deleted_count": result.deleted_count,
         }
-
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to clear chat history")
         raise HTTPException(status_code=500, detail="Failed to clear chat history")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# KEYWORD FALLBACK (preserved for emergencies — normally handled by ModelService)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def generate_wellness_response(user_message: str) -> str:
-    """
-    Legacy keyword-based wellness response.
-
-    NOTE: This is now superseded by ModelService.generate_fallback_response().
-    Kept here only for reference. Do not call this directly — call
-    ModelService.generate_fallback_response(user_message) instead.
-    """
-    # Delegate to the consolidated fallback in ModelService
-    return ModelService.generate_fallback_response(user_message)

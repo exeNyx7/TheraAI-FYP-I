@@ -72,12 +72,21 @@ class Settings(BaseSettings):
     )
     upload_path: str = Field(default="uploads/", alias="UPLOAD_PATH")
     
-    # Email Configuration
+    # Email Configuration (fastapi-mail)
     smtp_host: str = Field(default="smtp.gmail.com", alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
     smtp_username: Optional[str] = Field(default=None, alias="SMTP_USERNAME")
     smtp_password: Optional[str] = Field(default=None, alias="SMTP_PASSWORD")
     from_email: str = Field(default="noreply@theraai.dev", alias="FROM_EMAIL")
+    mail_enabled: bool = Field(default=False, alias="MAIL_ENABLED")
+    mail_username: Optional[str] = Field(default=None, alias="MAIL_USERNAME")
+    mail_password: Optional[str] = Field(default=None, alias="MAIL_PASSWORD")
+    mail_from: str = Field(default="noreply@theraai.app", alias="MAIL_FROM")
+    mail_port: int = Field(default=587, alias="MAIL_PORT")
+    mail_server: str = Field(default="smtp.gmail.com", alias="MAIL_SERVER")
+    mail_tls: bool = Field(default=True, alias="MAIL_STARTTLS")
+    mail_ssl: bool = Field(default=False, alias="MAIL_SSL_TLS")
+    admin_email: Optional[str] = Field(default=None, alias="ADMIN_EMAIL")
     
     # Redis Configuration (optional)
     redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")

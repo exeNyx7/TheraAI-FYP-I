@@ -49,8 +49,23 @@ export const getActivityFeed = async (limit = 10) => {
   }
 };
 
+/**
+ * Get weekly mood summary (7-day trend + AI insight)
+ * @returns {Promise}
+ */
+export const getWeeklySummary = async () => {
+  try {
+    const response = await apiClient.get('/users/me/weekly-summary');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch weekly summary:', error);
+    throw error;
+  }
+};
+
 export default {
   getUserStats,
   getUserAchievements,
   getActivityFeed,
+  getWeeklySummary,
 };
