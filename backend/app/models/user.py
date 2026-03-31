@@ -3,8 +3,8 @@ User Models and Schemas for TheraAI Authentication System
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
-from typing import Optional, Literal, Annotated
-from datetime import datetime
+from typing import Optional, List, Literal, Annotated
+from datetime import datetime, timezone
 from bson import ObjectId
 from enum import Enum
 
@@ -28,13 +28,31 @@ def validate_object_id(value: str) -> str:
 PyObjectId = Annotated[str, Field(description="MongoDB ObjectId")]
 
 
+class GenderEnum(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+    NON_BINARY = "non_binary"
+    PREFER_NOT_TO_SAY = "prefer_not_to_say"
+
+
 class UserBase(BaseModel):
     """Base user model with common fields"""
     email: EmailStr
     full_name: str = Field(..., min_length=2, max_length=100)
     role: UserRole = Field(default=UserRole.PATIENT, description="User role in the system")
     is_active: bool = Field(default=True, description="User account status")
-    
+
+    # Demographics (all optional — collected after signup on Profile page)
+    age: Optional[int] = Field(default=None, ge=13, le=120, description="User age")
+    gender: Optional[GenderEnum] = Field(default=None, description="User gender")
+    profession: Optional[str] = Field(default=None, max_length=100, description="User profession")
+    location: Optional[str] = Field(default=None, max_length=150, description="City / region")
+    bio: Optional[str] = Field(default=None, max_length=500, description="Short personal bio")
+    phone: Optional[str] = Field(default=None, max_length=20, description="Phone number")
+    emergency_contact: Optional[str] = Field(default=None, max_length=200, description="Emergency contact name + phone")
+    avatar_url: Optional[str] = Field(default=None, description="Profile picture URL")
+    preferred_language: Optional[str] = Field(default="en", max_length=10, description="ISO 639-1 language code")
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v):
@@ -107,8 +125,8 @@ class UserInDB(UserBase):
     """User database model with hashed password"""
     id: Optional[str] = Field(default=None, alias="_id")
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
     login_attempts: int = Field(default=0, description="Failed login attempts counter")
     locked_until: Optional[datetime] = None
@@ -129,10 +147,19 @@ class UserInDB(UserBase):
 
 
 class UserUpdate(BaseModel):
-    """User update schema"""
+    """User update schema (internal — accepts all mutable fields)"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
-    
+    age: Optional[int] = Field(None, ge=13, le=120)
+    gender: Optional[GenderEnum] = None
+    profession: Optional[str] = Field(None, max_length=100)
+    location: Optional[str] = Field(None, max_length=150)
+    bio: Optional[str] = Field(None, max_length=500)
+    phone: Optional[str] = Field(None, max_length=20)
+    emergency_contact: Optional[str] = Field(None, max_length=200)
+    avatar_url: Optional[str] = None
+    preferred_language: Optional[str] = Field(None, max_length=10)
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v):
@@ -142,8 +169,16 @@ class UserUpdate(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    """User profile update schema intended for frontend use"""
+    """User profile update schema (frontend — all demographic fields)"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    age: Optional[int] = Field(None, ge=13, le=120)
+    gender: Optional[GenderEnum] = None
+    profession: Optional[str] = Field(None, max_length=100)
+    location: Optional[str] = Field(None, max_length=150)
+    bio: Optional[str] = Field(None, max_length=500)
+    phone: Optional[str] = Field(None, max_length=20)
+    emergency_contact: Optional[str] = Field(None, max_length=200)
+    preferred_language: Optional[str] = Field(None, max_length=10)
 
 
 class Token(BaseModel):

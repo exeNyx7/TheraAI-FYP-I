@@ -193,7 +193,9 @@ class ModelService:
     @staticmethod
     async def generate_response(
         user_message: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        user_context: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """
         Generate a therapeutic response using Llama 3.1 8B via Ollama.
@@ -205,6 +207,9 @@ class ModelService:
                   - New format:    [{"role": "user"|"assistant", "content": "..."}]
                   - Legacy format: [{"role": "user"|"bot",       "message": "..."}]
                   The legacy format comes from the existing chat_history MongoDB records.
+            user_context: Optional string with memory facts + demographics injected
+                          into the system prompt to personalize responses.
+            max_tokens: Override default MAX_TOKENS (used by memory extraction).
 
         Returns:
             str: AI-generated response. Falls back to generate_fallback_response()
@@ -214,9 +219,18 @@ class ModelService:
             raise ValueError("User message cannot be empty")
 
         try:
+            # Build system prompt — inject user context if provided
+            system_content = THERAPIST_SYSTEM_PROMPT
+            if user_context and user_context.strip():
+                system_content = (
+                    THERAPIST_SYSTEM_PROMPT
+                    + "\n\n## What you know about this user:\n"
+                    + user_context.strip()
+                )
+
             # Build the messages array: system + history + current user message
             messages: List[Dict[str, str]] = [
-                {"role": "system", "content": THERAPIST_SYSTEM_PROMPT}
+                {"role": "system", "content": system_content}
             ]
 
             # Normalize and append conversation history
@@ -247,7 +261,7 @@ class ModelService:
                             "temperature": 0.7,       # Balanced: warm but grounded
                             "top_p": 0.9,
                             "top_k": 40,
-                            "num_predict": MAX_TOKENS,
+                            "num_predict": max_tokens if max_tokens else MAX_TOKENS,
                             "repeat_penalty": 1.1,    # Avoid repetitive phrasing
                             "stop": ["<|eot_id|>", "<|end_of_text|>"]
                         }
