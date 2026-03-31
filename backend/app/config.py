@@ -94,9 +94,27 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=1000, alias="RATE_LIMIT_REQUESTS")
     rate_limit_period: int = Field(default=60, alias="RATE_LIMIT_PERIOD")  # seconds
     
+    # Email Feature Flag
+    mail_enabled: bool = Field(default=False, alias="MAIL_ENABLED")
+
+    # Firebase / FCM
+    firebase_credentials_path: Optional[str] = Field(default=None, alias="FIREBASE_CREDENTIALS_PATH")
+    fcm_enabled: bool = Field(default=False, alias="FCM_ENABLED")
+
+    # Google Calendar OAuth2
+    google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: str = Field(
+        default="http://localhost:8000/api/v1/calendar/callback",
+        alias="GOOGLE_REDIRECT_URI",
+    )
+
+    # Jitsi Meet
+    jitsi_domain: str = Field(default="meet.jit.si", alias="JITSI_DOMAIN")
+
     # Health Check
     health_check_interval: int = Field(default=30, alias="HEALTH_CHECK_INTERVAL")  # seconds
-    
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

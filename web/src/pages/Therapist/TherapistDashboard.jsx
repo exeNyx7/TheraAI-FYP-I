@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import apiClient from '../../apiClient';
 
 const moodIcons = { happy: Smile, sad: Frown, anxious: Heart, calm: Wind };
 
@@ -19,17 +20,13 @@ const mockPatients = [
   { id: '3', name: 'Emma Wilson', currentMood: 'sad', lastAppointment: 'Mar 24', status: 'active', moodTrend: 'stable' },
 ];
 
-const mockUpcoming = [
-  { id: '1', patientName: 'Sarah Johnson', date: 'Apr 1', time: '10:00 AM' },
-  { id: '2', patientName: 'Michael Chen', date: 'Apr 2', time: '2:00 PM' },
-  { id: '3', patientName: 'Emma Wilson', date: 'Apr 3', time: '11:00 AM' },
-];
-
 export default function TherapistDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [activeAppointmentId, setActiveAppointmentId] = useState(null);
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -37,7 +34,17 @@ export default function TherapistDashboard() {
     if (!allowedRoles.includes(user.role || user.user_type)) {
       navigate('/dashboard');
     }
+    // Fetch real upcoming appointments
+    apiClient.get('/appointments?status=scheduled')
+      .then(res => setUpcomingAppointments(res.data || []))
+      .catch(() => {});
   }, [user, navigate]);
+
+  const handleStartCall = (patient, appointmentId) => {
+    setSelectedPatient(patient);
+    setActiveAppointmentId(appointmentId || null);
+    setShowVideoCall(true);
+  };
 
   if (!user) return null;
 
@@ -51,7 +58,8 @@ export default function TherapistDashboard() {
         <div className="bg-background min-h-screen">
           <VideoCallModal
             isOpen={showVideoCall}
-            onClose={() => setShowVideoCall(false)}
+            onClose={() => { setShowVideoCall(false); setActiveAppointmentId(null); }}
+            appointmentId={activeAppointmentId}
             patientName={selectedPatient?.name || 'Patient'}
             therapistName={`Dr. ${displayName}`}
           />
@@ -130,7 +138,13 @@ export default function TherapistDashboard() {
                             <Button
                               size="sm"
                               className="bg-primary hover:bg-primary/90"
-                              onClick={() => { setSelectedPatient(patient); setShowVideoCall(true); }}
+                              onClick={() => {
+                                // Find the most recent scheduled appointment for this patient (by name match)
+                                const appt = upcomingAppointments.find(
+                                  a => a.patient_name === patient.name
+                                );
+                                handleStartCall(patient, appt?.id);
+                              }}
                             >
                               Call
                             </Button>
@@ -151,12 +165,20 @@ export default function TherapistDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {mockUpcoming.map((appt) => (
-                    <div key={appt.id} className="p-3 border border-border rounded-lg">
-                      <p className="font-medium text-sm">{appt.patientName}</p>
-                      <p className="text-xs text-muted-foreground">{appt.date} at {appt.time}</p>
-                    </div>
-                  ))}
+                  {upcomingAppointments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No upcoming sessions</p>
+                  ) : (
+                    upcomingAppointments.slice(0, 5).map((appt) => (
+                      <div key={appt.id} className="p-3 border border-border rounded-lg">
+                        <p className="font-medium text-sm">{appt.patient_name || 'Patient'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {appt.scheduled_at
+                            ? new Date(appt.scheduled_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '—'}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </div>

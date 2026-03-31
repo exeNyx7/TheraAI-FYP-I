@@ -87,6 +87,7 @@ class UserOut(UserBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
+    google_calendar_connected: bool = Field(default=False)
     
     @classmethod
     def from_doc(cls, doc: dict):
@@ -112,6 +113,9 @@ class UserInDB(UserBase):
     last_login: Optional[datetime] = None
     login_attempts: int = Field(default=0, description="Failed login attempts counter")
     locked_until: Optional[datetime] = None
+    # Google Calendar integration
+    google_refresh_token: Optional[str] = Field(default=None, description="Google OAuth2 refresh token")
+    google_calendar_connected: bool = Field(default=False, description="Whether Google Calendar is connected")
     
     @classmethod
     def from_doc(cls, doc: dict):

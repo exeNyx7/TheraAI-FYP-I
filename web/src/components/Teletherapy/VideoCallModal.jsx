@@ -1,113 +1,137 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui/button';
-import { Mic, MicOff, Video, VideoOff, Phone, Maximize2, MessageSquare, X } from 'lucide-react';
+import { Phone, X, Maximize2, Minimize2 } from 'lucide-react';
+import apiClient from '../../apiClient';
 
-export function VideoCallModal({ isOpen, onClose, patientName, therapistName }) {
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
-  const [isConnecting, setIsConnecting] = useState(true);
+/**
+ * VideoCallModal — Jitsi Meet integration.
+ *
+ * Props:
+ *   isOpen         boolean — controls visibility
+ *   onClose        fn      — called when user ends call
+ *   appointmentId  string  — used to fetch/create the Jitsi room
+ *   patientName    string  — displayed while loading
+ *   therapistName  string  — displayed while loading
+ */
+export function VideoCallModal({ isOpen, onClose, appointmentId, patientName, therapistName }) {
+  const [jitsiUrl, setJitsiUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const iframeRef = useRef(null);
 
+  // Fetch room URL whenever modal opens with a valid appointmentId
   useEffect(() => {
-    if (!isOpen) { setCallDuration(0); setIsConnecting(true); return; }
-    const connectTimer = setTimeout(() => setIsConnecting(false), 2000);
-    return () => clearTimeout(connectTimer);
-  }, [isOpen]);
+    if (!isOpen) {
+      setJitsiUrl(null);
+      setError(null);
+      return;
+    }
 
-  useEffect(() => {
-    if (!isOpen || isConnecting) return;
-    const interval = setInterval(() => setCallDuration(s => s + 1), 1000);
-    return () => clearInterval(interval);
-  }, [isOpen, isConnecting]);
+    if (!appointmentId) {
+      setError('No appointment ID provided.');
+      return;
+    }
 
-  const formatDuration = (s) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    const fetchRoom = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await apiClient.post('/calls/room', { appointment_id: appointmentId });
+        setJitsiUrl(res.data.jitsi_url);
+      } catch (err) {
+        const msg = err?.response?.data?.detail || 'Failed to create video room.';
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoom();
+  }, [isOpen, appointmentId]);
+
+  const handleEndCall = () => {
+    setJitsiUrl(null);
+    onClose();
+  };
+
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      iframeRef.current?.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+    setIsFullscreen(!isFullscreen);
   };
 
   if (!isOpen) return null;
 
+  // Build Jitsi URL with config to disable prejoin screen
+  const iframeSrc = jitsiUrl
+    ? `${jitsiUrl}#config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&userInfo.displayName=${encodeURIComponent(patientName || therapistName || 'User')}`
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      {/* Main video area */}
-      <div className="flex-1 relative bg-gray-900">
-        {isConnecting ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-            <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center animate-pulse">
-              <Video className="h-12 w-12 text-primary" />
-            </div>
-            <p className="text-white text-xl font-semibold">Connecting to {patientName}...</p>
-          </div>
-        ) : (
-          <>
-            {/* Remote video placeholder */}
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-              <div className="h-32 w-32 rounded-full bg-primary/20 flex items-center justify-center text-5xl font-bold text-white">
-                {patientName?.[0] || 'P'}
-              </div>
-            </div>
-
-            {/* Call duration */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-white text-sm">
-              {formatDuration(callDuration)}
-            </div>
-
-            {/* Self-view */}
-            <div className="absolute bottom-24 right-4 w-32 h-24 bg-gray-700 rounded-xl border-2 border-white/20 overflow-hidden flex items-center justify-center">
-              {isVideoOff ? (
-                <VideoOff className="h-8 w-8 text-gray-400" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-primary/40 to-primary/20 flex items-center justify-center text-white font-bold text-xl">
-                  {therapistName?.[0] || 'T'}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Controls */}
-      <div className="bg-gray-900 border-t border-white/10 px-6 py-4 flex items-center justify-between">
-        <div className="text-white text-sm">
-          {isConnecting ? 'Connecting...' : patientName}
-        </div>
-
+      {/* Top bar */}
+      <div className="bg-gray-900 border-b border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
+          <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-white font-medium text-sm">
+            {loading ? 'Connecting...' : error ? 'Connection Failed' : `Session with ${patientName || therapistName || 'Participant'}`}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
           <Button
             size="icon"
-            variant={isMuted ? 'destructive' : 'secondary'}
-            className="h-12 w-12 rounded-full"
-            onClick={() => setIsMuted(!isMuted)}
+            variant="ghost"
+            className="text-white h-8 w-8"
+            onClick={toggleFullscreen}
+            title="Toggle fullscreen"
           >
-            {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-          </Button>
-          <Button
-            size="icon"
-            variant={isVideoOff ? 'destructive' : 'secondary'}
-            className="h-12 w-12 rounded-full"
-            onClick={() => setIsVideoOff(!isVideoOff)}
-          >
-            {isVideoOff ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
           <Button
             size="icon"
             variant="destructive"
-            className="h-14 w-14 rounded-full"
-            onClick={onClose}
+            className="h-8 w-8 rounded-full"
+            onClick={handleEndCall}
+            title="End call"
           >
-            <Phone className="h-6 w-6 rotate-[135deg]" />
+            <Phone className="h-4 w-4 rotate-[135deg]" />
           </Button>
         </div>
+      </div>
 
-        <div className="flex gap-2">
-          <Button size="icon" variant="ghost" className="text-white h-10 w-10">
-            <MessageSquare className="h-5 w-5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="text-white h-10 w-10">
-            <Maximize2 className="h-5 w-5" />
-          </Button>
-        </div>
+      {/* Main content area */}
+      <div className="flex-1 relative bg-gray-950">
+        {loading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+            <div className="h-16 w-16 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+            <p className="text-white text-lg">Setting up your session...</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+            <X className="h-16 w-16 text-red-400" />
+            <p className="text-white text-lg font-semibold">Could not start video call</p>
+            <p className="text-gray-400 text-sm max-w-md">{error}</p>
+            <Button variant="outline" onClick={handleEndCall} className="text-white border-white/20 hover:bg-white/10">
+              Close
+            </Button>
+          </div>
+        )}
+
+        {iframeSrc && !loading && !error && (
+          <iframe
+            ref={iframeRef}
+            src={iframeSrc}
+            allow="camera; microphone; fullscreen; display-capture; autoplay"
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            title="TheraAI Video Session"
+          />
+        )}
       </div>
     </div>
   );

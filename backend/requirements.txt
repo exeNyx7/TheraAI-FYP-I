@@ -31,6 +31,26 @@ accelerate>=0.25.0
 sentencepiece>=0.1.99
 pytz>=2024.2
 
+# Email (async SMTP)
+aiosmtplib>=3.0.0
+
+# Scheduling (appointment reminders)
+apscheduler>=3.10.0
+
+# Firebase Cloud Messaging (push notifications)
+firebase-admin>=6.0.0
+
+# Google Calendar OAuth2 sync
+google-auth>=2.0.0
+google-api-python-client>=2.0.0
+google-auth-oauthlib>=1.0.0
+
+# Caching (for auth dependency)
+cachetools>=5.0.0
+
+# Rate limiting
+slowapi>=0.1.9
+
 # Development and testing
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
