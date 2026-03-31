@@ -14,24 +14,19 @@ import apiClient from '../../apiClient';
 
 const moodIcons = { happy: Smile, sad: Frown, anxious: Heart, calm: Wind };
 
-function getMoodIcon(label = '') {
-  const key = label?.toLowerCase();
-  return moodIcons[key] || Smile;
-}
+const mockPatients = [
+  { id: '1', name: 'Sarah Johnson', currentMood: 'anxious', lastAppointment: 'Mar 25', status: 'critical', moodTrend: 'declining' },
+  { id: '2', name: 'Michael Chen', currentMood: 'happy', lastAppointment: 'Mar 26', status: 'active', moodTrend: 'improving' },
+  { id: '3', name: 'Emma Wilson', currentMood: 'sad', lastAppointment: 'Mar 24', status: 'active', moodTrend: 'stable' },
+];
 
 export default function TherapistDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [briefingAppointmentId, setBriefingAppointmentId] = useState(null);
-  const [briefingPatientName, setBriefingPatientName] = useState('');
-
-  const [stats, setStats] = useState(null);
-  const [patients, setPatients] = useState([]);
-  const [upcoming, setUpcoming] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [activeAppointmentId, setActiveAppointmentId] = useState(null);
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -39,32 +34,17 @@ export default function TherapistDashboard() {
     if (!allowedRoles.includes(user.role || user.user_type)) {
       navigate('/dashboard');
     }
+    // Fetch real upcoming appointments
+    apiClient.get('/appointments?status=scheduled')
+      .then(res => setUpcomingAppointments(res.data || []))
+      .catch(() => {});
   }, [user, navigate]);
 
-  useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    Promise.all([
-      apiClient.get('/therapist/dashboard'),
-      apiClient.get('/therapist/patients'),
-      apiClient.get('/appointments'),
-      apiClient.get('/therapist/alerts'),
-    ])
-      .then(([statsRes, patientsRes, apptsRes, alertsRes]) => {
-        setStats(statsRes.data);
-        setPatients(patientsRes.data);
-        // Filter to upcoming confirmed/pending appointments
-        const now = new Date();
-        setUpcoming(
-          (apptsRes.data || [])
-            .filter((a) => new Date(a.scheduled_at) >= now && ['pending', 'confirmed'].includes(a.status))
-            .slice(0, 5)
-        );
-        setAlerts(alertsRes.data);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user]);
+  const handleStartCall = (patient, appointmentId) => {
+    setSelectedPatient(patient);
+    setActiveAppointmentId(appointmentId || null);
+    setShowVideoCall(true);
+  };
 
   if (!user) return null;
 
@@ -77,8 +57,9 @@ export default function TherapistDashboard() {
         <div className="bg-background min-h-screen">
           <VideoCallModal
             isOpen={showVideoCall}
-            onClose={() => setShowVideoCall(false)}
-            patientName={selectedPatient?.full_name || 'Patient'}
+            onClose={() => { setShowVideoCall(false); setActiveAppointmentId(null); }}
+            appointmentId={activeAppointmentId}
+            patientName={selectedPatient?.name || 'Patient'}
             therapistName={`Dr. ${displayName}`}
           />
           <PreSessionBriefingModal
@@ -267,12 +248,96 @@ export default function TherapistDashboard() {
                               </p>
                             </div>
                           </div>
-                        ))}
+                          <div className="flex items-center gap-3">
+                            <Badge variant={patient.status === 'critical' ? 'destructive' : 'secondary'}>
+                              {patient.moodTrend}
+                            </Badge>
+                            <Button
+                              size="sm"
+                              className="bg-primary hover:bg-primary/90"
+                              onClick={() => {
+                                // Find the most recent scheduled appointment for this patient (by name match)
+                                const appt = upcomingAppointments.find(
+                                  a => a.patient_name === patient.name
+                                );
+                                handleStartCall(patient, appt?.id);
+                              }}
+                            >
+                              Call
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Upcoming appointments */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Upcoming Sessions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {upcomingAppointments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No upcoming sessions</p>
+                  ) : (
+                    upcomingAppointments.slice(0, 5).map((appt) => (
+                      <div key={appt.id} className="p-3 border border-border rounded-lg">
+                        <p className="font-medium text-sm">{appt.patient_name || 'Patient'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {appt.scheduled_at
+                            ? new Date(appt.scheduled_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '—'}
+                        </p>
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Critical Cases */}
+            {criticalPatients.length > 0 && (
+              <Card className="border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-red-600">
+                    <AlertCircle className="h-5 w-5" />
+                    Critical Cases Requiring Attention
+                  </CardTitle>
+                  <CardDescription>Patients showing declining mood trends</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {criticalPatients.map((patient) => {
+                      const MoodIcon = moodIcons[patient.currentMood] || Smile;
+                      return (
+                        <div
+                          key={patient.id}
+                          className="flex items-center justify-between p-4 border border-red-500/20 rounded-lg bg-background hover:bg-background/80 transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                              <MoodIcon className="h-5 w-5 text-red-600" />
+                            </div>
+                            <div>
+                              <p className="font-semibold">{patient.name}</p>
+                              <p className="text-sm text-muted-foreground">Status: {patient.currentMood}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-red-600">Mood Declining</p>
+                            <p className="text-xs text-muted-foreground">Last: {patient.lastAppointment}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         </div>

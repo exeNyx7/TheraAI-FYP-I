@@ -1,208 +1,171 @@
 """
-Email Notification Service
-
-Sends async emails for:
-- Appointment confirmations (to patient)
-- Appointment reminders (to patient, 24h before)
-- Crisis alerts (to therapist + admin)
-- Welcome email (to new patients)
-
-Config via env vars:
-  MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM, MAIL_SERVER, MAIL_PORT, MAIL_TLS, MAIL_SSL
-  MAIL_ENABLED (default False — set True in production)
-  ADMIN_EMAIL — receives crisis alerts
+Email Service for TheraAI
+SMTP-based transactional email using aiosmtplib
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-def _get_mail_config():
-    """Lazily build ConnectionConfig to avoid import errors when mail is disabled."""
-    from fastapi_mail import ConnectionConfig
-    from ..config import get_settings
-    s = get_settings()
-    return ConnectionConfig(
-        MAIL_USERNAME=s.mail_username or "",
-        MAIL_PASSWORD=s.mail_password or "",
-        MAIL_FROM=s.mail_from or "noreply@theraai.app",
-        MAIL_PORT=s.mail_port,
-        MAIL_SERVER=s.mail_server or "smtp.gmail.com",
-        MAIL_FROM_NAME="TheraAI",
-        MAIL_STARTTLS=s.mail_tls,
-        MAIL_SSL_TLS=s.mail_ssl,
-        USE_CREDENTIALS=bool(s.mail_username and s.mail_password),
-        VALIDATE_CERTS=True,
-    )
-
-
-async def _send(to: List[str], subject: str, html: str) -> bool:
-    """Send an email. Returns True on success, False on failure (never raises)."""
-    try:
-        from fastapi_mail import FastMail, MessageSchema, MessageType
-        from ..config import get_settings
-        s = get_settings()
-
-        if not s.mail_enabled:
-            logger.info("Mail disabled — skipping: %s → %s", subject, to)
-            return False
-
-        msg = MessageSchema(
-            subject=subject,
-            recipients=to,
-            body=html,
-            subtype=MessageType.html,
-        )
-        fm = FastMail(_get_mail_config())
-        await fm.send_message(msg)
-        logger.info("Email sent: '%s' → %s", subject, to)
-        return True
-    except Exception as e:
-        logger.warning("Email send failed: %s", e)
-        return False
-
-
-# ── Templates ────────────────────────────────────────────────────────────────
-
-def _base_template(title: str, content: str) -> str:
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body {{ font-family: 'Segoe UI', Arial, sans-serif; background:#f9fafb; margin:0; padding:0; }}
-    .container {{ max-width:600px; margin:32px auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.08); }}
-    .header {{ background:linear-gradient(135deg,#6366f1,#8b5cf6); padding:32px 32px 24px; }}
-    .header h1 {{ color:#fff; margin:0; font-size:22px; font-weight:700; }}
-    .header p {{ color:rgba(255,255,255,.8); margin:4px 0 0; font-size:13px; }}
-    .body {{ padding:32px; color:#374151; line-height:1.6; }}
-    .body h2 {{ color:#111827; margin-top:0; font-size:18px; }}
-    .info-box {{ background:#f3f4f6; border-radius:8px; padding:16px; margin:16px 0; }}
-    .info-box p {{ margin:4px 0; font-size:14px; }}
-    .alert-box {{ background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:16px; margin:16px 0; }}
-    .btn {{ display:inline-block; background:#6366f1; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; margin-top:8px; }}
-    .footer {{ background:#f9fafb; padding:16px 32px; text-align:center; font-size:12px; color:#9ca3af; border-top:1px solid #e5e7eb; }}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>TheraAI</h1>
-      <p>Your AI-powered mental wellness platform</p>
-    </div>
-    <div class="body">
-      <h2>{title}</h2>
-      {content}
-    </div>
-    <div class="footer">
-      <p>TheraAI · Mental Wellness Platform · Pakistan</p>
-      <p>If you need immediate help, call Umang: 0317-4288665</p>
-    </div>
-  </div>
-</body>
-</html>
-"""
-
-
-# ── Public API ────────────────────────────────────────────────────────────────
-
 class EmailService:
+    """Service for sending transactional emails"""
 
     @staticmethod
-    async def send_appointment_confirmation(
-        patient_email: str,
-        patient_name: str,
-        therapist_name: str,
-        appointment_time: str,
-        appointment_id: str,
-    ) -> bool:
-        content = f"""
-        <p>Hi {patient_name},</p>
-        <p>Your appointment has been <strong>confirmed</strong>!</p>
-        <div class="info-box">
-          <p><strong>Therapist:</strong> Dr. {therapist_name}</p>
-          <p><strong>Date & Time:</strong> {appointment_time}</p>
-          <p><strong>Booking ID:</strong> {appointment_id}</p>
-        </div>
-        <p>Please make sure you're in a quiet, private space for your session.</p>
-        <p>If you need to cancel or reschedule, please do so at least 24 hours in advance.</p>
-        <a href="https://theraai.app/appointments" class="btn">View Appointment</a>
-        """
-        html = _base_template("Appointment Confirmed", content)
-        return await _send([patient_email], "Your TheraAI Appointment is Confirmed", html)
+    async def send_email(to_email: str, subject: str, html_body: str) -> bool:
+        """Send a generic HTML email. Returns True on success."""
+        settings = get_settings()
+
+        if not getattr(settings, 'mail_enabled', False):
+            logger.info(f"[EMAIL DISABLED] Would send '{subject}' to {to_email}")
+            return False
+
+        if not settings.smtp_username or not settings.smtp_password:
+            logger.warning("SMTP credentials not configured — email not sent")
+            return False
+
+        try:
+            import aiosmtplib
+
+            msg = MIMEMultipart("alternative")
+            msg["From"] = settings.from_email
+            msg["To"] = to_email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(html_body, "html"))
+
+            await aiosmtplib.send(
+                msg,
+                hostname=settings.smtp_host,
+                port=settings.smtp_port,
+                username=settings.smtp_username,
+                password=settings.smtp_password,
+                use_tls=settings.smtp_port == 465,
+                start_tls=settings.smtp_port == 587,
+            )
+            logger.info(f"Email sent to {to_email}: {subject}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send email to {to_email}: {e}")
+            return False
 
     @staticmethod
     async def send_appointment_reminder(
-        patient_email: str,
+        to_email: str,
         patient_name: str,
         therapist_name: str,
-        appointment_time: str,
+        scheduled_at: datetime,
     ) -> bool:
-        content = f"""
-        <p>Hi {patient_name},</p>
-        <p>This is a reminder that you have a session scheduled <strong>tomorrow</strong>.</p>
-        <div class="info-box">
-          <p><strong>Therapist:</strong> Dr. {therapist_name}</p>
-          <p><strong>Date & Time:</strong> {appointment_time}</p>
+        """Send a 24-hour appointment reminder to the patient."""
+        subject = f"Reminder: Therapy session tomorrow with {therapist_name}"
+        formatted_time = scheduled_at.strftime("%B %d, %Y at %I:%M %p UTC")
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">TheraAI</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0;">Appointment Reminder</p>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px;">
+                <p>Hi <strong>{patient_name}</strong>,</p>
+                <p>This is a friendly reminder that you have a therapy session scheduled for:</p>
+                <div style="background: white; border-left: 4px solid #667eea; padding: 15px 20px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">{formatted_time}</p>
+                    <p style="margin: 5px 0 0; color: #666;">with {therapist_name}</p>
+                </div>
+                <p>Please make sure you're in a quiet, private space before your session begins.</p>
+                <p style="color: #888; font-size: 13px; margin-top: 30px;">If you need to cancel or reschedule, please do so at least 24 hours in advance through the TheraAI app.</p>
+                <p style="color: #888; font-size: 13px;">Need immediate support? Contact a crisis line: <strong>988 (US)</strong> or <strong>116 123 (UK)</strong></p>
+            </div>
         </div>
-        <p>Tip: Spend a few minutes journaling before your session — it helps you identify what to discuss.</p>
-        <a href="https://theraai.app/appointments" class="btn">View Appointment</a>
         """
-        html = _base_template("Reminder: Session Tomorrow", content)
-        return await _send([patient_email], "Reminder: Your Therapy Session is Tomorrow", html)
+        return await EmailService.send_email(to_email, subject, html)
+
+    @staticmethod
+    async def send_welcome_email(to_email: str, full_name: str) -> bool:
+        """Send a welcome email to a new user."""
+        subject = "Welcome to TheraAI — Your mental wellness journey begins"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">Welcome to TheraAI</h1>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px;">
+                <p>Hi <strong>{full_name}</strong>,</p>
+                <p>Welcome to TheraAI — your AI-powered mental wellness companion.</p>
+                <p>Here's what you can do to get started:</p>
+                <ul style="line-height: 2;">
+                    <li>📓 Write your first <strong>journal entry</strong></li>
+                    <li>😊 Log your <strong>daily mood</strong></li>
+                    <li>💬 Chat with your <strong>AI wellness companion</strong></li>
+                    <li>📋 Take a <strong>mental health assessment</strong></li>
+                    <li>📅 Book a session with a <strong>therapist</strong></li>
+                </ul>
+                <p>We're here for you every step of the way.</p>
+                <p style="color: #888; font-size: 13px; margin-top: 30px;">In a crisis? Contact: <strong>988 (US)</strong> · <strong>116 123 (UK)</strong> · <strong>1800-599-0019 (PK)</strong></p>
+            </div>
+        </div>
+        """
+        return await EmailService.send_email(to_email, subject, html)
+
+    @staticmethod
+    async def send_appointment_confirmation(
+        to_email: str,
+        patient_name: str,
+        therapist_name: str,
+        scheduled_at: datetime,
+    ) -> bool:
+        """Send booking confirmation email to a patient."""
+        subject = f"Appointment confirmed with {therapist_name}"
+        formatted_time = scheduled_at.strftime("%B %d, %Y at %I:%M %p UTC")
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">Appointment Confirmed ✓</h1>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px;">
+                <p>Hi <strong>{patient_name}</strong>,</p>
+                <p>Your therapy session has been successfully booked!</p>
+                <div style="background: white; border-left: 4px solid #22c55e; padding: 15px 20px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">{formatted_time}</p>
+                    <p style="margin: 5px 0 0; color: #666;">with {therapist_name}</p>
+                </div>
+                <p>You'll receive a reminder 24 hours before your session.</p>
+                <p style="color: #888; font-size: 13px; margin-top: 30px;">Need to cancel? You can do so through the TheraAI app at least 24 hours in advance.</p>
+            </div>
+        </div>
+        """
+        return await EmailService.send_email(to_email, subject, html)
 
     @staticmethod
     async def send_crisis_alert(
-        therapist_email: str,
+        to_email: str,
         therapist_name: str,
         patient_name: str,
-        patient_id: str,
         severity: str,
-        message_excerpt: str,
-        admin_emails: Optional[List[str]] = None,
+        trigger: str,
     ) -> bool:
-        severity_label = severity.upper()
-        content = f"""
-        <p>Hi Dr. {therapist_name},</p>
-        <p>A <strong>{severity_label}</strong> crisis signal was detected in a chat session with one of your patients.</p>
-        <div class="alert-box">
-          <p><strong>Patient:</strong> {patient_name}</p>
-          <p><strong>Severity:</strong> {severity_label}</p>
-          <p><strong>Message excerpt:</strong></p>
-          <p><em>"{message_excerpt[:300]}..."</em></p>
-          <p><strong>Time:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>
+        """Notify a therapist of a crisis detection event."""
+        subject = f"[TheraAI ALERT] Crisis detected for patient {patient_name}"
+        severity_color = {"low": "#f59e0b", "medium": "#f97316", "high": "#ef4444", "critical": "#7f1d1d"}.get(severity, "#ef4444")
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: {severity_color}; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">⚠️ Crisis Alert</h1>
+                <p style="color: white; text-transform: uppercase; font-weight: bold;">{severity.upper()} SEVERITY</p>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px;">
+                <p>Hi <strong>{therapist_name}</strong>,</p>
+                <p>A crisis event has been detected for your patient <strong>{patient_name}</strong>.</p>
+                <div style="background: white; border-left: 4px solid {severity_color}; padding: 15px 20px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-weight: bold; color: #333;">Trigger: {trigger}</p>
+                </div>
+                <p>Please review the patient's recent activity in your TheraAI dashboard and consider reaching out.</p>
+                <p style="color: #888; font-size: 13px; margin-top: 30px;">This is an automated alert from the TheraAI crisis detection system.</p>
+            </div>
         </div>
-        <p>Please reach out to this patient as soon as possible. If you believe they are in immediate danger,
-        contact emergency services or the Umang hotline (0317-4288665).</p>
-        <a href="https://theraai.app/dashboard" class="btn">View Patient Dashboard</a>
         """
-        html = _base_template(f"Crisis Alert: {severity_label}", content)
-        recipients = [therapist_email]
-        if admin_emails:
-            recipients.extend(admin_emails)
-        return await _send(recipients, f"[TheraAI] Crisis Alert — {severity_label}: {patient_name}", html)
-
-    @staticmethod
-    async def send_welcome_email(
-        patient_email: str,
-        patient_name: str,
-    ) -> bool:
-        content = f"""
-        <p>Hi {patient_name},</p>
-        <p>Welcome to <strong>TheraAI</strong> — your AI-powered mental wellness companion!</p>
-        <p>Here's what you can do to get started:</p>
-        <div class="info-box">
-          <p>📝 <strong>Journal</strong> — Log your thoughts and let AI analyze your mood</p>
-          <p>💬 <strong>Chat</strong> — Talk to your AI wellness companion anytime</p>
-          <p>📊 <strong>Assessments</strong> — Take PHQ-9, GAD-7, and other standardized tests</p>
-          <p>🗓️ <strong>Appointments</strong> — Book sessions with qualified therapists</p>
-        </div>
-        <p>Remember: you're never alone. Help is always available.</p>
-        <a href="https://theraai.app/dashboard" class="btn">Go to Dashboard</a>
-        """
-        html = _base_template("Welcome to TheraAI!", content)
-        return await _send([patient_email], "Welcome to TheraAI — Your Wellness Journey Starts Here", html)
+        return await EmailService.send_email(to_email, subject, html)

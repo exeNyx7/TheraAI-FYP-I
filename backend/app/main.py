@@ -9,7 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import db_manager, init_database, check_database_health
-from .api import auth_router, journal_router, stats_router, chat_router
+from .api import (
+    auth_router, journal_router, stats_router, chat_router,
+    appointments_router, therapist_router, calls_router,
+    notifications_router, calendar_router,
+)
 from .api.moods import router as moods_router
 from .api.conversations import router as conversations_router
 from .api.settings import router as settings_router
@@ -51,15 +55,39 @@ async def lifespan(app: FastAPI):
                 
         threading.Thread(target=load_ai_background, daemon=True).start()
         
+        # Initialize notification service (FCM) if configured
+        try:
+            from .services.notification_service import NotificationService
+            if settings.firebase_credentials_path:
+                NotificationService.initialize(settings.firebase_credentials_path)
+                print("✅ Firebase Cloud Messaging initialized")
+            else:
+                print("ℹ️ FCM not configured (FIREBASE_CREDENTIALS_PATH not set)")
+        except Exception as e:
+            print(f"⚠️ FCM initialization skipped: {e}")
+
+        # Start appointment reminder scheduler
+        try:
+            from .services.scheduler_service import start_scheduler
+            start_scheduler()
+            print("✅ Appointment reminder scheduler started")
+        except Exception as e:
+            print(f"⚠️ Scheduler start failed: {e}")
+
         print("✅ Application startup complete")
     except Exception as e:
         print(f"❌ Failed to start application: {e}")
         raise e
-    
+
     yield
-    
+
     # Shutdown
     print("🛑 Shutting down application...")
+    try:
+        from .services.scheduler_service import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
     await db_manager.close_database_connection()
     print("✅ Application shutdown complete")
 
@@ -100,13 +128,11 @@ app.include_router(stats_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(moods_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
-app.include_router(settings_router, prefix="/api/v1")
-app.include_router(assessments_router, prefix="/api/v1")
 app.include_router(appointments_router, prefix="/api/v1")
-app.include_router(therapists_router, prefix="/api/v1")
 app.include_router(therapist_router, prefix="/api/v1")
-app.include_router(ws_router)  # WebSocket — no /api/v1 prefix, path is /ws/chat
-app.include_router(admin_router, prefix="/api/v1")
+app.include_router(calls_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(calendar_router, prefix="/api/v1")
 
 
 @app.get(

@@ -1,334 +1,388 @@
 """
-Therapist Dashboard Service for TheraAI
-Handles dashboard stats, patient list, patient history, alerts, and profile management.
+Therapist Service Layer for TheraAI
+Aggregates dashboard stats, patient lists, alerts, and AI briefings
 """
 
-from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
+import httpx
 
 from ..database import get_database
-from ..models.appointments import (
-    TherapistProfileCreate,
-    TherapistProfileUpdate,
-    TherapistProfileOut,
-    WeeklyAvailability,
-)
-
-WEEKDAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-
-
-def _doc_to_therapist(doc: dict, full_name: str = None) -> TherapistProfileOut:
-    avail_data = doc.get("availability", {})
-    availability = WeeklyAvailability(**{
-        day: avail_data.get(day, []) for day in WEEKDAY_NAMES
-    })
-    return TherapistProfileOut(
-        **{
-            "_id": str(doc["_id"]),
-            "user_id": doc["user_id"],
-            "full_name": full_name or doc.get("full_name"),
-            "specializations": doc.get("specializations", []),
-            "bio": doc.get("bio", ""),
-            "years_experience": doc.get("years_experience", 0),
-            "hourly_rate": doc.get("hourly_rate", 0),
-            "currency": doc.get("currency", "PKR"),
-            "availability": availability,
-            "rating": doc.get("rating", 0.0),
-            "total_reviews": doc.get("total_reviews", 0),
-            "is_accepting_patients": doc.get("is_accepting_patients", True),
-            "created_at": doc.get("created_at"),
-        }
-    )
+from ..models.appointment import AppointmentStatus
 
 
 class TherapistService:
-
-    # ------------------------------------------------------------------
-    # Profile management
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    async def get_or_create_profile(therapist_id: str) -> TherapistProfileOut:
-        db = await get_database()
-        doc = await db.therapist_profiles.find_one({"user_id": therapist_id})
-        if doc:
-            user = await db.users.find_one({"_id": ObjectId(therapist_id)})
-            full_name = user.get("full_name") if user else None
-            return _doc_to_therapist(doc, full_name)
-
-        # Create minimal default profile
-        now = datetime.now(timezone.utc)
-        user = await db.users.find_one({"_id": ObjectId(therapist_id)})
-        default_doc = {
-            "user_id": therapist_id,
-            "full_name": user.get("full_name") if user else None,
-            "specializations": [],
-            "bio": "",
-            "years_experience": 0,
-            "hourly_rate": 0.0,
-            "currency": "PKR",
-            "availability": {day: [] for day in WEEKDAY_NAMES},
-            "rating": 0.0,
-            "total_reviews": 0,
-            "is_accepting_patients": False,
-            "created_at": now,
-        }
-        result = await db.therapist_profiles.insert_one(default_doc)
-        default_doc["_id"] = result.inserted_id
-        full_name = user.get("full_name") if user else None
-        return _doc_to_therapist(default_doc, full_name)
-
-    @staticmethod
-    async def update_profile(therapist_id: str, data: TherapistProfileUpdate) -> Optional[TherapistProfileOut]:
-        db = await get_database()
-        doc = await db.therapist_profiles.find_one({"user_id": therapist_id})
-        if not doc:
-            return None
-
-        updates = data.model_dump(exclude_unset=True)
-        if "availability" in updates and updates["availability"] is not None:
-            # Convert nested WeeklyAvailability to plain dict
-            avail = updates["availability"]
-            if hasattr(avail, "model_dump"):
-                avail = avail.model_dump()
-            # Convert each day's list of TimeSlotAvailability dicts
-            for day in WEEKDAY_NAMES:
-                if day in avail and avail[day]:
-                    avail[day] = [
-                        (s.model_dump() if hasattr(s, "model_dump") else s)
-                        for s in avail[day]
-                    ]
-            updates["availability"] = avail
-
-        if not updates:
-            user = await db.users.find_one({"_id": ObjectId(therapist_id)})
-            full_name = user.get("full_name") if user else None
-            return _doc_to_therapist(doc, full_name)
-
-        await db.therapist_profiles.update_one(
-            {"user_id": therapist_id},
-            {"$set": updates},
-        )
-        updated = await db.therapist_profiles.find_one({"user_id": therapist_id})
-        user = await db.users.find_one({"_id": ObjectId(therapist_id)})
-        full_name = user.get("full_name") if user else None
-        return _doc_to_therapist(updated, full_name)
-
-    # ------------------------------------------------------------------
-    # Dashboard stats
-    # ------------------------------------------------------------------
+    """Service for therapist dashboard data aggregation"""
 
     @staticmethod
     async def get_dashboard_stats(therapist_id: str) -> Dict[str, Any]:
+        """Get aggregate dashboard stats for a therapist"""
         db = await get_database()
+        now = datetime.now(timezone.utc)
+        week_start = now - timedelta(days=7)
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
 
-        # Total unique patients (ever had a non-cancelled appointment)
-        pipeline = [
-            {"$match": {
-                "therapist_id": therapist_id,
-                "status": {"$nin": ["cancelled", "no_show"]},
-            }},
+        # Count distinct patients via appointments
+        patient_pipeline = [
+            {"$match": {"therapist_id": therapist_id}},
             {"$group": {"_id": "$patient_id"}},
             {"$count": "total"},
         ]
-        patient_agg = await db.appointments.aggregate(pipeline).to_list(length=None)
-        total_patients = patient_agg[0]["total"] if patient_agg else 0
+        patient_result = await db.appointments.aggregate(patient_pipeline).to_list(1)
+        total_patients = patient_result[0]["total"] if patient_result else 0
 
         # Sessions this week
-        now = datetime.now(timezone.utc)
-        week_start = now - timedelta(days=now.weekday())
-        week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_end = week_start + timedelta(days=7)
         sessions_this_week = await db.appointments.count_documents({
             "therapist_id": therapist_id,
-            "scheduled_at": {"$gte": week_start, "$lt": week_end},
-            "status": {"$in": ["confirmed", "in_progress", "completed"]},
+            "scheduled_at": {"$gte": week_start},
+            "status": {"$in": [AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED]},
         })
 
-        # Upcoming appointments (confirmed or pending, in the future)
-        upcoming_count = await db.appointments.count_documents({
+        # Appointments today
+        appointments_today = await db.appointments.count_documents({
             "therapist_id": therapist_id,
-            "scheduled_at": {"$gte": now},
-            "status": {"$in": ["pending", "confirmed"]},
+            "scheduled_at": {"$gte": start_of_day, "$lt": end_of_day},
+            "status": AppointmentStatus.SCHEDULED,
         })
 
-        # Alerts: patients with ≥3 consecutive negative journal sentiments in last 48h
-        cutoff = now - timedelta(hours=48)
+        # Unacknowledged crisis alerts for therapist's patients
+        # Get all patient ids for this therapist
         patient_ids_cursor = db.appointments.aggregate([
-            {"$match": {"therapist_id": therapist_id, "status": {"$nin": ["cancelled", "no_show"]}}},
+            {"$match": {"therapist_id": therapist_id}},
             {"$group": {"_id": "$patient_id"}},
         ])
         patient_ids = [doc["_id"] async for doc in patient_ids_cursor]
 
-        alert_count = 0
-        for pid in patient_ids:
-            recent_entries = await db.journals.find(
-                {"user_id": pid, "created_at": {"$gte": cutoff}},
-                sort=[("created_at", -1)],
-            ).to_list(length=10)
-            negatives = sum(
-                1 for e in recent_entries
-                if e.get("sentiment_label", "").lower() in ("negative", "very negative")
-            )
-            if negatives >= 3:
-                alert_count += 1
+        pending_alerts = 0
+        if patient_ids:
+            pending_alerts = await db.crisis_events.count_documents({
+                "patient_id": {"$in": patient_ids},
+                "acknowledged": False,
+            })
 
         return {
             "total_patients": total_patients,
             "sessions_this_week": sessions_this_week,
-            "upcoming_count": upcoming_count,
-            "alert_count": alert_count,
+            "appointments_today": appointments_today,
+            "pending_alerts": pending_alerts,
         }
-
-    # ------------------------------------------------------------------
-    # Patients list
-    # ------------------------------------------------------------------
 
     @staticmethod
     async def get_patients(therapist_id: str) -> List[Dict[str, Any]]:
+        """Get all patients for a therapist with recent activity"""
         db = await get_database()
 
-        # Unique patients with at least one active appointment
+        # Get distinct patient IDs from appointments
         pipeline = [
-            {"$match": {
-                "therapist_id": therapist_id,
-                "status": {"$nin": ["cancelled", "no_show"]},
-            }},
-            {"$sort": {"scheduled_at": -1}},
-            {"$group": {
-                "_id": "$patient_id",
-                "last_appointment": {"$first": "$scheduled_at"},
-                "last_status": {"$first": "$status"},
-            }},
-        ]
-        patient_docs = await db.appointments.aggregate(pipeline).to_list(length=None)
-
-        results = []
-        for pd in patient_docs:
-            pid = pd["_id"]
-            user = await db.users.find_one({"_id": ObjectId(pid)})
-            if not user:
-                continue
-
-            # Latest mood entry
-            latest_mood = await db.moods.find_one(
-                {"user_id": pid},
-                sort=[("created_at", -1)],
-            )
-
-            # Latest journal sentiment
-            latest_journal = await db.journals.find_one(
-                {"user_id": pid},
-                sort=[("created_at", -1)],
-            )
-
-            results.append({
-                "patient_id": pid,
-                "full_name": user.get("full_name", "Unknown"),
-                "email": user.get("email", ""),
-                "last_appointment": pd["last_appointment"],
-                "last_appointment_status": pd["last_status"],
-                "latest_mood_score": latest_mood.get("mood_score") if latest_mood else None,
-                "latest_mood_label": latest_mood.get("mood_label") if latest_mood else None,
-                "latest_sentiment": latest_journal.get("sentiment_label") if latest_journal else None,
-            })
-
-        return results
-
-    # ------------------------------------------------------------------
-    # Patient history (for detail view)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    async def get_patient_history(therapist_id: str, patient_id: str) -> Optional[Dict[str, Any]]:
-        db = await get_database()
-
-        # Verify this therapist has had appointments with the patient
-        appointment = await db.appointments.find_one({
-            "therapist_id": therapist_id,
-            "patient_id": patient_id,
-            "status": {"$nin": ["cancelled", "no_show"]},
-        })
-        if not appointment:
-            return None
-
-        user = await db.users.find_one({"_id": ObjectId(patient_id)})
-        if not user:
-            return None
-
-        # Last 10 journal entries
-        journals = await db.journals.find(
-            {"user_id": patient_id},
-            sort=[("created_at", -1)],
-        ).to_list(length=10)
-
-        # Last 14 days of mood entries
-        cutoff = datetime.now(timezone.utc) - timedelta(days=14)
-        moods = await db.moods.find(
-            {"user_id": patient_id, "created_at": {"$gte": cutoff}},
-            sort=[("created_at", -1)],
-        ).to_list(length=None)
-
-        # All assessment results
-        assessments = await db.assessment_results.find(
-            {"user_id": patient_id},
-            sort=[("completed_at", -1)],
-        ).to_list(length=None)
-
-        def _clean(docs):
-            out = []
-            for d in docs:
-                d["_id"] = str(d["_id"])
-                out.append(d)
-            return out
-
-        return {
-            "patient_id": patient_id,
-            "full_name": user.get("full_name", "Unknown"),
-            "email": user.get("email", ""),
-            "journals": _clean(journals),
-            "moods": _clean(moods),
-            "assessments": _clean(assessments),
-        }
-
-    # ------------------------------------------------------------------
-    # Alerts
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    async def get_alerts(therapist_id: str) -> List[Dict[str, Any]]:
-        db = await get_database()
-        now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(hours=48)
-
-        # Unique patients of this therapist
-        pipeline = [
-            {"$match": {"therapist_id": therapist_id, "status": {"$nin": ["cancelled", "no_show"]}}},
+            {"$match": {"therapist_id": therapist_id}},
             {"$group": {"_id": "$patient_id"}},
         ]
         patient_ids = [doc["_id"] async for doc in db.appointments.aggregate(pipeline)]
 
-        alerts = []
-        for pid in patient_ids:
-            recent_entries = await db.journals.find(
-                {"user_id": pid, "created_at": {"$gte": cutoff}},
-                sort=[("created_at", -1)],
-            ).to_list(length=10)
+        patients = []
+        for patient_id in patient_ids:
+            try:
+                patient = await db.users.find_one({"_id": ObjectId(patient_id)})
+                if not patient:
+                    continue
 
-            negatives = [
-                e for e in recent_entries
-                if e.get("sentiment_label", "").lower() in ("negative", "very negative")
-            ]
-            if len(negatives) >= 3:
-                user = await db.users.find_one({"_id": ObjectId(pid)})
-                alerts.append({
-                    "patient_id": pid,
-                    "full_name": user.get("full_name", "Unknown") if user else "Unknown",
-                    "alert_type": "consecutive_negative_sentiments",
-                    "negative_count": len(negatives),
-                    "latest_entry_at": negatives[0]["created_at"] if negatives else None,
-                    "message": f"{len(negatives)} consecutive negative journal entries in the last 48 hours",
+                # Get latest mood entry
+                latest_mood = await db.moods.find_one(
+                    {"user_id": patient_id},
+                    sort=[("created_at", -1)],
+                )
+
+                # Get latest appointment with this therapist
+                latest_appt = await db.appointments.find_one(
+                    {"therapist_id": therapist_id, "patient_id": patient_id},
+                    sort=[("scheduled_at", -1)],
+                )
+
+                # Check for unacknowledged crisis events
+                crisis_count = await db.crisis_events.count_documents({
+                    "patient_id": patient_id,
+                    "acknowledged": False,
                 })
 
+                patients.append({
+                    "id": patient_id,
+                    "full_name": patient.get("full_name", "Unknown"),
+                    "email": patient.get("email", ""),
+                    "latest_mood": latest_mood.get("mood") if latest_mood else None,
+                    "latest_mood_date": latest_mood["created_at"].isoformat() if latest_mood and latest_mood.get("created_at") else None,
+                    "last_appointment": latest_appt["scheduled_at"].isoformat() if latest_appt and latest_appt.get("scheduled_at") else None,
+                    "last_appointment_status": latest_appt.get("status") if latest_appt else None,
+                    "unacknowledged_alerts": crisis_count,
+                    "member_since": patient.get("created_at", datetime.now(timezone.utc)).isoformat() if patient.get("created_at") else None,
+                })
+            except Exception:
+                continue
+
+        return patients
+
+    @staticmethod
+    async def get_patient_history(
+        therapist_id: str,
+        patient_id: str,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """Get a patient's journal, mood, and appointment history"""
+        db = await get_database()
+
+        # Validate the therapist has at least one appointment with this patient
+        has_access = await db.appointments.find_one({
+            "therapist_id": therapist_id,
+            "patient_id": patient_id,
+        })
+        if not has_access:
+            return {"error": "Access denied — no appointments with this patient"}
+
+        patient = await db.users.find_one({"_id": ObjectId(patient_id)})
+        if not patient:
+            return {"error": "Patient not found"}
+
+        # Journals (recent)
+        journals_cursor = (
+            db.journals.find({"user_id": patient_id})
+            .sort("created_at", -1)
+            .skip(skip)
+            .limit(limit)
+        )
+        journals = []
+        async for doc in journals_cursor:
+            journals.append({
+                "id": str(doc["_id"]),
+                "title": doc.get("title"),
+                "mood": doc.get("mood"),
+                "sentiment_label": doc.get("sentiment_label"),
+                "content_excerpt": (doc.get("content") or "")[:200],
+                "created_at": doc["created_at"].isoformat() if doc.get("created_at") else None,
+            })
+
+        # Recent moods
+        moods_cursor = (
+            db.moods.find({"user_id": patient_id})
+            .sort("created_at", -1)
+            .limit(30)
+        )
+        moods = []
+        async for doc in moods_cursor:
+            moods.append({
+                "id": str(doc["_id"]),
+                "mood": doc.get("mood"),
+                "energy_level": doc.get("energy_level"),
+                "notes": doc.get("notes"),
+                "created_at": doc["created_at"].isoformat() if doc.get("created_at") else None,
+            })
+
+        # Appointments with this therapist
+        appts_cursor = (
+            db.appointments.find({
+                "therapist_id": therapist_id,
+                "patient_id": patient_id,
+            })
+            .sort("scheduled_at", -1)
+            .limit(10)
+        )
+        appointments = []
+        async for doc in appts_cursor:
+            appointments.append({
+                "id": str(doc["_id"]),
+                "scheduled_at": doc["scheduled_at"].isoformat() if doc.get("scheduled_at") else None,
+                "status": doc.get("status"),
+                "type": doc.get("type"),
+                "duration_minutes": doc.get("duration_minutes"),
+                "notes": doc.get("notes"),
+            })
+
+        return {
+            "patient": {
+                "id": patient_id,
+                "full_name": patient.get("full_name"),
+                "email": patient.get("email"),
+                "created_at": patient.get("created_at", datetime.now(timezone.utc)).isoformat() if patient.get("created_at") else None,
+            },
+            "journals": journals,
+            "moods": moods,
+            "appointments": appointments,
+        }
+
+    @staticmethod
+    async def get_alerts(therapist_id: str) -> List[Dict[str, Any]]:
+        """Get unacknowledged crisis alerts for a therapist's patients"""
+        db = await get_database()
+
+        # Get patient IDs
+        pipeline = [
+            {"$match": {"therapist_id": therapist_id}},
+            {"$group": {"_id": "$patient_id"}},
+        ]
+        patient_ids = [doc["_id"] async for doc in db.appointments.aggregate(pipeline)]
+
+        if not patient_ids:
+            return []
+
+        crisis_cursor = (
+            db.crisis_events.find({
+                "patient_id": {"$in": patient_ids},
+                "acknowledged": False,
+            })
+            .sort("created_at", -1)
+            .limit(50)
+        )
+
+        alerts = []
+        async for doc in crisis_cursor:
+            # Enrich with patient name
+            patient_name = doc.get("patient_name")
+            if not patient_name:
+                try:
+                    patient = await db.users.find_one({"_id": ObjectId(doc["patient_id"])})
+                    patient_name = patient.get("full_name", "Unknown") if patient else "Unknown"
+                except Exception:
+                    patient_name = "Unknown"
+
+            alerts.append({
+                "id": str(doc["_id"]),
+                "patient_id": doc["patient_id"],
+                "patient_name": patient_name,
+                "severity": doc.get("severity", "medium"),
+                "trigger": doc.get("trigger", ""),
+                "source": doc.get("source", "chat"),
+                "message_excerpt": doc.get("message_excerpt"),
+                "created_at": doc["created_at"].isoformat() if doc.get("created_at") else None,
+            })
+
         return alerts
+
+    @staticmethod
+    async def acknowledge_alert(alert_id: str, therapist_id: str) -> bool:
+        """Mark a crisis alert as acknowledged"""
+        db = await get_database()
+        if not ObjectId.is_valid(alert_id):
+            return False
+        result = await db.crisis_events.update_one(
+            {"_id": ObjectId(alert_id)},
+            {"$set": {
+                "acknowledged": True,
+                "acknowledged_by": therapist_id,
+                "acknowledged_at": datetime.now(timezone.utc),
+            }},
+        )
+        return result.modified_count > 0
+
+    @staticmethod
+    async def get_presession_briefing(therapist_id: str, patient_id: str) -> Dict[str, Any]:
+        """Generate an AI pre-session briefing for a patient"""
+        db = await get_database()
+
+        # Validate access
+        has_access = await db.appointments.find_one({
+            "therapist_id": therapist_id,
+            "patient_id": patient_id,
+        })
+        if not has_access:
+            return {"error": "Access denied"}
+
+        patient = await db.users.find_one({"_id": ObjectId(patient_id)})
+        if not patient:
+            return {"error": "Patient not found"}
+
+        # Gather recent data
+        journals_cursor = (
+            db.journals.find({"user_id": patient_id})
+            .sort("created_at", -1)
+            .limit(5)
+        )
+        journals = await journals_cursor.to_list(5)
+
+        moods_cursor = (
+            db.moods.find({"user_id": patient_id})
+            .sort("created_at", -1)
+            .limit(10)
+        )
+        moods = await moods_cursor.to_list(10)
+
+        crisis_events_cursor = (
+            db.crisis_events.find({"patient_id": patient_id})
+            .sort("created_at", -1)
+            .limit(3)
+        )
+        crisis_events = await crisis_events_cursor.to_list(3)
+
+        # Build context for AI
+        journal_summary = ""
+        for j in journals:
+            date = j.get("created_at", "")
+            if hasattr(date, "strftime"):
+                date = date.strftime("%Y-%m-%d")
+            sentiment = j.get("sentiment_label", "unknown")
+            excerpt = (j.get("content") or "")[:300]
+            journal_summary += f"[{date}] Mood: {j.get('mood', 'N/A')}, Sentiment: {sentiment}. \"{excerpt}\"\n"
+
+        mood_summary = ""
+        for m in moods:
+            date = m.get("created_at", "")
+            if hasattr(date, "strftime"):
+                date = date.strftime("%Y-%m-%d")
+            mood_summary += f"[{date}] {m.get('mood', 'N/A')} (energy: {m.get('energy_level', 'N/A')})\n"
+
+        crisis_summary = ""
+        for c in crisis_events:
+            date = c.get("created_at", "")
+            if hasattr(date, "strftime"):
+                date = date.strftime("%Y-%m-%d")
+            crisis_summary += f"[{date}] {c.get('severity', 'N/A')} — {c.get('trigger', '')}\n"
+
+        prompt = f"""You are a clinical assistant preparing a brief pre-session note for a therapist.
+
+Patient: {patient.get('full_name', 'Patient')}
+
+Recent Journal Entries (last 5):
+{journal_summary or 'No recent journal entries.'}
+
+Recent Mood Logs (last 10):
+{mood_summary or 'No recent mood logs.'}
+
+Recent Crisis Events:
+{crisis_summary or 'No recent crisis events.'}
+
+Write a concise 2-3 paragraph clinical pre-session briefing covering:
+1. Patient's recent emotional trends
+2. Key concerns or patterns to explore
+3. Suggested focus areas for today's session
+
+Keep it professional and clinically appropriate."""
+
+        # Call Ollama
+        briefing_text = "Unable to generate AI briefing. Please review the patient data manually."
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "http://localhost:11434/api/generate",
+                    json={
+                        "model": "llama3.1:8b",
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {"temperature": 0.3, "num_predict": 500},
+                    },
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    briefing_text = data.get("response", briefing_text)
+        except Exception:
+            pass  # Fallback to static message if Ollama is down
+
+        return {
+            "patient_name": patient.get("full_name"),
+            "briefing": briefing_text,
+            "data_summary": {
+                "journals_analyzed": len(journals),
+                "moods_analyzed": len(moods),
+                "crisis_events": len(crisis_events),
+            },
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }

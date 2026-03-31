@@ -4,10 +4,11 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Input } from '../../components/ui/input';
-import { Bell, Moon, Lock, Trash2, Shield, Key } from 'lucide-react';
+import { Bell, Moon, Lock, Trash2, Shield, Key, Calendar, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import apiClient from '../../apiClient';
 
 function Toggle({ checked, onChange }) {
   return (
@@ -24,6 +25,7 @@ function Toggle({ checked, onChange }) {
 export default function Settings() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showSuccess, showError } = useToast();
 
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system');
@@ -34,10 +36,56 @@ export default function Settings() {
   const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarLoading, setCalendarLoading] = useState(false);
 
   useEffect(() => {
     if (!user) navigate('/login');
   }, [user, navigate]);
+
+  // Check Google Calendar connection status on mount
+  useEffect(() => {
+    if (!user) return;
+    apiClient.get('/calendar/status')
+      .then(res => setCalendarConnected(res.data.connected))
+      .catch(() => {});
+  }, [user]);
+
+  // Handle redirect from Google OAuth callback
+  useEffect(() => {
+    const connected = searchParams.get('calendar_connected');
+    if (connected === 'true') {
+      setCalendarConnected(true);
+      showSuccess('Google Calendar connected successfully!');
+    } else if (connected === 'false') {
+      showError('Failed to connect Google Calendar. Please try again.');
+    }
+  }, [searchParams]);
+
+  const handleConnectCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      const res = await apiClient.get('/calendar/auth-url');
+      window.location.href = res.data.auth_url;
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Google Calendar integration is not configured.';
+      showError(msg);
+      setCalendarLoading(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      await apiClient.post('/calendar/disconnect');
+      setCalendarConnected(false);
+      showSuccess('Google Calendar disconnected.');
+    } catch {
+      showError('Failed to disconnect Google Calendar.');
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -151,6 +199,57 @@ export default function Settings() {
                     <p className="text-sm text-muted-foreground">Allow your assigned therapist to view your mood data</p>
                   </div>
                   <Toggle checked={privacy.shareWithTherapist} onChange={() => setPrivacy(p => ({ ...p, shareWithTherapist: !p.shareWithTherapist }))} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Google Calendar Integration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" /> Google Calendar
+                </CardTitle>
+                <CardDescription>Sync your therapy appointments to Google Calendar</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    {calendarConnected ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <Calendar className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <div>
+                      <p className="font-medium">
+                        {calendarConnected ? 'Google Calendar Connected' : 'Google Calendar Not Connected'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {calendarConnected
+                          ? 'New appointments are automatically added to your calendar'
+                          : 'Connect to automatically sync appointments'}
+                      </p>
+                    </div>
+                  </div>
+                  {calendarConnected ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDisconnectCalendar}
+                      disabled={calendarLoading}
+                      className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                    >
+                      {calendarLoading ? 'Disconnecting...' : 'Disconnect'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleConnectCalendar}
+                      disabled={calendarLoading}
+                    >
+                      {calendarLoading ? 'Redirecting...' : 'Connect'}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
