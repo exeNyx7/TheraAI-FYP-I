@@ -149,14 +149,21 @@ export default function Appointments() {
   };
 
   const handleCancelAppointment = async (appointmentId) => {
+    if (!appointmentId) return;
     try {
       await apiClient.put(`/appointments/${appointmentId}/cancel`);
       setAppointments((prev) =>
-        prev.map((a) => a.id === appointmentId ? { ...a, status: 'cancelled' } : a)
+        prev.map((a) => (a.id || a._id) === appointmentId ? { ...a, status: 'cancelled' } : a)
       );
     } catch (err) {
       console.error('Failed to cancel appointment:', err);
     }
+  };
+
+  const resetBooking = () => {
+    setStep('list');
+    setSelectedTherapist(null);
+    setSelectedDateSlot(null);
   };
 
   const formatDate = (isoString) => {
@@ -218,8 +225,10 @@ export default function Appointments() {
                     <p>No appointments yet. Book a session to get started.</p>
                   </div>
                 ) : (
-                  appointments.map((apt) => (
-                    <Card key={apt.id} className="hover:shadow-md transition-all">
+                  appointments.map((apt) => {
+                    const aptId = apt.id || apt._id;
+                    return (
+                    <Card key={aptId} className="hover:shadow-md transition-all">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-4">
@@ -259,7 +268,7 @@ export default function Appointments() {
                                   variant="outline"
                                   size="sm"
                                   className="text-destructive border-destructive/30"
-                                  onClick={() => handleCancelAppointment(apt.id)}
+                                  onClick={() => handleCancelAppointment(aptId)}
                                 >
                                   Cancel
                                 </Button>
@@ -269,7 +278,8 @@ export default function Appointments() {
                         </div>
                       </CardContent>
                     </Card>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
@@ -346,7 +356,7 @@ export default function Appointments() {
       <VideoCallModal
         isOpen={showVideoCall}
         onClose={() => { setShowVideoCall(false); setActiveAppointment(null); }}
-        appointmentId={activeAppointment?.id}
+        appointmentId={activeAppointment?.id || activeAppointment?._id}
         patientName={user?.full_name || user?.name || 'Patient'}
         therapistName={activeAppointment?.therapist_name || activeAppointment?.therapistName || 'Therapist'}
       />

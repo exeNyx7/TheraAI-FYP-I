@@ -23,8 +23,8 @@ async def create_mood(
         user_id=mood["user_id"],
         mood=mood["mood"],
         notes=mood.get("notes"),
-        timestamp=mood["timestamp"],
-        created_at=mood["created_at"]
+        timestamp=mood.get("timestamp") or mood.get("created_at"),
+        created_at=mood.get("created_at") or mood.get("timestamp"),
     )
 
 
@@ -43,8 +43,8 @@ async def get_moods(
             user_id=mood["user_id"],
             mood=mood["mood"],
             notes=mood.get("notes"),
-            timestamp=mood["timestamp"],
-            created_at=mood["created_at"]
+            timestamp=mood.get("timestamp") or mood.get("created_at"),
+            created_at=mood.get("created_at") or mood.get("timestamp"),
         )
         for mood in moods
     ]
@@ -79,8 +79,8 @@ async def get_mood(
         user_id=mood["user_id"],
         mood=mood["mood"],
         notes=mood.get("notes"),
-        timestamp=mood["timestamp"],
-        created_at=mood["created_at"]
+        timestamp=mood.get("timestamp") or mood.get("created_at"),
+        created_at=mood.get("created_at") or mood.get("timestamp"),
     )
 
 
@@ -105,8 +105,8 @@ async def update_mood(
         user_id=mood["user_id"],
         mood=mood["mood"],
         notes=mood.get("notes"),
-        timestamp=mood["timestamp"],
-        created_at=mood["created_at"]
+        timestamp=mood.get("timestamp") or mood.get("created_at"),
+        created_at=mood.get("created_at") or mood.get("timestamp"),
     )
 
 

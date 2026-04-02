@@ -33,20 +33,20 @@ const MOOD_BAR_COLORS = {
   stressed: 'bg-orange-500', angry: 'bg-red-400',
 };
 
-export function PreSessionBriefingModal({ appointmentId, patientName, isOpen, onClose }) {
+export function PreSessionBriefingModal({ patientId, patientName, isOpen, onClose }) {
   const [briefing, setBriefing] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!isOpen || !appointmentId) return;
+    if (!isOpen || !patientId) return;
     setLoading(true);
     setError(null);
-    apiClient.get(`/therapist/appointments/${appointmentId}/briefing`)
+    apiClient.get(`/therapist/patients/${patientId}/briefing`)
       .then(res => setBriefing(res.data))
       .catch(err => setError(err.response?.data?.detail || 'Failed to load briefing.'))
       .finally(() => setLoading(false));
-  }, [isOpen, appointmentId]);
+  }, [isOpen, patientId]);
 
   if (!isOpen) return null;
 

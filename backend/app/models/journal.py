@@ -5,7 +5,7 @@ Includes mood tracking, sentiment analysis, and AI-generated empathy responses
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict, computed_field
 from typing import Optional, Literal, Annotated, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 from enum import Enum
 
@@ -285,7 +285,7 @@ class JournalInDB(JournalBase):
     emotion_themes: Optional[List[str]] = None
     top_emotions: Optional[List[Dict[str, Any]]] = None
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
     
     @classmethod

@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import LandingPage from './pages/Landing/LandingPageV0';
@@ -18,6 +18,11 @@ import Appointments from './pages/Appointments/Appointments';
 import Achievements from './pages/Achievements/Achievements';
 import TherapistDashboard from './pages/Therapist/TherapistDashboard';
 import './App.css';
+
+function AuthAwareRedirect() {
+  const { isAuthenticated } = useAuth();
+  return <Navigate to={isAuthenticated ? '/dashboard' : '/'} replace />;
+}
 
 function App() {
   return (
@@ -225,7 +230,7 @@ function App() {
             />
 
             {/* Default Routes */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<AuthAwareRedirect />} />
             </Routes>
           </div>
         </Router>

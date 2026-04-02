@@ -103,9 +103,6 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=1000, alias="RATE_LIMIT_REQUESTS")
     rate_limit_period: int = Field(default=60, alias="RATE_LIMIT_PERIOD")  # seconds
     
-    # Email Feature Flag
-    mail_enabled: bool = Field(default=False, alias="MAIL_ENABLED")
-
     # Firebase / FCM
     firebase_credentials_path: Optional[str] = Field(default=None, alias="FIREBASE_CREDENTIALS_PATH")
     fcm_enabled: bool = Field(default=False, alias="FCM_ENABLED")

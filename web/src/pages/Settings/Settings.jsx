@@ -112,17 +112,14 @@ export default function Settings() {
     }
     setIsChangingPassword(true);
     try {
-      const token = localStorage.getItem(import.meta.env.VITE_AUTH_TOKEN_KEY || 'theraai_auth_token');
-      const res = await fetch('/api/v1/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ current_password: passwords.current, new_password: passwords.newPass }),
+      await apiClient.post('/auth/change-password', {
+        current_password: passwords.current,
+        new_password: passwords.newPass,
       });
-      if (!res.ok) throw new Error();
       showSuccess('Password changed successfully!');
       setPasswords({ current: '', newPass: '', confirm: '' });
-    } catch {
-      showError('Failed to change password. Check current password.');
+    } catch (err) {
+      showError(err.response?.data?.detail || 'Failed to change password. Check current password.');
     } finally { setIsChangingPassword(false); }
   };
 

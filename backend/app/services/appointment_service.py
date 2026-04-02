@@ -84,7 +84,7 @@ class AppointmentService:
         )
 
         result = await db.appointments.insert_one(
-            appointment_doc.dict(by_alias=True, exclude={"id"})
+            appointment_doc.model_dump(by_alias=True, exclude={"id"})
         )
 
         created = await db.appointments.find_one({"_id": result.inserted_id})

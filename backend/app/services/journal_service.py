@@ -74,7 +74,7 @@ class JournalService:
             
             # Insert into database
             result = await journals_collection.insert_one(
-                journal_doc.dict(by_alias=True, exclude={"id"})
+                journal_doc.model_dump(by_alias=True, exclude={"id"})
             )
             
             # Get the created document
@@ -122,10 +122,16 @@ class JournalService:
             ).sort("created_at", -1).skip(skip).limit(limit)
             
             # Convert to list of JournalOut
+            import logging as _log
             journals = []
             async for doc in cursor:
-                journals.append(JournalOut.from_doc(doc))
-            
+                try:
+                    journals.append(JournalOut.from_doc(doc))
+                except Exception:
+                    _log.getLogger(__name__).warning(
+                        "Skipping malformed journal doc _id=%s", doc.get("_id")
+                    )
+
             return journals
             
         except Exception as e:

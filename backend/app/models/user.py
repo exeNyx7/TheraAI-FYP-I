@@ -127,7 +127,7 @@ class UserInDB(UserBase):
     id: Optional[str] = Field(default=None, alias="_id")
     hashed_password: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
     login_attempts: int = Field(default=0, description="Failed login attempts counter")
     locked_until: Optional[datetime] = None

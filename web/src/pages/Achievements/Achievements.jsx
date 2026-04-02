@@ -4,6 +4,7 @@ import { AchievementTracker } from '../../components/Gamification/AchievementTra
 import { Zap } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import apiClient from '../../apiClient';
 
 export default function Achievements() {
   const { user } = useAuth();
@@ -12,10 +13,14 @@ export default function Achievements() {
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
-    // Fetch achievement data from API; for now use demo unlocked achievements
-    const demo = [];
-    if (user) demo.push('first_entry'); // Signed up
-    setUnlockedIds(demo);
+    apiClient.get('/users/me/achievements')
+      .then(res => {
+        const unlocked = (res.data.achievements || [])
+          .filter(a => a.unlocked)
+          .map(a => a.id);
+        setUnlockedIds(unlocked);
+      })
+      .catch(() => {});
   }, [user, navigate]);
 
   if (!user) return null;

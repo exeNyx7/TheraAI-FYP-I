@@ -4,7 +4,7 @@ Appointment Models and Schemas for TheraAI Teletherapy System
 
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 from enum import Enum
 
@@ -89,7 +89,7 @@ class AppointmentInDB(BaseModel):
     patient_calendar_event_id: Optional[str] = None
     therapist_calendar_event_id: Optional[str] = None
     reminder_sent: bool = False
-    created_at: datetime = Field(default_factory=lambda: datetime.now())
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(

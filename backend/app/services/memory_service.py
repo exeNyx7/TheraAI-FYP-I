@@ -100,7 +100,7 @@ class MemoryService:
 
         try:
             raw_response = await model_service.generate_response(
-                message=extraction_prompt,
+                user_message=extraction_prompt,
                 conversation_history=[],
                 user_context=None,
                 max_tokens=200,

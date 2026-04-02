@@ -10,6 +10,7 @@ import { Smile, Frown, Heart, Wind, Circle, Plus, Calendar, TrendingUp, PieChart
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import apiClient from '../../apiClient';
 
 const MOODS = [
   { value: 'happy', label: 'Happy', color: '#FBBF24', icon: Smile },
@@ -20,8 +21,6 @@ const MOODS = [
   { value: 'excited', label: 'Excited', color: '#F59E0B', icon: Smile },
   { value: 'stressed', label: 'Stressed', color: '#6366F1', icon: Heart },
 ];
-
-const API = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/v1` : 'http://localhost:8000/api/v1';
 
 export default function MoodTracker() {
   const { user } = useAuth();
@@ -34,8 +33,6 @@ export default function MoodTracker() {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const token = () => localStorage.getItem(import.meta.env.VITE_AUTH_TOKEN_KEY || 'theraai_auth_token');
-
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     fetchMoods();
@@ -43,8 +40,8 @@ export default function MoodTracker() {
 
   const fetchMoods = async () => {
     try {
-      const res = await fetch(`${API}/moods`, { headers: { Authorization: `Bearer ${token()}` } });
-      const data = await res.json();
+      const res = await apiClient.get('/moods');
+      const data = res.data;
       setMoodEntries(Array.isArray(data) ? data : data.moods || []);
     } catch { }
   };
@@ -52,12 +49,7 @@ export default function MoodTracker() {
   const handleAddMood = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API}/moods`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-        body: JSON.stringify({ mood: selectedMood, intensity, notes }),
-      });
-      if (!res.ok) throw new Error();
+      await apiClient.post('/moods', { mood: selectedMood, intensity, notes });
       await fetchMoods();
       showSuccess(`Mood logged: ${selectedMood}`);
       setModalOpen(false);

@@ -208,7 +208,10 @@ async def get_user_achievements(current_user: UserOut = Depends(get_current_user
                 name="Early Bird",
                 description="Journal before 8 AM",
                 icon="🌅",
-                unlocked=False,  # Implement time-based check
+                unlocked=any(
+                    e.get("created_at") and 5 <= parse_datetime(e["created_at"]).hour < 8
+                    for e in entries
+                ),
                 progress=0,
                 target=1
             ),
@@ -217,7 +220,13 @@ async def get_user_achievements(current_user: UserOut = Depends(get_current_user
                 name="Night Owl",
                 description="Journal after 10 PM",
                 icon="🌙",
-                unlocked=False,  # Implement time-based check
+                unlocked=any(
+                    e.get("created_at") and (
+                        parse_datetime(e["created_at"]).hour >= 22
+                        or parse_datetime(e["created_at"]).hour < 2
+                    )
+                    for e in entries
+                ),
                 progress=0,
                 target=1
             ),

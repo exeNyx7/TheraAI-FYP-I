@@ -14,30 +14,62 @@ import apiClient from '../../apiClient';
 
 const moodIcons = { happy: Smile, sad: Frown, anxious: Heart, calm: Wind };
 
-const mockPatients = [
-  { id: '1', name: 'Sarah Johnson', currentMood: 'anxious', lastAppointment: 'Mar 25', status: 'critical', moodTrend: 'declining' },
-  { id: '2', name: 'Michael Chen', currentMood: 'happy', lastAppointment: 'Mar 26', status: 'active', moodTrend: 'improving' },
-  { id: '3', name: 'Emma Wilson', currentMood: 'sad', lastAppointment: 'Mar 24', status: 'active', moodTrend: 'stable' },
-];
+function getMoodIcon(label) {
+  if (!label) return Smile;
+  const lower = label.toLowerCase();
+  if (lower.includes('happy') || lower.includes('positive')) return Smile;
+  if (lower.includes('sad') || lower.includes('negative')) return Frown;
+  if (lower.includes('anx')) return Heart;
+  if (lower.includes('calm')) return Wind;
+  return Smile;
+}
 
 export default function TherapistDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+  const [patients, setPatients] = useState([]);
+  const [upcoming, setUpcoming] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [activeAppointmentId, setActiveAppointmentId] = useState(null);
-  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+
+  const [briefingPatientId, setBriefingPatientId] = useState(null);
+  const [briefingPatientName, setBriefingPatientName] = useState('');
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     const allowedRoles = ['psychiatrist', 'therapist', 'admin'];
     if (!allowedRoles.includes(user.role || user.user_type)) {
       navigate('/dashboard');
+      return;
     }
-    // Fetch real upcoming appointments
-    apiClient.get('/appointments?status=scheduled')
-      .then(res => setUpcomingAppointments(res.data || []))
-      .catch(() => {});
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [statsRes, patientsRes, upcomingRes, alertsRes] = await Promise.allSettled([
+          apiClient.get('/therapist/dashboard'),
+          apiClient.get('/therapist/patients'),
+          apiClient.get('/appointments?status=scheduled'),
+          apiClient.get('/therapist/alerts'),
+        ]);
+        if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+        if (patientsRes.status === 'fulfilled') setPatients(patientsRes.value.data || []);
+        if (upcomingRes.status === 'fulfilled') setUpcoming(upcomingRes.value.data || []);
+        if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data || []);
+      } catch (_) {
+        // silently fail, show empty states
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
   }, [user, navigate]);
 
   const handleStartCall = (patient, appointmentId) => {
@@ -50,6 +82,13 @@ export default function TherapistDashboard() {
 
   const displayName = user.full_name || user.name || 'Doctor';
 
+  const metrics = [
+    { label: 'Total Patients', value: stats?.total_patients ?? patients.length, icon: Users, color: 'text-blue-500 bg-blue-500/10' },
+    { label: 'Active Patients', value: patients.length, icon: Activity, color: 'text-green-500 bg-green-500/10' },
+    { label: 'Sessions This Week', value: stats?.sessions_this_week ?? 0, icon: Calendar, color: 'text-purple-500 bg-purple-500/10' },
+    { label: 'Pending Alerts', value: alerts.length, icon: AlertCircle, color: 'text-red-500 bg-red-500/10' },
+  ];
+
   return (
     <div className="flex">
       <TherapistSidebar />
@@ -59,14 +98,14 @@ export default function TherapistDashboard() {
             isOpen={showVideoCall}
             onClose={() => { setShowVideoCall(false); setActiveAppointmentId(null); }}
             appointmentId={activeAppointmentId}
-            patientName={selectedPatient?.name || 'Patient'}
+            patientName={selectedPatient?.full_name || selectedPatient?.name || 'Patient'}
             therapistName={`Dr. ${displayName}`}
           />
           <PreSessionBriefingModal
-            isOpen={!!briefingAppointmentId}
-            appointmentId={briefingAppointmentId}
+            isOpen={!!briefingPatientId}
+            patientId={briefingPatientId}
             patientName={briefingPatientName}
-            onClose={() => { setBriefingAppointmentId(null); setBriefingPatientName(''); }}
+            onClose={() => { setBriefingPatientId(null); setBriefingPatientName(''); }}
           />
 
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
@@ -89,12 +128,7 @@ export default function TherapistDashboard() {
               <>
                 {/* Metrics */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  {[
-                    { label: 'Total Patients', value: stats?.total_patients ?? 0, icon: Users, color: 'text-blue-500 bg-blue-500/10' },
-                    { label: 'Active Patients', value: patients.length, icon: Activity, color: 'text-green-500 bg-green-500/10' },
-                    { label: 'Sessions This Week', value: stats?.sessions_this_week ?? 0, icon: Calendar, color: 'text-purple-500 bg-purple-500/10' },
-                    { label: 'Pending Alerts', value: stats?.alert_count ?? 0, icon: AlertCircle, color: 'text-red-500 bg-red-500/10' },
-                  ].map((metric) => {
+                  {metrics.map((metric) => {
                     const Icon = metric.icon;
                     return (
                       <Card key={metric.label} className="hover:-translate-y-1 transition-all duration-300 hover:shadow-lg">
@@ -173,7 +207,7 @@ export default function TherapistDashboard() {
                     </Card>
                   </div>
 
-                  {/* Upcoming appointments */}
+                  {/* Upcoming Sessions */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
@@ -201,7 +235,7 @@ export default function TherapistDashboard() {
                                 variant="outline"
                                 className="gap-1.5 bg-transparent text-xs h-8"
                                 onClick={() => {
-                                  setBriefingAppointmentId(apptId);
+                                  setBriefingPatientId(appt.patient_id || null);
                                   setBriefingPatientName(appt.patient_name || 'Patient');
                                 }}
                               >
@@ -248,96 +282,12 @@ export default function TherapistDashboard() {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <Badge variant={patient.status === 'critical' ? 'destructive' : 'secondary'}>
-                              {patient.moodTrend}
-                            </Badge>
-                            <Button
-                              size="sm"
-                              className="bg-primary hover:bg-primary/90"
-                              onClick={() => {
-                                // Find the most recent scheduled appointment for this patient (by name match)
-                                const appt = upcomingAppointments.find(
-                                  a => a.patient_name === patient.name
-                                );
-                                handleStartCall(patient, appt?.id);
-                              }}
-                            >
-                              Call
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Upcoming appointments */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Upcoming Sessions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {upcomingAppointments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No upcoming sessions</p>
-                  ) : (
-                    upcomingAppointments.slice(0, 5).map((appt) => (
-                      <div key={appt.id} className="p-3 border border-border rounded-lg">
-                        <p className="font-medium text-sm">{appt.patient_name || 'Patient'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {appt.scheduled_at
-                            ? new Date(appt.scheduled_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                            : '—'}
-                        </p>
+                        ))}
                       </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Critical Cases */}
-            {criticalPatients.length > 0 && (
-              <Card className="border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-red-600">
-                    <AlertCircle className="h-5 w-5" />
-                    Critical Cases Requiring Attention
-                  </CardTitle>
-                  <CardDescription>Patients showing declining mood trends</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {criticalPatients.map((patient) => {
-                      const MoodIcon = moodIcons[patient.currentMood] || Smile;
-                      return (
-                        <div
-                          key={patient.id}
-                          className="flex items-center justify-between p-4 border border-red-500/20 rounded-lg bg-background hover:bg-background/80 transition-colors"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                              <MoodIcon className="h-5 w-5 text-red-600" />
-                            </div>
-                            <div>
-                              <p className="font-semibold">{patient.name}</p>
-                              <p className="text-sm text-muted-foreground">Status: {patient.currentMood}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-red-600">Mood Declining</p>
-                            <p className="text-xs text-muted-foreground">Last: {patient.lastAppointment}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
           </div>
         </div>
