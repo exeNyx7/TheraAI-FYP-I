@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
 import { sendChatMessage } from '../../services/chatService';
 import { useWebSocketChat } from '../../hooks/useWebSocketChat';
+import apiClient from '../../apiClient';
 
 const suggestedPrompts = [
   "I'm feeling overwhelmed with work",
@@ -166,10 +167,18 @@ export default function Chat() {
     }
   };
 
-  const clearHistory = () => {
+  const clearHistory = async () => {
+    // Clear local state immediately so UI responds fast
     setMessages([systemWelcome]);
     setCrisisState({ visible: false, severity: null });
-    showSuccess('Chat history cleared.');
+    // Also wipe DB history so old garbled BlenderBot entries no longer
+    // contaminate Llama's conversation context on next message
+    try {
+      await apiClient.delete('/chat/history');
+      showSuccess('Chat history cleared.');
+    } catch {
+      showSuccess('Chat cleared (local only — server clear failed).');
+    }
   };
 
   if (!user) return null;

@@ -29,6 +29,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["AI Chat"])
 
 
+def _is_clean_text(text: str) -> bool:
+    """
+    Return False if text looks like garbled/binary data from old BlenderBot responses.
+    Normal English chat text is at least 50% alphabetic characters + spaces.
+    The old BlenderBot outputs were character-soup like '8C9=72;CC:!4>:?4795BG:...'
+    which have a very low alpha-space ratio.
+    """
+    if not text or len(text.strip()) < 3:
+        return False
+    alpha_space = sum(1 for c in text if c.isalpha() or c == " ")
+    return (alpha_space / len(text)) >= 0.50
+
+
 # =============================================================================
 # REQUEST / RESPONSE SCHEMAS
 # =============================================================================
@@ -146,8 +159,14 @@ async def send_chat_message(
 
         conversation_history = []
         for record in history_records:
-            conversation_history.append({"role": "user", "content": record["user_message"]})
-            conversation_history.append({"role": "assistant", "content": record["ai_response"]})
+            user_msg = record.get("user_message", "")
+            ai_msg = record.get("ai_response", "")
+            # Skip any record where the AI response looks like garbled BlenderBot output
+            if not _is_clean_text(ai_msg):
+                logger.warning("Skipping corrupted history entry (likely old BlenderBot output)")
+                continue
+            conversation_history.append({"role": "user", "content": user_msg})
+            conversation_history.append({"role": "assistant", "content": ai_msg})
 
         # ── Generate AI response via Ollama / Llama 3.1 8B ───────────────
         ai_response = await ModelService.generate_response(

@@ -25,6 +25,7 @@ from ..services.model_service import ModelService
 from ..services.crisis_service import CrisisService
 from ..services.memory_service import MemoryService
 from ..services.ai_service import get_ai_service
+from .chat import _is_clean_text  # shared garbled-text guard
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["WebSocket"])
@@ -136,8 +137,14 @@ async def websocket_chat(
 
             conversation_history = []
             for rec in history_records:
-                conversation_history.append({"role": "user", "content": rec["user_message"]})
-                conversation_history.append({"role": "assistant", "content": rec["ai_response"]})
+                user_msg = rec.get("user_message", "")
+                ai_msg = rec.get("ai_response", "")
+                # Skip entries with garbled/binary AI responses (old BlenderBot output)
+                if not _is_clean_text(ai_msg):
+                    logger.warning("WS: Skipping corrupted history entry (likely old BlenderBot output)")
+                    continue
+                conversation_history.append({"role": "user", "content": user_msg})
+                conversation_history.append({"role": "assistant", "content": ai_msg})
 
             # ── Build user context from memory ───────────────────────────
             user_context = None

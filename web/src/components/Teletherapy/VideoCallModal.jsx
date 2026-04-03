@@ -1,96 +1,203 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '../ui/button';
-import { Phone, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Phone, ExternalLink, X } from 'lucide-react';
 import apiClient from '../../apiClient';
 
 /**
- * VideoCallModal — Jitsi Meet integration.
+ * VideoCallModal — Jitsi Meet integration via External API.
+ *
+ * Uses the Jitsi Meet External API (JS SDK) instead of a raw iframe src URL.
+ * This approach bypasses the meet.jit.si sign-in page that appears when the
+ * iframe URL is loaded directly (meet.jit.si started requiring auth Jan 2025).
+ *
+ * The External API creates a peer connection directly from JavaScript, so the
+ * browser-level sign-in web page is never loaded.
  *
  * Props:
  *   isOpen         boolean — controls visibility
  *   onClose        fn      — called when user ends call
  *   appointmentId  string  — used to fetch/create the Jitsi room
- *   patientName    string  — displayed while loading
- *   therapistName  string  — displayed while loading
+ *   patientName    string  — participant display name
+ *   therapistName  string  — participant display name
  */
 export function VideoCallModal({ isOpen, onClose, appointmentId, patientName, therapistName }) {
-  const [jitsiUrl, setJitsiUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const iframeRef = useRef(null);
+  const [roomData, setRoomData] = useState(null); // { roomName, jitsiUrl, domain }
 
-  // Fetch room URL whenever modal opens with a valid appointmentId
+  const jitsiContainerRef = useRef(null);
+  const jitsiApiRef = useRef(null);
+
+  // ── Fetch room from backend ───────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) {
-      setJitsiUrl(null);
-      setError(null);
+      cleanup();
       return;
     }
-
     if (!appointmentId) {
       setError('No appointment ID provided.');
       return;
     }
-
-    const fetchRoom = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await apiClient.post('/calls/room', { appointment_id: appointmentId });
-        setJitsiUrl(res.data.jitsi_url);
-      } catch (err) {
-        const msg = err?.response?.data?.detail || 'Failed to create video room.';
-        setError(msg);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchRoom();
   }, [isOpen, appointmentId]);
 
+  const fetchRoom = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiClient.post('/calls/room', { appointment_id: appointmentId });
+      const jitsiUrl = res.data.jitsi_url; // e.g. "https://meet.jit.si/theraai-<id>"
+      // Extract domain and room name from URL
+      const url = new URL(jitsiUrl);
+      const domain = url.hostname; // "meet.jit.si"
+      const roomName = url.pathname.replace(/^\//, ''); // "theraai-<id>"
+      setRoomData({ roomName, jitsiUrl, domain });
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to create video room.');
+      setLoading(false);
+    }
+  };
+
+  // ── Load Jitsi External API script then init meeting ─────────────────────
+  useEffect(() => {
+    if (!roomData || !isOpen) return;
+
+    const domain = roomData.domain;
+    const scriptSrc = `https://${domain}/external_api.js`;
+    const scriptId = 'jitsi-external-api-script';
+
+    const initMeeting = () => {
+      // Small delay to ensure the container div is rendered
+      setTimeout(() => createMeeting(domain, roomData.roomName), 100);
+    };
+
+    const existing = document.getElementById(scriptId);
+    if (existing && window.JitsiMeetExternalAPI) {
+      initMeeting();
+      return;
+    }
+    // Remove any stale script with a different domain
+    if (existing) existing.remove();
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = scriptSrc;
+    script.async = true;
+    script.onload = initMeeting;
+    script.onerror = () => {
+      setError('Failed to load Jitsi API. Check your internet connection.');
+      setLoading(false);
+    };
+    document.head.appendChild(script);
+  }, [roomData, isOpen]);
+
+  // ── Create the actual JitsiMeetExternalAPI instance ───────────────────────
+  const createMeeting = useCallback((domain, roomName) => {
+    if (!jitsiContainerRef.current || !window.JitsiMeetExternalAPI) return;
+
+    // Dispose any previous instance
+    if (jitsiApiRef.current) {
+      try { jitsiApiRef.current.dispose(); } catch {}
+      jitsiApiRef.current = null;
+    }
+
+    const displayName = patientName || therapistName || 'User';
+
+    try {
+      const api = new window.JitsiMeetExternalAPI(domain, {
+        roomName,
+        parentNode: jitsiContainerRef.current,
+        width: '100%',
+        height: '100%',
+        configOverwrite: {
+          prejoinPageEnabled: false,
+          startWithAudioMuted: false,
+          startWithVideoMuted: false,
+          disableDeepLinking: true,
+          enableNoisyMicDetection: false,
+          // Disable any features that trigger auth redirects
+          enableUserRolesBasedOnToken: false,
+        },
+        interfaceConfigOverwrite: {
+          SHOW_JITSI_WATERMARK: false,
+          SHOW_WATERMARK_FOR_GUESTS: false,
+          TOOLBAR_BUTTONS: [
+            'microphone', 'camera', 'closedcaptions', 'desktop',
+            'hangup', 'chat', 'settings', 'fullscreen',
+          ],
+        },
+        userInfo: { displayName },
+      });
+
+      api.addEventListener('videoConferenceLeft', handleEndCall);
+      api.addEventListener('readyToClose', handleEndCall);
+      jitsiApiRef.current = api;
+      setLoading(false);
+    } catch (err) {
+      console.error('Jitsi External API init failed:', err);
+      setError('Could not start video call. Try opening in a new tab.');
+      setLoading(false);
+    }
+  }, [patientName, therapistName]);
+
+  // ── Cleanup ───────────────────────────────────────────────────────────────
+  const cleanup = () => {
+    if (jitsiApiRef.current) {
+      try { jitsiApiRef.current.dispose(); } catch {}
+      jitsiApiRef.current = null;
+    }
+    setRoomData(null);
+    setError(null);
+    setLoading(false);
+  };
+
   const handleEndCall = () => {
-    setJitsiUrl(null);
+    cleanup();
     onClose();
   };
 
-  const toggleFullscreen = () => {
-    if (!isFullscreen) {
-      iframeRef.current?.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
-    }
-    setIsFullscreen(!isFullscreen);
+  const openInNewTab = () => {
+    if (roomData?.jitsiUrl) window.open(roomData.jitsiUrl, '_blank');
   };
 
   if (!isOpen) return null;
 
-  // Build Jitsi URL with config to disable prejoin screen
-  const iframeSrc = jitsiUrl
-    ? `${jitsiUrl}#config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&userInfo.displayName=${encodeURIComponent(patientName || therapistName || 'User')}`
-    : null;
+  const sessionLabel = loading
+    ? 'Connecting...'
+    : error
+    ? 'Connection Failed'
+    : `Session with ${patientName || therapistName || 'Participant'}`;
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       {/* Top bar */}
       <div className="bg-gray-900 border-b border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-white font-medium text-sm">
-            {loading ? 'Connecting...' : error ? 'Connection Failed' : `Session with ${patientName || therapistName || 'Participant'}`}
-          </span>
+          <div
+            className={`h-2 w-2 rounded-full ${
+              loading
+                ? 'bg-yellow-400 animate-pulse'
+                : error
+                ? 'bg-red-400'
+                : 'bg-green-400 animate-pulse'
+            }`}
+          />
+          <span className="text-white font-medium text-sm">{sessionLabel}</span>
         </div>
+
         <div className="flex items-center gap-2">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="text-white h-8 w-8"
-            onClick={toggleFullscreen}
-            title="Toggle fullscreen"
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
+          {/* Always show "Open in new tab" as a fallback */}
+          {roomData?.jitsiUrl && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-white h-8 w-8"
+              onClick={openInNewTab}
+              title="Open in new tab"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             size="icon"
             variant="destructive"
@@ -103,35 +210,51 @@ export function VideoCallModal({ isOpen, onClose, appointmentId, patientName, th
         </div>
       </div>
 
-      {/* Main content area */}
+      {/* Body */}
       <div className="flex-1 relative bg-gray-950">
+        {/* Loading spinner */}
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10">
             <div className="h-16 w-16 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
             <p className="text-white text-lg">Setting up your session...</p>
           </div>
         )}
 
+        {/* Error state */}
         {error && !loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center z-10">
             <X className="h-16 w-16 text-red-400" />
             <p className="text-white text-lg font-semibold">Could not start video call</p>
             <p className="text-gray-400 text-sm max-w-md">{error}</p>
-            <Button variant="outline" onClick={handleEndCall} className="text-white border-white/20 hover:bg-white/10">
-              Close
-            </Button>
+            <div className="flex gap-3 flex-wrap justify-center">
+              {roomData?.jitsiUrl && (
+                <Button
+                  onClick={openInNewTab}
+                  className="gap-2 bg-primary hover:bg-primary/90 text-white"
+                >
+                  <ExternalLink className="h-4 w-4" /> Open in New Tab
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={handleEndCall}
+                className="text-white border-white/20 hover:bg-white/10"
+              >
+                Close
+              </Button>
+            </div>
           </div>
         )}
 
-        {iframeSrc && !loading && !error && (
-          <iframe
-            ref={iframeRef}
-            src={iframeSrc}
-            allow="camera; microphone; fullscreen; display-capture; autoplay"
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            title="TheraAI Video Session"
-          />
-        )}
+        {/*
+          Jitsi External API renders INTO this div.
+          Keep it mounted even during loading so the ref is available when
+          createMeeting() is called via the script.onload callback.
+        */}
+        <div
+          ref={jitsiContainerRef}
+          style={{ width: '100%', height: '100%' }}
+        />
       </div>
     </div>
   );

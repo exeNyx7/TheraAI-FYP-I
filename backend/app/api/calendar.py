@@ -153,10 +153,26 @@ async def disconnect_calendar(
 async def calendar_status(
     current_user: UserOut = Depends(get_current_user),
 ):
-    """Returns whether the current user has Google Calendar connected."""
+    """
+    Returns whether the current user has Google Calendar connected,
+    and whether the integration is configured at all (credentials set).
+    Frontend uses `configured` to decide whether to show the Connect button.
+    """
     from bson import ObjectId
+
+    settings = get_settings()
+    # Integration is only usable if both client_id and client_secret are present
+    # and look like real Google credentials (not placeholder strings)
+    has_client_id = bool(settings.google_client_id)
+    has_client_secret = bool(settings.google_client_secret)
+    configured = has_client_id and has_client_secret
 
     db = await get_database()
     user = await db.users.find_one({"_id": ObjectId(str(current_user.id))})
-    connected = bool(user and user.get("google_calendar_connected") and user.get("google_refresh_token"))
-    return {"connected": connected}
+    connected = bool(
+        configured
+        and user
+        and user.get("google_calendar_connected")
+        and user.get("google_refresh_token")
+    )
+    return {"connected": connected, "configured": configured}

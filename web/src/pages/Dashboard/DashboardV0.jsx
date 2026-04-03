@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PatientDashboardV0 from './PatientDashboardV0';
-import PsychiatristDashboardV0 from './PsychiatristDashboardV0';
 import AdminDashboardV0 from './AdminDashboardV0';
 import { Loader2 } from 'lucide-react';
 
@@ -29,7 +28,9 @@ export default function DashboardV0() {
     case 'patient':
       return <PatientDashboardV0 />;
     case 'psychiatrist':
-      return <PsychiatristDashboardV0 />;
+      // Redirect to the canonical therapist dashboard — avoids the duplicate
+      // PsychiatristDashboardV0 which was missing features available in TherapistDashboard
+      return <Navigate to="/therapist-dashboard" replace />;
     case 'admin':
       return <AdminDashboardV0 />;
     default:

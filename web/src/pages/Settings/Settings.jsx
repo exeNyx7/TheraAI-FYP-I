@@ -37,18 +37,23 @@ export default function Settings() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarConfigured, setCalendarConfigured] = useState(true); // assume true until status loaded
   const [calendarLoading, setCalendarLoading] = useState(false);
 
   useEffect(() => {
     if (!user) navigate('/login');
   }, [user, navigate]);
 
-  // Check Google Calendar connection status on mount
+  // Check Google Calendar connection + configuration status on mount
   useEffect(() => {
     if (!user) return;
     apiClient.get('/calendar/status')
-      .then(res => setCalendarConnected(res.data.connected))
-      .catch(() => {});
+      .then(res => {
+        setCalendarConnected(res.data.connected);
+        // `configured` tells us whether Google credentials are set on the backend
+        if (res.data.configured === false) setCalendarConfigured(false);
+      })
+      .catch(() => setCalendarConfigured(false));
   }, [user]);
 
   // Handle redirect from Google OAuth callback
@@ -209,45 +214,62 @@ export default function Settings() {
                 <CardDescription>Sync your therapy appointments to Google Calendar</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    {calendarConnected ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <Calendar className="h-5 w-5 text-muted-foreground" />
-                    )}
+                {!calendarConfigured ? (
+                  /* ── Not configured — credentials not set on backend ── */
+                  <div className="flex items-start gap-3 p-4 border border-border rounded-lg bg-muted/40">
+                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="font-medium">
-                        {calendarConnected ? 'Google Calendar Connected' : 'Google Calendar Not Connected'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {calendarConnected
-                          ? 'New appointments are automatically added to your calendar'
-                          : 'Connect to automatically sync appointments'}
+                      <p className="font-medium text-muted-foreground">Google Calendar Not Available</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        This integration requires Google OAuth credentials to be configured
+                        in the backend. Set <code className="text-xs bg-muted px-1 rounded">GOOGLE_CLIENT_ID</code> and{' '}
+                        <code className="text-xs bg-muted px-1 rounded">GOOGLE_CLIENT_SECRET</code> in{' '}
+                        <code className="text-xs bg-muted px-1 rounded">backend/.env</code> to enable this feature.
                       </p>
                     </div>
                   </div>
-                  {calendarConnected ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDisconnectCalendar}
-                      disabled={calendarLoading}
-                      className="text-destructive border-destructive/30 hover:bg-destructive/5"
-                    >
-                      {calendarLoading ? 'Disconnecting...' : 'Disconnect'}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleConnectCalendar}
-                      disabled={calendarLoading}
-                    >
-                      {calendarLoading ? 'Redirecting...' : 'Connect'}
-                    </Button>
-                  )}
-                </div>
+                ) : (
+                  /* ── Configured — show connect / disconnect ── */
+                  <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {calendarConnected ? (
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <Calendar className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <div>
+                        <p className="font-medium">
+                          {calendarConnected ? 'Google Calendar Connected' : 'Google Calendar Not Connected'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {calendarConnected
+                            ? 'New appointments are automatically added to your calendar'
+                            : 'Connect to automatically sync appointments'}
+                        </p>
+                      </div>
+                    </div>
+                    {calendarConnected ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDisconnectCalendar}
+                        disabled={calendarLoading}
+                        className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                      >
+                        {calendarLoading ? 'Disconnecting...' : 'Disconnect'}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleConnectCalendar}
+                        disabled={calendarLoading}
+                      >
+                        {calendarLoading ? 'Redirecting...' : 'Connect'}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
