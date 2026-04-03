@@ -21,7 +21,23 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
+// Human-readable role labels — DB stores 'psychiatrist' but we display 'Therapist'
+const ROLE_LABELS = {
+  patient:      'Patient',
+  psychiatrist: 'Therapist',  // legacy DB value → display as Therapist
+  therapist:    'Therapist',
+  admin:        'Admin',
+};
+
 // Nav items per role — only what each role actually needs
+const THERAPIST_NAV = [
+  { icon: LayoutDashboard, label: 'Dashboard',    href: '/therapist-dashboard' },
+  { icon: Users,           label: 'My Patients',  href: '/therapist-dashboard' },
+  { icon: Calendar,        label: 'Appointments', href: '/appointments' },
+  { icon: User,            label: 'Profile',      href: '/profile' },
+  { icon: Settings,        label: 'Settings',     href: '/settings' },
+];
+
 const NAV_BY_ROLE = {
   patient: [
     { icon: LayoutDashboard, label: 'Dashboard',     href: '/dashboard' },
@@ -34,13 +50,9 @@ const NAV_BY_ROLE = {
     { icon: User,            label: 'Profile',        href: '/profile' },
     { icon: Settings,        label: 'Settings',       href: '/settings' },
   ],
-  psychiatrist: [
-    { icon: LayoutDashboard, label: 'Dashboard',      href: '/therapist-dashboard' },
-    { icon: Users,           label: 'My Patients',    href: '/therapist-dashboard' },
-    { icon: Calendar,        label: 'Appointments',   href: '/appointments' },
-    { icon: User,            label: 'Profile',        href: '/profile' },
-    { icon: Settings,        label: 'Settings',       href: '/settings' },
-  ],
+  // Both 'psychiatrist' (legacy DB value) and 'therapist' get the same nav
+  psychiatrist: THERAPIST_NAV,
+  therapist:    THERAPIST_NAV,
   admin: [
     { icon: LayoutDashboard, label: 'Dashboard',      href: '/dashboard' },
     { icon: Users,           label: 'Users',          href: '/users' },
@@ -111,7 +123,7 @@ export function SidebarNav() {
       >
         {/* Logo */}
         <Link
-          to={role === 'psychiatrist' ? '/therapist-dashboard' : '/dashboard'}
+          to={['psychiatrist', 'therapist'].includes(role) ? '/therapist-dashboard' : '/dashboard'}
           className={`flex items-center gap-3 mb-10 group ${isCollapsed ? 'justify-center' : ''}`}
           onClick={() => setIsOpen(false)}
         >
@@ -126,7 +138,7 @@ export function SidebarNav() {
                 Thera-AI
               </span>
               {role !== 'patient' && (
-                <p className="text-xs text-muted-foreground capitalize">{role}</p>
+                <p className="text-xs text-muted-foreground">{ROLE_LABELS[role] || role}</p>
               )}
             </div>
           )}

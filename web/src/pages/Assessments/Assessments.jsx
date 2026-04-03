@@ -39,7 +39,11 @@ export default function Assessments() {
   const [detailResult, setDetailResult] = useState(null);
 
   useEffect(() => {
-    if (!user) navigate('/login');
+    if (!user) { navigate('/login'); return; }
+    // Assessments are for patients only — redirect therapists/admins to their dashboard
+    if (['psychiatrist', 'therapist', 'admin'].includes(user.role)) {
+      navigate('/therapist-dashboard', { replace: true });
+    }
   }, [user, navigate]);
 
   useEffect(() => {

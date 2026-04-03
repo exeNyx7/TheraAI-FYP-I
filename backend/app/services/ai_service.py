@@ -61,10 +61,31 @@ class AIService:
     def _detect_gpu_config(self) -> Dict[str, Any]:
         """
         Detect GPU model and return optimal configuration
-        
+
         Returns:
             dict with GPU-specific settings (precision, max_history, max_length, etc.)
+
+        Set env var AI_MODELS_FORCE_CPU=true to keep DistilBERT/RoBERTa on CPU
+        even when CUDA is available — recommended on 8 GB VRAM laptops where
+        Ollama (Llama 3.1 8B, ~4.7 GB) and these models would otherwise exceed
+        the VRAM ceiling and cause slow / garbled inference.
         """
+        import os
+        if os.environ.get("AI_MODELS_FORCE_CPU", "false").lower() in ("true", "1", "yes"):
+            logger.info(
+                "🖥️  AI_MODELS_FORCE_CPU=true — loading DistilBERT/RoBERTa on CPU "
+                "(frees all GPU VRAM for Ollama)"
+            )
+            return {
+                "device": "cpu",
+                "device_id": -1,
+                "precision": "fp32",
+                "max_history": 10,
+                "max_response_length": 150,
+                "use_fp16": False,
+                "gradient_checkpointing": False,
+            }
+
         if not torch.cuda.is_available():
             logger.info("🖥️  No GPU detected, using CPU configuration")
             return {
