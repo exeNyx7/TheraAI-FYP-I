@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     # Jitsi Meet
     jitsi_domain: str = Field(default="meet.jit.si", alias="JITSI_DOMAIN")
 
+    # AI Models — set true on 8 GB VRAM laptops to keep DistilBERT/RoBERTa
+    # on CPU and give all VRAM to Ollama (Llama 3.1 8B)
+    ai_models_force_cpu: bool = Field(default=False, alias="AI_MODELS_FORCE_CPU")
+
     # Health Check
     health_check_interval: int = Field(default=30, alias="HEALTH_CHECK_INTERVAL")  # seconds
 
