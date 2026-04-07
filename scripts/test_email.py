@@ -52,14 +52,17 @@ async def run(to_email: str):
     print(f"[info] Sending test reminder to: {to_email}")
     print(f"[info] SMTP host: {settings.smtp_host}:{settings.smtp_port}")
 
-    await EmailService.send_appointment_reminder(
-        to=to_email,
+    sent = await EmailService.send_appointment_reminder(
+        to_email=to_email,
         patient_name="Test Patient",
         therapist_name="Dr. Test Therapist",
         scheduled_at=scheduled_at,
     )
 
-    print("[ok] Email sent successfully! Check your inbox.")
+    if sent:
+        print("[ok] Email sent successfully! Check your inbox.")
+    else:
+        print("[error] Email was not sent. Check MAIL_ENABLED/SMTP credentials and backend logs.")
 
 
 if __name__ == "__main__":
