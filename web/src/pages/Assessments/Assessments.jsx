@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { AssessmentSelector } from '../../components/Assessments/AssessmentSelector';
@@ -40,10 +40,6 @@ export default function Assessments() {
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
-    // Assessments are for patients only — redirect therapists/admins to their dashboard
-    if (['psychiatrist', 'therapist', 'admin'].includes(user.role)) {
-      navigate('/therapist-dashboard', { replace: true });
-    }
   }, [user, navigate]);
 
   useEffect(() => {
@@ -141,7 +137,7 @@ export default function Assessments() {
       : 0;
     return (
       <div className="flex">
-        <SidebarNav />
+        <AppSidebar />
         <main className="flex-1 pt-16 md:pt-0">
           <div className="bg-background min-h-screen">
             <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
@@ -191,7 +187,7 @@ export default function Assessments() {
       : 0;
     return (
       <div className="flex">
-        <SidebarNav />
+        <AppSidebar />
         <main className="flex-1 pt-16 md:pt-0">
           <div className="bg-background min-h-screen">
             <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
@@ -251,7 +247,7 @@ export default function Assessments() {
 
     return (
       <div className="flex">
-        <SidebarNav />
+        <AppSidebar />
         <main className="flex-1 pt-16 md:pt-0">
           <div className="bg-background min-h-screen">
             <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
@@ -361,7 +357,7 @@ export default function Assessments() {
   // ── Library / History tabs ────────────────────────────────────────────
   return (
     <div className="flex">
-      <SidebarNav />
+      <AppSidebar />
       <main className="flex-1 pt-16 md:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">

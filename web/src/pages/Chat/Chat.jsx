@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { MessageBubble } from '../../components/Chat/MessageBubble';
@@ -216,7 +216,7 @@ export default function Chat() {
 
   return (
     <div className="flex">
-      <SidebarNav />
+      <AppSidebar />
       <main className="flex-1 pt-16 md:pt-0">
         <div className="bg-background h-[calc(100vh-0px)] flex flex-col lg:flex-row">
           {/* Main chat area */}

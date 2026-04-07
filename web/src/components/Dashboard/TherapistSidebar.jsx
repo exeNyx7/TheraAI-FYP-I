@@ -18,13 +18,13 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/therapist-dashboard' },
-  { icon: Users, label: 'My Patients', href: '/appointments' },
-  { icon: Calendar, label: 'Schedule', href: '/appointments' },
-  { icon: MessageSquare, label: 'Messaging', href: '/chat' },
-  { icon: ClipboardList, label: 'Treatment Plans', href: '/assessments' },
-  { icon: Activity, label: 'Progress', href: '/progress' },
-  { icon: Settings, label: 'Settings', href: '/settings' },
+  { icon: LayoutDashboard, label: 'Dashboard',       href: '/dashboard' },
+  { icon: Users,           label: 'My Patients',     href: '/appointments' },
+  { icon: Calendar,        label: 'Schedule',        href: '/appointments' },
+  { icon: MessageSquare,   label: 'Messaging',       href: '/chat' },
+  { icon: ClipboardList,   label: 'Treatment Plans', href: '/treatment-plans' },
+  { icon: Activity,        label: 'Progress',        href: '/assessments' },
+  { icon: Settings,        label: 'Settings',        href: '/settings' },
 ];
 
 export function TherapistSidebar() {
@@ -67,7 +67,7 @@ export function TherapistSidebar() {
       >
         {/* Logo */}
         <Link
-          to="/therapist-dashboard"
+          to="/dashboard"
           className={`flex items-center gap-3 mb-10 group ${isCollapsed ? 'justify-center' : ''}`}
           onClick={() => setIsOpen(false)}
         >

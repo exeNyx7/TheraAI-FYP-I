@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { AchievementTracker } from '../../components/Gamification/AchievementTracker';
 import { Zap } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -27,7 +27,7 @@ export default function Achievements() {
 
   return (
     <div className="flex">
-      <SidebarNav />
+      <AppSidebar />
       <main className="flex-1 pt-16 md:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-6xl mx-auto p-6 md:p-8 space-y-8">

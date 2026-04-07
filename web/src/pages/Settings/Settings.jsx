@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
@@ -167,7 +167,7 @@ export default function Settings() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <SidebarNav />
+      <AppSidebar />
       <main className="flex-1 overflow-auto">
         <div>
           <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-8">
