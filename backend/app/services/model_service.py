@@ -221,6 +221,7 @@ class ModelService:
                         "messages": messages,
                         "stream": False,
                         "options": {
+                            "num_ctx": 2048,          # Limit context window to prevent VRAM overflow on RTX 3070
                             "temperature": 0.7,       # Balanced: warm but grounded
                             "top_p": 0.9,
                             "top_k": 40,

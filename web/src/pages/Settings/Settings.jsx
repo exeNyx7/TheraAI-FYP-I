@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SidebarNav } from '../../components/Dashboard/SidebarNav';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -32,6 +32,7 @@ export default function Settings() {
     // Prefer backend-persisted value (from user object), fall back to localStorage
     return user?.theme || localStorage.getItem('theme') || 'system';
   });
+  const isFirstRender = useRef(true);
   const [notifications, setNotifications] = useState(() => ({
     email: true, push: true, appointments: true, insights: true,
     ...(user?.notification_preferences || {}),
@@ -110,9 +111,14 @@ export default function Settings() {
       prefersDark ? root.classList.add('dark') : root.classList.remove('dark');
     }
     localStorage.setItem('theme', theme);
-    // Persist to backend (user not available until loaded)
+
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    // Persist to backend only when user explicitly changes theme (not on mount)
     if (user) savePreference({ theme });
-  }, [theme]);
+  }, [theme, user]);
 
   // Persist a preference update to backend (fire-and-forget — no blocking UI)
   const savePreference = async (patch) => {

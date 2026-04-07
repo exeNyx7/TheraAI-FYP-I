@@ -218,6 +218,18 @@ function App() {
             />
 
             <Route
+              path="/treatment-plans"
+              element={
+                <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
+                  <div className="page-placeholder">
+                    <h2>Treatment Plans</h2>
+                    <p>Manage and review patient treatment plans.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/resources"
               element={
                 <ProtectedRoute>
