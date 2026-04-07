@@ -76,6 +76,48 @@ class EmailService:
         return await EmailService.send_email(to_email, subject, html)
 
     @staticmethod
+    async def send_booking_confirmation(
+        to_email: str,
+        patient_name: str,
+        therapist_name: str,
+        appointment_date: str,
+        room_url: str = "",
+    ) -> bool:
+        """Send a booking confirmation email to patient or therapist."""
+        subject = "TheraAI — Your appointment is confirmed"
+        join_block = (
+            f'<p style="text-align:center; margin: 24px 0;">'
+            f'<a href="{room_url}" style="background:#667eea;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Join Session</a>'
+            f"</p>"
+            if room_url
+            else ""
+        )
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">TheraAI</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0;">Booking Confirmed</p>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px;">
+                <p>Hi <strong>{patient_name or 'there'}</strong>,</p>
+                <p>Your therapy session has been booked successfully.</p>
+                <div style="background: white; border-left: 4px solid #667eea; padding: 16px; margin: 20px 0;">
+                    <p style="margin: 4px 0;"><strong>Therapist:</strong> {therapist_name}</p>
+                    <p style="margin: 4px 0;"><strong>When:</strong> {appointment_date}</p>
+                </div>
+                {join_block}
+                <p>You'll receive reminders 15 minutes and 5 minutes before your session begins.</p>
+                <p style="color: #888; font-size: 13px; margin-top: 30px;">In a crisis? Contact: <strong>988 (US)</strong> · <strong>116 123 (UK)</strong> · <strong>1800-599-0019 (PK)</strong></p>
+            </div>
+        </div>
+        """
+        try:
+            return await EmailService.send_email(to_email, subject, html)
+        except Exception as e:
+            logger.error(f"send_booking_confirmation failed: {e}")
+            return False
+
+    @staticmethod
     async def send_welcome_email(to_email: str, full_name: str) -> bool:
         """Send a welcome email to a new user."""
         subject = "Welcome to TheraAI — Your mental wellness journey begins"

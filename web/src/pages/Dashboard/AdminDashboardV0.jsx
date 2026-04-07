@@ -9,6 +9,10 @@ import {
   Users, Activity, Server, Database, TrendingUp, AlertTriangle,
   CheckCircle, Clock, Shield, Settings, BarChart3, UserPlus
 } from 'lucide-react';
+import apiClient from '../../apiClient';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '../../components/ui/dialog';
 
 export default function AdminDashboardV0() {
   const { user } = useAuth();
@@ -17,6 +21,47 @@ export default function AdminDashboardV0() {
   const [recentUsers, setRecentUsers] = useState([]);
   const [systemAlerts, setSystemAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [escalations, setEscalations] = useState([]);
+  const [therapistsList, setTherapistsList] = useState([]);
+  const [bookDialogEsc, setBookDialogEsc] = useState(null);
+  const [bookTherapistId, setBookTherapistId] = useState('');
+  const [bookDate, setBookDate] = useState('');
+  const [bookSubmitting, setBookSubmitting] = useState(false);
+
+  useEffect(() => {
+    apiClient.get('/escalations').then(r => setEscalations(Array.isArray(r.data) ? r.data : [])).catch(() => setEscalations([]));
+    apiClient.get('/therapists').then(r => setTherapistsList(Array.isArray(r.data) ? r.data : [])).catch(() => setTherapistsList([]));
+  }, []);
+
+  const openBookDialog = (esc) => {
+    setBookDialogEsc(esc);
+    setBookTherapistId(therapistsList[0]?.id || '');
+    setBookDate('');
+  };
+
+  const submitBookOnBehalf = async () => {
+    if (!bookDialogEsc || !bookTherapistId || !bookDate) return;
+    setBookSubmitting(true);
+    try {
+      const iso = new Date(bookDate).toISOString();
+      await apiClient.post(`/escalations/${bookDialogEsc.id}/book-on-behalf`, {
+        therapist_id: bookTherapistId,
+        date: iso,
+      });
+      setEscalations(prev => prev.map(e => e.id === bookDialogEsc.id ? { ...e, status: 'resolved' } : e));
+      setBookDialogEsc(null);
+    } catch (_) {
+    } finally {
+      setBookSubmitting(false);
+    }
+  };
+
+  const grantFreeSession = async (esc) => {
+    try {
+      await apiClient.post(`/escalations/${esc.id}/grant-free-session`);
+      setEscalations(prev => prev.map(e => e.id === esc.id ? { ...e, free_session_granted: true } : e));
+    } catch (_) {}
+  };
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -285,6 +330,89 @@ export default function AdminDashboardV0() {
                 </div>
               </Card>
             </div>
+
+            {/* Escalations */}
+            <Card>
+              <div className="p-6 border-b border-border">
+                <h3 className="text-xl font-semibold flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                  Escalations
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">Crisis escalations requiring review</p>
+              </div>
+              <div className="p-6 space-y-3">
+                {escalations.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No escalations.</p>
+                )}
+                {escalations.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between gap-3 p-4 border border-border rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{e.patient_name || 'Patient'}</p>
+                        <Badge variant="destructive">{e.severity}</Badge>
+                        <Badge variant="default">{e.status}</Badge>
+                        {e.free_session_granted && <Badge variant="success">Free session</Badge>}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{e.message || e.triggered_by}</p>
+                      <p className="text-xs text-muted-foreground">{e.created_at}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {!e.free_session_granted && (
+                        <Button size="sm" variant="outline" onClick={() => grantFreeSession(e)}>
+                          Grant Free Session
+                        </Button>
+                      )}
+                      <Button size="sm" onClick={() => openBookDialog(e)}>
+                        Book on Patient's Behalf
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Dialog open={!!bookDialogEsc} onOpenChange={(o) => !o && setBookDialogEsc(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Book on Patient's Behalf</DialogTitle>
+                  <DialogDescription>
+                    Create an appointment for {bookDialogEsc?.patient_name || 'this patient'}.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium">Therapist</label>
+                    <select
+                      value={bookTherapistId}
+                      onChange={(e) => setBookTherapistId(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 border border-border rounded-lg bg-background"
+                    >
+                      <option value="">Select therapist…</option>
+                      {therapistsList.map(t => (
+                        <option key={t.id} value={t.id}>{t.name || t.email}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Date & time</label>
+                    <input
+                      type="datetime-local"
+                      value={bookDate}
+                      onChange={(e) => setBookDate(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 border border-border rounded-lg bg-background"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setBookDialogEsc(null)} disabled={bookSubmitting}>
+                    Cancel
+                  </Button>
+                  <Button onClick={submitBookOnBehalf} disabled={bookSubmitting || !bookTherapistId || !bookDate}>
+                    {bookSubmitting ? 'Booking…' : 'Book Appointment'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {/* Recent Users */}
             <Card>

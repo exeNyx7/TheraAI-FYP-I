@@ -12,6 +12,14 @@ from .database import db_manager, init_database, check_database_health
 from .api import auth_router, journal_router, stats_router, chat_router
 from .api.moods import router as moods_router
 from .api.conversations import router as conversations_router
+from .api.therapist import router as therapist_router
+from .api.treatment_plans import router as treatment_plans_router
+from .api.session_notes import router as session_notes_router
+from .api.therapists_public import router as therapists_public_router
+from .api.appointments import router as appointments_router
+from .api.sharing_preferences import router as sharing_preferences_router
+from .api.notifications import router as notifications_router
+from .api.escalations import router as escalations_router
 
 # Load settings
 settings = get_settings()
@@ -94,6 +102,14 @@ app.include_router(stats_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(moods_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
+app.include_router(therapist_router, prefix="/api/v1")
+app.include_router(treatment_plans_router, prefix="/api/v1")
+app.include_router(session_notes_router, prefix="/api/v1")
+app.include_router(therapists_public_router, prefix="/api/v1")
+app.include_router(appointments_router, prefix="/api/v1")
+app.include_router(sharing_preferences_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(escalations_router, prefix="/api/v1")
 
 
 @app.get(

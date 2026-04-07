@@ -1,12 +1,52 @@
 import { useState, useEffect } from 'react';
 import { SidebarNav } from '../../components/Dashboard/SidebarNav';
-import { Card, CardContent } from '../../components/ui/card';
+import { TherapistSidebar } from '../../components/Dashboard/TherapistSidebar';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { AssessmentSelector } from '../../components/Assessments/AssessmentSelector';
-import { Trophy } from 'lucide-react';
+import { Trophy, Activity } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+
+function TherapistAssessmentsView() {
+  return (
+    <div className="flex min-h-screen bg-background">
+      <TherapistSidebar />
+      <main className="flex-1 overflow-auto">
+        <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
+          <div>
+            <h1
+              className="text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent"
+              style={{ fontFamily: 'Montserrat' }}
+            >
+              Patient Assessment Results
+            </h1>
+            <p className="text-muted-foreground mt-2 text-lg">
+              Review completed assessments and progress across your caseload
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Montserrat' }}>
+                <Activity className="h-5 w-5" /> Clinical Progress Overview
+              </CardTitle>
+              <CardDescription>
+                Aggregated assessment scores (PHQ-9, GAD-7, stress) for each patient will appear here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="p-6 border border-dashed border-border rounded-lg text-center text-muted-foreground">
+                Coming soon — backend wiring in next phase
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 const TAB_LIBRARY = 'library';
 const TAB_HISTORY = 'history';
@@ -37,6 +77,10 @@ export default function Assessments() {
   };
 
   if (!user) return null;
+
+  if (['therapist', 'psychiatrist', 'admin'].includes(user?.role)) {
+    return <TherapistAssessmentsView />;
+  }
 
   return (
     <div className="flex">

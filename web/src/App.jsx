@@ -17,10 +17,21 @@ import Assessments from './pages/Assessments/Assessments';
 import Appointments from './pages/Appointments/Appointments';
 import Achievements from './pages/Achievements/Achievements';
 import TherapistDashboard from './pages/Therapist/TherapistDashboard';
+import Schedule from './pages/Therapist/Schedule';
+import Patients from './pages/Therapist/Patients';
+import PatientDetail from './pages/Therapist/PatientDetail';
+import TreatmentPlans from './pages/Therapist/TreatmentPlans';
+import Messaging from './pages/Messaging/Messaging';
 import ForgotPassword from './pages/Auth/ForgotPassword';
 import OTPVerification from './pages/Auth/OTPVerification';
 import ResetPassword from './pages/Auth/ResetPassword';
 import Onboarding from './pages/Onboarding/Onboarding';
+import BrowseTherapists from './pages/Therapists/BrowseTherapists';
+import BookTherapist from './pages/Therapists/BookTherapist';
+import WaitingRoom from './pages/Call/WaitingRoom';
+import PostCallPatient from './pages/Call/PostCallPatient';
+import PostCallTherapist from './pages/Call/PostCallTherapist';
+import NotificationPopup from './components/Notifications/NotificationPopup';
 import './App.css';
 
 function App() {
@@ -29,6 +40,7 @@ function App() {
       <AuthProvider>
         <Router>
           <div className="app">
+            <NotificationPopup />
             <Routes>
             {/* Landing Page - Public, no auth check */}
             <Route path="/" element={<LandingPage />} />
@@ -77,7 +89,47 @@ function App() {
 
             <Route
               path="/patients"
-              element={<Navigate to="/therapist-dashboard" replace />}
+              element={
+                <ProtectedRoute roles={['therapist', 'psychiatrist', 'admin']}>
+                  <Patients />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/patients/:id"
+              element={
+                <ProtectedRoute roles={['therapist', 'psychiatrist', 'admin']}>
+                  <PatientDetail />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/schedule"
+              element={
+                <ProtectedRoute roles={['therapist', 'psychiatrist', 'admin']}>
+                  <Schedule />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/treatment-plans"
+              element={
+                <ProtectedRoute roles={['therapist', 'psychiatrist', 'admin']}>
+                  <TreatmentPlans />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/messaging"
+              element={
+                <ProtectedRoute>
+                  <Messaging />
+                </ProtectedRoute>
+              }
             />
 
             <Route
@@ -173,6 +225,24 @@ function App() {
             />
 
             <Route
+              path="/therapists"
+              element={
+                <ProtectedRoute>
+                  <BrowseTherapists />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/book/:therapistId"
+              element={
+                <ProtectedRoute roles="patient">
+                  <BookTherapist />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/appointments"
               element={
                 <ProtectedRoute>
@@ -216,6 +286,31 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Settings />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/waiting-room/:appointmentId"
+              element={
+                <ProtectedRoute>
+                  <WaitingRoom />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/call/:appointmentId/post-patient"
+              element={
+                <ProtectedRoute roles="patient">
+                  <PostCallPatient />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/call/:appointmentId/post-therapist"
+              element={
+                <ProtectedRoute roles={['therapist', 'psychiatrist', 'admin']}>
+                  <PostCallTherapist />
                 </ProtectedRoute>
               }
             />

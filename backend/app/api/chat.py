@@ -29,6 +29,21 @@ class ChatResponse(BaseModel):
     response: str
     timestamp: str
     sentiment: Optional[str] = None
+    crisis_detected: bool = False
+
+
+CRISIS_KEYWORDS = [
+    "suicide", "kill myself", "end it all", "self harm", "self-harm",
+    "want to die", "hurt myself", "no reason to live",
+]
+
+
+def _detect_crisis(message: str) -> bool:
+    try:
+        m = (message or "").lower()
+        return any(k in m for k in CRISIS_KEYWORDS)
+    except Exception:
+        return False
 
 
 class ChatHistory(BaseModel):
@@ -131,11 +146,40 @@ async def send_chat_message(
         }
         
         await db.chat_history.insert_one(chat_record)
-        
+
+        # Crisis detection (Phase 8)
+        crisis_detected = _detect_crisis(user_message)
+        if crisis_detected:
+            try:
+                await db.escalations.insert_one({
+                    "patient_id": str(current_user.id),
+                    "severity": "critical",
+                    "triggered_by": "chat_keyword",
+                    "message": user_message[:500],
+                    "status": "open",
+                    "free_session_granted": False,
+                    "acknowledged": False,
+                    "created_at": datetime.now(timezone.utc),
+                })
+            except Exception:
+                pass
+            try:
+                await db.notifications.insert_one({
+                    "user_id": str(current_user.id),
+                    "type": "crisis_detected",
+                    "title": "We're here to help",
+                    "body": "We noticed you may be going through a difficult time. Booking a session with a therapist is recommended.",
+                    "read": False,
+                    "created_at": datetime.now(timezone.utc),
+                })
+            except Exception:
+                pass
+
         return ChatResponse(
             response=ai_response,
             timestamp=current_time_pakistan.isoformat(),
-            sentiment=sentiment
+            sentiment=sentiment,
+            crisis_detected=crisis_detected,
         )
         
     except HTTPException:
