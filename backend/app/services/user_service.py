@@ -55,7 +55,7 @@ class UserService:
         
         try:
             # Insert user into database
-            result = await users_collection.insert_one(user_doc.dict(by_alias=True, exclude={"id"}))
+            result = await users_collection.insert_one(user_doc.model_dump(by_alias=True, exclude={"id"}))
             
             # Get the created user
             created_user = await users_collection.find_one({"_id": result.inserted_id})
@@ -165,7 +165,7 @@ class UserService:
         
         try:
             # Prepare update data
-            update_data = user_data.dict(exclude_unset=True)
+            update_data = user_data.model_dump(exclude_unset=True)
             if update_data:
                 update_data["updated_at"] = datetime.now(timezone.utc)
                 

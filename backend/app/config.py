@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-3.5-turbo", alias="OPENAI_MODEL")
     openai_max_tokens: int = Field(default=1000, alias="OPENAI_MAX_TOKENS")
     openai_temperature: float = Field(default=0.7, alias="OPENAI_TEMPERATURE")
+    ollama_num_ctx: int = Field(default=2048, alias="OLLAMA_NUM_CTX")
     
     # Therapy AI Settings
     ai_therapy_model: str = Field(default="gpt-3.5-turbo", alias="AI_THERAPY_MODEL")
@@ -72,18 +73,21 @@ class Settings(BaseSettings):
     )
     upload_path: str = Field(default="uploads/", alias="UPLOAD_PATH")
     
-    # Google OAuth Configuration
-    google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
-    google_client_secret: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
-    frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
-    mail_enabled: bool = Field(default=False, alias="MAIL_ENABLED")
-
-    # Email Configuration
+    # Email Configuration (fastapi-mail)
     smtp_host: str = Field(default="smtp.gmail.com", alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
     smtp_username: Optional[str] = Field(default=None, alias="SMTP_USERNAME")
     smtp_password: Optional[str] = Field(default=None, alias="SMTP_PASSWORD")
     from_email: str = Field(default="noreply@theraai.dev", alias="FROM_EMAIL")
+    mail_enabled: bool = Field(default=False, alias="MAIL_ENABLED")
+    mail_username: Optional[str] = Field(default=None, alias="MAIL_USERNAME")
+    mail_password: Optional[str] = Field(default=None, alias="MAIL_PASSWORD")
+    mail_from: str = Field(default="noreply@theraai.app", alias="MAIL_FROM")
+    mail_port: int = Field(default=587, alias="MAIL_PORT")
+    mail_server: str = Field(default="smtp.gmail.com", alias="MAIL_SERVER")
+    mail_tls: bool = Field(default=True, alias="MAIL_STARTTLS")
+    mail_ssl: bool = Field(default=False, alias="MAIL_SSL_TLS")
+    admin_email: Optional[str] = Field(default=None, alias="ADMIN_EMAIL")
     
     # Redis Configuration (optional)
     redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")
@@ -100,9 +104,28 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=1000, alias="RATE_LIMIT_REQUESTS")
     rate_limit_period: int = Field(default=60, alias="RATE_LIMIT_PERIOD")  # seconds
     
+    # Firebase / FCM
+    firebase_credentials_path: Optional[str] = Field(default=None, alias="FIREBASE_CREDENTIALS_PATH")
+    fcm_enabled: bool = Field(default=False, alias="FCM_ENABLED")
+
+    # Google Calendar OAuth2
+    google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: str = Field(
+        default="http://localhost:8000/api/v1/calendar/callback",
+        alias="GOOGLE_REDIRECT_URI",
+    )
+
+    # Jitsi Meet
+    jitsi_domain: str = Field(default="meet.jit.si", alias="JITSI_DOMAIN")
+
+    # AI Models — set true on 8 GB VRAM laptops to keep DistilBERT/RoBERTa
+    # on CPU and give all VRAM to Ollama (Llama 3.1 8B)
+    ai_models_force_cpu: bool = Field(default=False, alias="AI_MODELS_FORCE_CPU")
+
     # Health Check
     health_check_interval: int = Field(default=30, alias="HEALTH_CHECK_INTERVAL")  # seconds
-    
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

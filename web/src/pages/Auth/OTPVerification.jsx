@@ -18,10 +18,12 @@ export default function OTPVerification() {
   const inputRefs = useRef([]);
 
   const handleChange = (index, value) => {
+    // Only allow single digit
     const digit = value.replace(/\D/g, '').slice(-1);
     const next = [...digits];
     next[index] = digit;
     setDigits(next);
+    // Auto-advance
     if (digit && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -104,6 +106,7 @@ export default function OTPVerification() {
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* 6-digit OTP input */}
               <div className="flex justify-center gap-3" onPaste={handlePaste}>
                 {digits.map((digit, i) => (
                   <input

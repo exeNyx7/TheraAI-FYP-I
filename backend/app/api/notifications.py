@@ -1,75 +1,64 @@
 """
-Notifications API.
-Lightweight read/mark-read endpoints backed by the `notifications` collection.
+Notifications API Routes for TheraAI
+Device token registration for FCM push notifications
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, status
 
-from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException
-
-from ..database import get_database
-from ..dependencies.auth import get_current_user
 from ..models.user import UserOut
+from ..models.device_token import DeviceTokenRegister
+from ..dependencies.auth import get_current_user
+from ..database import get_database
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
-def _fmt(doc: dict) -> dict:
-    try:
-        created = doc.get("created_at")
-        if isinstance(created, datetime):
-            created_str = created.isoformat()
-        else:
-            created_str = str(created) if created is not None else ""
-        return {
-            "id": str(doc.get("_id", "")),
-            "type": doc.get("type", ""),
-            "title": doc.get("title", ""),
-            "body": doc.get("body", ""),
-            "appointment_id": doc.get("appointment_id"),
-            "read": bool(doc.get("read", False)),
-            "created_at": created_str,
-        }
-    except Exception:
-        return {}
-
-
-@router.get("/unread", summary="List unread notifications for current user")
-async def list_unread(current_user: UserOut = Depends(get_current_user)) -> list[dict]:
-    try:
-        db = await get_database()
-        cursor = (
-            db.notifications
-            .find({"user_id": str(current_user.id), "read": False})
-            .sort("created_at", -1)
-            .limit(50)
-        )
-        docs = await cursor.to_list(length=50)
-        return [_fmt(d) for d in docs if d]
-    except Exception:
-        return []
-
-
-@router.post("/{notification_id}/read", summary="Mark notification as read")
-async def mark_read(
-    notification_id: str,
+@router.post(
+    "/register-device",
+    status_code=status.HTTP_200_OK,
+    summary="Register a device for push notifications",
+)
+async def register_device(
+    payload: DeviceTokenRegister,
     current_user: UserOut = Depends(get_current_user),
-) -> dict:
-    try:
-        db = await get_database()
-        try:
-            oid = ObjectId(notification_id)
-        except Exception:
-            raise HTTPException(status_code=404, detail="Notification not found")
-        res = await db.notifications.update_one(
-            {"_id": oid, "user_id": str(current_user.id)},
-            {"$set": {"read": True, "read_at": datetime.utcnow()}},
-        )
-        if res.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Notification not found")
-        return {"ok": True}
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to mark notification read")
+):
+    """Register or update an FCM device token for the authenticated user."""
+    db = await get_database()
+    user_id = str(current_user.id)
+    now = datetime.now(timezone.utc)
+
+    # Upsert: same user+token → update timestamp; new → insert
+    await db.device_tokens.update_one(
+        {"user_id": user_id, "token": payload.token},
+        {
+            "$set": {
+                "user_id": user_id,
+                "token": payload.token,
+                "device_type": payload.device_type,
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+    return {"message": "Device registered successfully"}
+
+
+@router.delete(
+    "/unregister-device",
+    status_code=status.HTTP_200_OK,
+    summary="Unregister a device token",
+)
+async def unregister_device(
+    payload: DeviceTokenRegister,
+    current_user: UserOut = Depends(get_current_user),
+):
+    """Remove an FCM device token (e.g. on logout)."""
+    db = await get_database()
+    await db.device_tokens.delete_one({
+        "user_id": str(current_user.id),
+        "token": payload.token,
+    })
+    return {"message": "Device unregistered successfully"}

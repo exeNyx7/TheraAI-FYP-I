@@ -122,11 +122,6 @@ export function AuthProvider({ children }) {
       const user = await authService.getCurrentUser();
       dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: user });
 
-      // Show success message
-      setTimeout(() => {
-        console.log('Login successful! Welcome back!');
-      }, 100);
-
       return { success: true, user, message: 'Login successful! Welcome back!' };
     } catch (error) {
       const errorMessage = error.message || 'Login failed. Please try again.';

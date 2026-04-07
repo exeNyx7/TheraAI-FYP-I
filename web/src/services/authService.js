@@ -3,7 +3,10 @@
  * Handles all authentication-related API calls and token management
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+let API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+if (API_BASE_URL.endsWith('/api/v1')) {
+  API_BASE_URL = API_BASE_URL.slice(0, -7);
+}
 const TOKEN_KEY = import.meta.env.VITE_AUTH_TOKEN_KEY || 'theraai_auth_token';
 
 class AuthService {
@@ -236,18 +239,10 @@ class AuthService {
   }
 
   /**
-   * Check if user is member
-   */
-  isMember() {
-    return this.hasRole('member');
-  }
-
-  /**
-   * Check if user is patient (legacy support)
-   * @deprecated Use isMember() instead
+   * Check if user is patient
    */
   isPatient() {
-    return this.hasRole('patient') || this.hasRole('member');
+    return this.hasRole('patient');
   }
 }
 

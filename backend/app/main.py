@@ -9,17 +9,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import db_manager, init_database, check_database_health
-from .api import auth_router, journal_router, stats_router, chat_router
+from .api import (
+    auth_router, journal_router, stats_router, chat_router,
+    appointments_router, calls_router,
+    notifications_router, calendar_router,
+)
 from .api.moods import router as moods_router
 from .api.conversations import router as conversations_router
+from .api.settings import router as settings_router
+from .api.assessments import router as assessments_router
 from .api.therapist import router as therapist_router
-from .api.treatment_plans import router as treatment_plans_router
-from .api.session_notes import router as session_notes_router
-from .api.therapists_public import router as therapists_public_router
-from .api.appointments import router as appointments_router
-from .api.sharing_preferences import router as sharing_preferences_router
-from .api.notifications import router as notifications_router
-from .api.escalations import router as escalations_router
+from .api.ws import router as ws_router
+from .api.admin import router as admin_router
 
 # Load settings
 settings = get_settings()
@@ -53,15 +54,39 @@ async def lifespan(app: FastAPI):
                 
         threading.Thread(target=load_ai_background, daemon=True).start()
         
+        # Initialize notification service (FCM) if configured
+        try:
+            from .services.notification_service import NotificationService
+            if settings.firebase_credentials_path:
+                NotificationService.initialize(settings.firebase_credentials_path)
+                print("✅ Firebase Cloud Messaging initialized")
+            else:
+                print("ℹ️ FCM not configured (FIREBASE_CREDENTIALS_PATH not set)")
+        except Exception as e:
+            print(f"⚠️ FCM initialization skipped: {e}")
+
+        # Start appointment reminder scheduler
+        try:
+            from .services.scheduler_service import start_scheduler
+            start_scheduler()
+            print("✅ Appointment reminder scheduler started")
+        except Exception as e:
+            print(f"⚠️ Scheduler start failed: {e}")
+
         print("✅ Application startup complete")
     except Exception as e:
         print(f"❌ Failed to start application: {e}")
         raise e
-    
+
     yield
-    
+
     # Shutdown
     print("🛑 Shutting down application...")
+    try:
+        from .services.scheduler_service import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
     await db_manager.close_database_connection()
     print("✅ Application shutdown complete")
 
@@ -102,14 +127,15 @@ app.include_router(stats_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(moods_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
-app.include_router(therapist_router, prefix="/api/v1")
-app.include_router(treatment_plans_router, prefix="/api/v1")
-app.include_router(session_notes_router, prefix="/api/v1")
-app.include_router(therapists_public_router, prefix="/api/v1")
 app.include_router(appointments_router, prefix="/api/v1")
-app.include_router(sharing_preferences_router, prefix="/api/v1")
+app.include_router(therapist_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+app.include_router(assessments_router, prefix="/api/v1")
+app.include_router(calls_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
-app.include_router(escalations_router, prefix="/api/v1")
+app.include_router(calendar_router, prefix="/api/v1")
+app.include_router(ws_router)
+app.include_router(admin_router, prefix="/api/v1")
 
 
 @app.get(
@@ -133,25 +159,38 @@ async def root():
 @app.get(
     "/health",
     summary="Health check",
-    description="Comprehensive health check including database status"
+    description="Comprehensive health check including database and Ollama LLM status"
 )
 async def health_check():
     """Comprehensive health check endpoint"""
     try:
         # Check database health
         db_health = await check_database_health()
-        
+
+        # Check Ollama / ModelService health
+        from .services.model_service import ModelService
+        model_health = await ModelService.check_health()
+
+        # Overall status: healthy only if both DB and model are up
+        db_ok = db_health["status"] == "healthy"
+        model_ok = model_health.get("status") == "healthy"
+        overall = "healthy" if (db_ok and model_ok) else "degraded"
+
         return {
-            "status": "healthy" if db_health["status"] == "healthy" else "degraded",
+            "status": overall,
             "service": settings.app_name,
             "version": settings.app_version,
             "environment": settings.environment,
             "timestamp": db_health.get("timestamp"),
             "database": db_health,
+            "chat_ai": model_health,
             "features": {
                 "authentication": "enabled",
                 "user_roles": ["patient", "psychiatrist", "admin"],
-                "jwt_auth": "enabled"
+                "jwt_auth": "enabled",
+                "sentiment_analysis": "distilbert-base-uncased-finetuned-sst-2-english",
+                "emotion_detection": "SamLowe/roberta-base-go_emotions",
+                "chat_llm": model_health.get("model", "llama3.1:8b"),
             }
         }
     except Exception as e:

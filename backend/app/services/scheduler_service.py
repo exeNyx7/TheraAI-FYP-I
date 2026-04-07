@@ -1,153 +1,123 @@
 """
 Scheduler Service for TheraAI
-Schedules appointment reminders (T-15m / T-5m / T-0) using asyncio background tasks.
-No extra dependencies required — relies on asyncio.create_task + asyncio.sleep.
-Tasks are best-effort: if the FastAPI process restarts, pending reminders are lost.
+APScheduler-based background job runner for appointment reminders
 """
 
-import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
-
-from bson import ObjectId
-
-from ..database import get_database
-from .email_service import EmailService
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
-REMINDER_OFFSETS = [
-    (15 * 60, "reminder_15m", "Your session starts in 15 minutes"),
-    (5 * 60, "reminder_5m", "Your session starts in 5 minutes"),
-    (0, "session_starting", "Your session is starting now"),
-]
+_scheduler = None
 
 
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-async def _insert_notification(
-    db,
-    user_id: str,
-    n_type: str,
-    title: str,
-    body: str,
-    appointment_id: Optional[str] = None,
-) -> None:
+def _create_scheduler():
     try:
-        await db.notifications.insert_one(
-            {
-                "user_id": str(user_id),
-                "type": n_type,
-                "title": title,
-                "body": body,
-                "appointment_id": appointment_id,
-                "read": False,
-                "created_at": _now_utc(),
-            }
-        )
-    except Exception as e:
-        logger.error(f"_insert_notification failed: {e}")
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        return AsyncIOScheduler(timezone="UTC")
+    except ImportError:
+        logger.warning("APScheduler not installed — appointment reminders disabled. Run: pip install apscheduler")
+        return None
 
 
-async def _lookup_user(db, user_id: str) -> dict:
+async def _check_upcoming_appointments():
+    """
+    Runs every hour.
+    Finds appointments starting in the 23–25 hour window and sends reminders.
+    """
     try:
-        doc = await db.users.find_one({"_id": ObjectId(user_id)})
-        return doc or {}
-    except Exception:
-        return {}
+        from ..database import get_database
+        from ..services.email_service import EmailService
 
-
-async def _delayed_reminder(
-    appointment_id: str,
-    delay_seconds: float,
-    n_type: str,
-    title: str,
-    patient_id: str,
-    therapist_id: str,
-) -> None:
-    try:
-        if delay_seconds > 0:
-            await asyncio.sleep(delay_seconds)
         db = await get_database()
+        now = datetime.now(timezone.utc)
+        window_start = now + timedelta(hours=23)
+        window_end = now + timedelta(hours=25)
 
-        # Verify appointment still exists & is not cancelled
-        try:
-            appt = await db.appointments.find_one({"_id": ObjectId(appointment_id)})
-            if not appt or appt.get("status") == "cancelled":
-                return
-        except Exception:
-            return
+        cursor = db.appointments.find({
+            "scheduled_at": {"$gte": window_start, "$lte": window_end},
+            "status": "scheduled",
+            "reminder_sent": False,
+        })
 
-        body = f"{title}."
-        await _insert_notification(db, patient_id, n_type, title, body, appointment_id)
-        await _insert_notification(db, therapist_id, n_type, title, body, appointment_id)
-
-        # Fire-and-forget email for 15m reminder only (avoid spam)
-        if n_type == "reminder_15m":
+        count = 0
+        async for appt in cursor:
             try:
-                patient = await _lookup_user(db, patient_id)
-                therapist = await _lookup_user(db, therapist_id)
-                p_email = patient.get("email")
-                t_email = therapist.get("email")
-                p_name = patient.get("full_name") or ""
-                t_name = therapist.get("full_name") or ""
-                appt_date_str = (
-                    appt.get("date").isoformat()
-                    if isinstance(appt.get("date"), datetime)
-                    else str(appt.get("date", ""))
+                from bson import ObjectId
+
+                patient = await db.users.find_one({"_id": ObjectId(appt["patient_id"])})
+                therapist = await db.users.find_one({"_id": ObjectId(appt["therapist_id"])})
+
+                if not patient or not therapist:
+                    continue
+
+                # Send email reminder
+                await EmailService.send_appointment_reminder(
+                    to_email=patient["email"],
+                    patient_name=patient["full_name"],
+                    therapist_name=therapist["full_name"],
+                    scheduled_at=appt["scheduled_at"],
                 )
-                if p_email:
-                    await EmailService.send_email(
-                        p_email,
-                        "TheraAI — Session reminder (15 minutes)",
-                        f"<p>Hi {p_name}, your session with {t_name} starts in 15 minutes.</p><p>Scheduled: {appt_date_str}</p>",
-                    )
-                if t_email:
-                    await EmailService.send_email(
-                        t_email,
-                        "TheraAI — Session reminder (15 minutes)",
-                        f"<p>Hi {t_name}, your session with {p_name} starts in 15 minutes.</p><p>Scheduled: {appt_date_str}</p>",
-                    )
+
+                # Send push notification if FCM is configured
+                try:
+                    from ..services.notification_service import NotificationService
+                    if NotificationService.is_initialized():
+                        await NotificationService.send_to_user(
+                            user_id=appt["patient_id"],
+                            title="Appointment Reminder",
+                            body=f"Your session with {therapist['full_name']} is tomorrow.",
+                            data={"type": "appointment_reminder", "appointment_id": str(appt["_id"])},
+                        )
+                except Exception:
+                    pass
+
+                # Mark reminder as sent
+                await db.appointments.update_one(
+                    {"_id": appt["_id"]},
+                    {"$set": {"reminder_sent": True}},
+                )
+                count += 1
+
             except Exception as e:
-                logger.error(f"reminder email failed: {e}")
+                logger.error(f"Error sending reminder for appointment {appt.get('_id')}: {e}")
+
+        if count:
+            logger.info(f"Sent {count} appointment reminder(s)")
+
     except Exception as e:
-        logger.error(f"_delayed_reminder failed: {e}")
+        logger.error(f"Scheduler job failed: {e}")
 
 
-def schedule_appointment_reminders(
-    appointment_id: str,
-    scheduled_at: datetime,
-    patient_id: str,
-    therapist_id: str,
-) -> None:
-    """Schedule T-15m / T-5m / T-0 reminders for an appointment. Best-effort."""
+def start_scheduler():
+    """Start the APScheduler background scheduler"""
+    global _scheduler
+    scheduler = _create_scheduler()
+    if scheduler is None:
+        return
+
     try:
-        if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
-        now = _now_utc()
-        for offset, n_type, title in REMINDER_OFFSETS:
-            fire_at = scheduled_at.timestamp() - offset
-            delay = fire_at - now.timestamp()
-            if delay < -30:
-                # Reminder in the past — skip
-                continue
-            try:
-                asyncio.create_task(
-                    _delayed_reminder(
-                        appointment_id=appointment_id,
-                        delay_seconds=max(0, delay),
-                        n_type=n_type,
-                        title=title,
-                        patient_id=patient_id,
-                        therapist_id=therapist_id,
-                    )
-                )
-            except RuntimeError:
-                # No running loop — skip silently
-                logger.warning("schedule_appointment_reminders: no running event loop")
-                break
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        scheduler.add_job(
+            _check_upcoming_appointments,
+            IntervalTrigger(hours=1),
+            id="appointment_reminders",
+            replace_existing=True,
+        )
+        scheduler.start()
+        _scheduler = scheduler
+        logger.info("Appointment reminder scheduler started (runs every hour)")
     except Exception as e:
-        logger.error(f"schedule_appointment_reminders failed: {e}")
+        logger.error(f"Failed to start scheduler: {e}")
+
+
+def stop_scheduler():
+    """Stop the scheduler gracefully"""
+    global _scheduler
+    if _scheduler and _scheduler.running:
+        try:
+            _scheduler.shutdown(wait=False)
+            logger.info("Scheduler stopped")
+        except Exception:
+            pass

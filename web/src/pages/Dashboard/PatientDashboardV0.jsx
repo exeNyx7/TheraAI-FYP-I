@@ -6,10 +6,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { DashboardHeader } from '../../components/Dashboard/DashboardHeader';
 import { QuickActions } from '../../components/Dashboard/QuickActions';
 import { ActivityHeatmap } from '../../components/Dashboard/ActivityHeatmap';
+import { WeeklyMoodSummary } from '../../components/Dashboard/WeeklyMoodSummary';
 import { getUserStats } from '../../services/statsService';
 import { Loader2 } from 'lucide-react';
 
@@ -75,16 +76,19 @@ export default function PatientDashboardV0() {
 
   return (
     <div className="flex">
-      <SidebarNav />
-      <main className="flex-1">
+      <AppSidebar />
+      <main className="flex-1 overflow-auto min-w-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
             <DashboardHeader stats={stats} />
             <QuickActions />
             
-            {/* Activity Heatmap */}
+            {/* Activity Heatmap + Weekly Mood Summary */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <ActivityHeatmap />
+              <div className="lg:col-span-2">
+                <ActivityHeatmap />
+              </div>
+              <WeeklyMoodSummary />
             </div>
           </div>
         </div>

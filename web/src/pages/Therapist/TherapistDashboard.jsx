@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { TherapistSidebar } from '../../components/Dashboard/TherapistSidebar';
+import { useState } from 'react';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { VideoCallModal } from '../../components/Teletherapy/VideoCallModal';
 import {
@@ -69,7 +69,7 @@ export default function TherapistDashboard() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <TherapistSidebar />
+      <AppSidebar />
       <main className="flex-1 overflow-auto">
         <div>
           <VideoCallModal

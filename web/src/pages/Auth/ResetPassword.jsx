@@ -19,6 +19,7 @@ export default function ResetPassword() {
   const [isLoading, setIsLoading]   = useState(false);
   const [done, setDone]             = useState(false);
 
+  // Redirect if no reset token (direct navigation)
   if (!reset_token) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center px-4">

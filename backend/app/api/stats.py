@@ -208,7 +208,10 @@ async def get_user_achievements(current_user: UserOut = Depends(get_current_user
                 name="Early Bird",
                 description="Journal before 8 AM",
                 icon="🌅",
-                unlocked=False,  # Implement time-based check
+                unlocked=any(
+                    e.get("created_at") and 5 <= parse_datetime(e["created_at"]).hour < 8
+                    for e in entries
+                ),
                 progress=0,
                 target=1
             ),
@@ -217,7 +220,13 @@ async def get_user_achievements(current_user: UserOut = Depends(get_current_user
                 name="Night Owl",
                 description="Journal after 10 PM",
                 icon="🌙",
-                unlocked=False,  # Implement time-based check
+                unlocked=any(
+                    e.get("created_at") and (
+                        parse_datetime(e["created_at"]).hour >= 22
+                        or parse_datetime(e["created_at"]).hour < 2
+                    )
+                    for e in entries
+                ),
                 progress=0,
                 target=1
             ),
@@ -366,7 +375,7 @@ def parse_datetime(date_str: str) -> datetime:
     """Safely parse datetime string"""
     if not date_str:
         return datetime.now(timezone.utc)
-    
+
     try:
         # Handle ISO format with Z
         if "Z" in date_str:
@@ -377,3 +386,136 @@ def parse_datetime(date_str: str) -> datetime:
         return datetime.fromisoformat(date_str)
     except Exception:
         return datetime.now(timezone.utc)
+
+
+# ── Weekly Mood Summary ──────────────────────────────────────────────────────
+
+class DayMoodPoint(BaseModel):
+    date: str          # YYYY-MM-DD
+    avg_sentiment: float  # 0-10
+    entry_count: int
+    dominant_mood: Optional[str] = None
+
+
+class WeeklyMoodSummary(BaseModel):
+    days: list[DayMoodPoint]
+    week_avg: float
+    best_day: Optional[str] = None
+    worst_day: Optional[str] = None
+    total_entries: int
+    trend: str  # "improving" | "declining" | "stable"
+    ai_summary: str
+
+
+@router.get("/me/weekly-summary", response_model=WeeklyMoodSummary)
+async def get_weekly_mood_summary(current_user: UserOut = Depends(get_current_user)):
+    """
+    Get a 7-day mood trend summary with AI-generated insight.
+    Uses journal sentiment scores + standalone mood entries.
+    """
+    try:
+        db = db_manager.get_database()
+        user_id = str(current_user.id)
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+
+        # Fetch journal entries for last 7 days
+        journal_entries = await db.journals.find(
+            {"user_id": user_id, "created_at": {"$gte": week_ago}}
+        ).to_list(length=None)
+
+        # Fetch standalone mood entries for last 7 days
+        mood_entries = await db.moods.find(
+            {"user_id": user_id, "timestamp": {"$gte": week_ago}}
+        ).to_list(length=None)
+
+        # Build day-by-day buckets
+        _MOOD_SCORES = {
+            "happy": 9, "excited": 8, "calm": 7, "neutral": 5,
+            "anxious": 4, "sad": 3, "stressed": 3, "angry": 2,
+        }
+        from collections import defaultdict
+        buckets: dict[str, list[float]] = defaultdict(list)
+        mood_bucket: dict[str, list[str]] = defaultdict(list)
+
+        for entry in journal_entries:
+            dt = parse_datetime(entry.get("created_at", ""))
+            day = dt.strftime("%Y-%m-%d")
+            score = entry.get("sentiment_score", 0.5)
+            buckets[day].append(score * 10)
+            if entry.get("mood"):
+                mood_bucket[day].append(entry["mood"])
+
+        for entry in mood_entries:
+            dt = parse_datetime(entry.get("timestamp", entry.get("created_at", "")))
+            day = dt.strftime("%Y-%m-%d")
+            mood = entry.get("mood", "neutral")
+            score = _MOOD_SCORES.get(mood, 5)
+            buckets[day].append(float(score))
+            mood_bucket[day].append(mood)
+
+        # Generate points for all 7 days
+        today = datetime.now(timezone.utc).date()
+        days_out = []
+        all_avgs = []
+        for i in range(6, -1, -1):
+            d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+            scores = buckets.get(d, [])
+            avg = round(sum(scores) / len(scores), 1) if scores else 0.0
+            moods = mood_bucket.get(d, [])
+            dominant = max(set(moods), key=moods.count) if moods else None
+            days_out.append(DayMoodPoint(
+                date=d,
+                avg_sentiment=avg,
+                entry_count=len(scores),
+                dominant_mood=dominant,
+            ))
+            if scores:
+                all_avgs.append(avg)
+
+        week_avg = round(sum(all_avgs) / len(all_avgs), 1) if all_avgs else 0.0
+
+        # Best / worst days (only days with entries)
+        filled = [p for p in days_out if p.entry_count > 0]
+        best_day = max(filled, key=lambda p: p.avg_sentiment).date if filled else None
+        worst_day = min(filled, key=lambda p: p.avg_sentiment).date if filled else None
+
+        # Trend: compare first half vs second half
+        first_half = [p.avg_sentiment for p in days_out[:3] if p.entry_count > 0]
+        second_half = [p.avg_sentiment for p in days_out[4:] if p.entry_count > 0]
+        if first_half and second_half:
+            first_avg = sum(first_half) / len(first_half)
+            second_avg = sum(second_half) / len(second_half)
+            if second_avg - first_avg > 0.5:
+                trend = "improving"
+            elif first_avg - second_avg > 0.5:
+                trend = "declining"
+            else:
+                trend = "stable"
+        else:
+            trend = "stable"
+
+        # AI summary
+        total_entries = sum(p.entry_count for p in days_out)
+        if total_entries == 0:
+            ai_summary = "No entries this week. Start journaling to see your mood trends!"
+        elif trend == "improving":
+            ai_summary = f"Great week! Your mood improved over the past 7 days with an average score of {week_avg}/10. Keep up the positive habits."
+        elif trend == "declining":
+            ai_summary = f"Your mood dipped this week (avg {week_avg}/10). Consider talking to your AI companion or booking a session with a therapist."
+        else:
+            ai_summary = f"Your mood stayed steady this week with an average of {week_avg}/10. Consistency is a great foundation for mental wellness."
+
+        return WeeklyMoodSummary(
+            days=days_out,
+            week_avg=week_avg,
+            best_day=best_day,
+            worst_day=worst_day,
+            total_entries=total_entries,
+            trend=trend,
+            ai_summary=ai_summary,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate weekly summary: {str(e)}")

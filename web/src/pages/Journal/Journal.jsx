@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { AddJournalModal } from '../../components/Journal/AddJournalModal';
@@ -9,8 +9,7 @@ import { Plus, Search, BookOpen } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
-
-const API = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/v1` : 'http://localhost:8000/api/v1';
+import apiClient from '../../apiClient';
 
 export default function Journal() {
   const { user } = useAuth();
@@ -22,8 +21,6 @@ export default function Journal() {
   const [searchQuery, setSearchQuery] = useState('');
   const [moodFilter, setMoodFilter] = useState('all');
 
-  const token = () => localStorage.getItem(import.meta.env.VITE_AUTH_TOKEN_KEY || 'theraai_auth_token');
-
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     fetchJournals();
@@ -32,8 +29,8 @@ export default function Journal() {
   const fetchJournals = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API}/journals`, { headers: { Authorization: `Bearer ${token()}` } });
-      const data = await res.json();
+      const res = await apiClient.get('/journals');
+      const data = res.data;
       setJournals(Array.isArray(data) ? data : data.journals || []);
     } catch { showError('Failed to load journals.'); }
     finally { setIsLoading(false); }
@@ -41,24 +38,17 @@ export default function Journal() {
 
   const handleCreate = async (entry) => {
     try {
-      const res = await fetch(`${API}/journals`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-        body: JSON.stringify(entry),
-      });
-      if (!res.ok) {
-        throw new Error('Failed to create journal entry.');
-      }
+      await apiClient.post('/journals', entry);
       await fetchJournals();
       showSuccess('Journal entry created successfully!');
     } catch (error) {
-      showError(error.message || 'Failed to create journal entry.');
+      showError(error.response?.data?.detail || 'Failed to create journal entry.');
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      await fetch(`${API}/journals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } });
+      await apiClient.delete(`/journals/${id}`);
       setJournals(prev => prev.filter(j => (j._id || j.id) !== id));
       showSuccess('Journal entry deleted.');
     } catch { showError('Failed to delete entry.'); }
@@ -75,7 +65,7 @@ export default function Journal() {
 
   return (
     <div className="flex">
-      <SidebarNav />
+      <AppSidebar />
       <main className="flex-1 pt-16 md:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-6xl mx-auto p-6 md:p-8 space-y-8">
