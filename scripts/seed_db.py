@@ -101,7 +101,7 @@ ADMIN = {
     "is_active": True,
 }
 
-MOODS = ["happy", "sad", "anxious", "calm", "angry", "hopeful", "frustrated", "neutral"]
+MOODS = ["happy", "sad", "anxious", "calm", "angry", "excited", "stressed", "neutral"]
 
 JOURNAL_ENTRIES = [
     "Today was a challenging day but I managed to use some breathing techniques that helped.",
@@ -153,33 +153,54 @@ async def seed(wipe: bool = False, dry_run: bool = False):
             print("[abort] Wipe cancelled.")
             client.close()
             return
-        for col in ["users", "appointments", "moods", "journals", "crisis_events", "device_tokens", "conversations"]:
+        for col in [
+            "users",
+            "therapist_profiles",
+            "appointments",
+            "moods",
+            "journals",
+            "crisis_events",
+            "device_tokens",
+            "conversations",
+            "chat_history",
+            "chat_messages",
+            "assessments",
+            "assessment_results",
+            "user_settings",
+            "user_memory",
+        ]:
             await db[col].drop()
         print("[info] All collections dropped.")
+
+    await db.users.create_index("email", unique=True)
 
     # ------------------------------------------------------------------
     # Helper: upsert user (idempotent by email)
     # ------------------------------------------------------------------
     async def upsert_user(data: dict) -> str:
-        doc = {
-            "full_name": data["full_name"],
-            "email": data["email"],
-            "role": data["role"],
-            "is_active": data.get("is_active", True),
-            "hashed_password": hashed_pw,
-            "created_at": now,
-            "updated_at": None,
-            "google_refresh_token": None,
-            "google_calendar_connected": False,
-        }
-        result = await db.users.find_one_and_update(
+        result = await db.users.update_one(
             {"email": data["email"]},
-            {"$setOnInsert": doc},
+            {
+                "$set": {
+                    "full_name": data["full_name"],
+                    "email": data["email"],
+                    "role": data["role"],
+                    "is_active": data.get("is_active", True),
+                    "updated_at": now,
+                    "google_refresh_token": None,
+                    "google_calendar_connected": False,
+                },
+                "$setOnInsert": {
+                    "hashed_password": hashed_pw,
+                    "created_at": now,
+                },
+            },
             upsert=True,
-            return_document=True,
         )
-        uid = str(result["_id"])
-        print(f"  [user] {data['role']:12s}  {data['full_name']} <{data['email']}>  id={uid}")
+        user_doc = await db.users.find_one({"email": data["email"]}, {"_id": 1})
+        uid = str(user_doc["_id"])
+        action = "created" if result.upserted_id else "updated"
+        print(f"  [user] {data['role']:12s}  {data['full_name']} <{data['email']}>  id={uid} ({action})")
         return uid
 
     # ------------------------------------------------------------------
@@ -230,12 +251,13 @@ async def seed(wipe: bool = False, dry_run: bool = False):
     for patient_id in patient_ids:
         for day_offset in range(14):
             mood_val = random.choice(MOODS)
+            timestamp = now - timedelta(days=day_offset)
             doc = {
                 "user_id": patient_id,
                 "mood": mood_val,
-                "score": random.randint(1, 10),
                 "notes": f"Feeling {mood_val} today.",
-                "created_at": now - timedelta(days=day_offset),
+                "timestamp": timestamp,
+                "created_at": timestamp,
             }
             await db.moods.insert_one(doc)
         print(f"  [mood] 14 entries for {patient_ids.index(patient_id) + 1}. patient")
@@ -272,6 +294,8 @@ async def seed(wipe: bool = False, dry_run: bool = False):
             "severity": "high" if i == 0 else "medium",
             "trigger": "Expressed suicidal ideation during chat session",
             "ai_summary": "Patient mentioned feeling hopeless and not wanting to continue.",
+            "source": "chat",
+            "message_excerpt": "I do not feel like continuing anymore.",
             "acknowledged": False,
             "acknowledged_by": None,
             "acknowledged_at": None,

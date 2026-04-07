@@ -90,6 +90,9 @@ export default function Chat() {
   const [showHistory, setShowHistory] = useState(false);
   const [crisisState, setCrisisState] = useState({ visible: false, severity: null });
   const messagesEndRef = useRef(null);
+  const chatInputRef = useRef(null);
+  const inputValueRef = useRef('');
+  const voiceBaseTextRef = useRef('');
 
   // WebSocket handler — called with parsed assistant message from WS
   const handleWsMessage = useCallback((data) => {
@@ -130,6 +133,10 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    inputValueRef.current = inputValue;
+  }, [inputValue]);
 
   const sendMessage = async (content) => {
     if (!content.trim() || isLoading) return;
@@ -180,6 +187,30 @@ export default function Chat() {
       showSuccess('Chat cleared (local only — server clear failed).');
     }
   };
+
+  const mergeVoiceWithBaseInput = useCallback((spokenText) => {
+    const baseText = voiceBaseTextRef.current;
+    const cleanedSpokenText = (spokenText || '').trim();
+    if (!cleanedSpokenText) return baseText;
+    if (!baseText) return cleanedSpokenText;
+    return /\s$/.test(baseText) ? `${baseText}${cleanedSpokenText}` : `${baseText} ${cleanedSpokenText}`;
+  }, []);
+
+  const handleVoiceListeningChange = useCallback((listening) => {
+    if (listening) {
+      voiceBaseTextRef.current = inputValueRef.current;
+    }
+    chatInputRef.current?.focus();
+  }, []);
+
+  const handleVoiceTranscript = useCallback((spokenText) => {
+    setInputValue(mergeVoiceWithBaseInput(spokenText));
+  }, [mergeVoiceWithBaseInput]);
+
+  const handleVoiceInput = useCallback((spokenText) => {
+    setInputValue(mergeVoiceWithBaseInput(spokenText));
+    chatInputRef.current?.focus();
+  }, [mergeVoiceWithBaseInput]);
 
   if (!user) return null;
 
@@ -267,13 +298,23 @@ export default function Chat() {
 
             {/* Input area */}
             <div className="border-t border-border px-6 py-4 bg-card/50 backdrop-blur-sm space-y-3">
-              <VoiceInput onVoiceInput={sendMessage} />
+              <VoiceInput
+                onVoiceInput={handleVoiceInput}
+                onTranscriptChange={handleVoiceTranscript}
+                onListeningChange={handleVoiceListeningChange}
+              />
               <div className="flex gap-2">
                 <Input
+                  ref={chatInputRef}
                   placeholder="Type your message..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage(inputValue)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      sendMessage(inputValue);
+                    }
+                  }}
                   disabled={isLoading}
                   className="flex-1"
                 />

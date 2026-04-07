@@ -206,8 +206,21 @@ class ModelService:
                         role = "assistant"
                     # Normalize field name ("message" → "content")
                     content = msg.get("content") or msg.get("message", "")
+                    
                     if content and role in ("user", "assistant"):
-                        messages.append({"role": role, "content": content.strip()})
+                        clean_content = content.strip()
+                        
+                        # SAFETY FALLBACK: Prevent VRAM spikes from corrupted/garbage chats
+                        # If a string is massive and lacks spaces, it's likely broken GPU tensors
+                        if len(clean_content) > 800 and " " not in clean_content[:200]:
+                            logger.warning("Dropped corrupted history message to protect VRAM.")
+                            continue
+                            
+                        # Truncate excessively long valid messages to protect context window limits
+                        if len(clean_content) > 1500:
+                            clean_content = clean_content[:1500] + "..."
+                            
+                        messages.append({"role": role, "content": clean_content})
 
             # Append current message
             messages.append({"role": "user", "content": user_message.strip()})

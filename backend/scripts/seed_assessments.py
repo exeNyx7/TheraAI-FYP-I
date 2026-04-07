@@ -11,6 +11,7 @@ Usage:
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -298,6 +299,7 @@ async def seed():
     client = AsyncIOMotorClient(MONGO_URL)
     db = client[DB_NAME]
     collection = db.assessments
+    now = datetime.now(timezone.utc)
 
     inserted = 0
     updated = 0
@@ -305,7 +307,15 @@ async def seed():
     for assessment in ASSESSMENTS:
         result = await collection.update_one(
             {"slug": assessment["slug"]},
-            {"$set": assessment},
+            {
+                "$set": {
+                    **assessment,
+                    "updated_at": now,
+                },
+                "$setOnInsert": {
+                    "created_at": now,
+                },
+            },
             upsert=True,
         )
         if result.upserted_id:

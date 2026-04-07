@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-3.5-turbo", alias="OPENAI_MODEL")
     openai_max_tokens: int = Field(default=1000, alias="OPENAI_MAX_TOKENS")
     openai_temperature: float = Field(default=0.7, alias="OPENAI_TEMPERATURE")
+    ollama_num_ctx: int = Field(default=2048, alias="OLLAMA_NUM_CTX")
     
     # Therapy AI Settings
     ai_therapy_model: str = Field(default="gpt-3.5-turbo", alias="AI_THERAPY_MODEL")

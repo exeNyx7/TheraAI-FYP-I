@@ -70,8 +70,8 @@ class AIService:
         Ollama (Llama 3.1 8B, ~4.7 GB) and these models would otherwise exceed
         the VRAM ceiling and cause slow / garbled inference.
         """
-        import os
-        if os.environ.get("AI_MODELS_FORCE_CPU", "false").lower() in ("true", "1", "yes"):
+        from ..config import get_settings
+        if get_settings().ai_models_force_cpu:
             logger.info(
                 "🖥️  AI_MODELS_FORCE_CPU=true — loading DistilBERT/RoBERTa on CPU "
                 "(frees all GPU VRAM for Ollama)"

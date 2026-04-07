@@ -39,10 +39,19 @@ WIPE_COLLECTIONS = [
     "therapist_profiles",
     "assessments",
     "assessment_results",
+    "appointments",
+    "journals",
+    "moods",
+    "crisis_events",
+    "conversations",
     "chat_history",
+    "chat_messages",
+    "user_settings",
+    "device_tokens",
+    "user_memory",
+    # Legacy/stale names kept for cleanup compatibility
     "journal_entries",
     "mood_entries",
-    "appointments",
     "achievements",
     "notifications",
     "password_reset_otps",
@@ -590,9 +599,20 @@ async def wipe(db):
 async def seed_assessments(db):
     section("SEEDING ASSESSMENTS")
     inserted = updated = 0
+    now = datetime.now(timezone.utc)
     for a in ASSESSMENTS:
         res = await db.assessments.update_one(
-            {"slug": a["slug"]}, {"$set": a}, upsert=True
+            {"slug": a["slug"]},
+            {
+                "$set": {
+                    **a,
+                    "updated_at": now,
+                },
+                "$setOnInsert": {
+                    "created_at": now,
+                },
+            },
+            upsert=True,
         )
         if res.upserted_id:
             inserted += 1
@@ -602,6 +622,7 @@ async def seed_assessments(db):
             print(f"  🔄 Updated:  {a['name']}")
     await db.assessments.create_index("slug", unique=True)
     await db.assessments.create_index("category")
+    await db.assessments.create_index("is_active")
     print(f"\n  Total: {inserted} inserted, {updated} updated ({len(ASSESSMENTS)} assessments)")
 
 
@@ -610,44 +631,83 @@ async def seed_therapists(db):
     now = datetime.now(timezone.utc)
     hashed_pw = pwd_context.hash(THERAPIST_PASSWORD)
 
+    await db.users.create_index("email", unique=True)
+    await db.therapist_profiles.create_index("user_id", unique=True)
+    await db.therapist_profiles.create_index("is_accepting_patients")
+
     for entry in THERAPISTS:
         u = entry["user"]
         p = entry["profile"]
-        res = await db.users.insert_one({
-            **u,
-            "hashed_password": hashed_pw,
-            "is_active": True,
-            "is_verified": True,
-            "created_at": now,
-            "updated_at": now,
-        })
-        uid = str(res.inserted_id)
-        await db.therapist_profiles.insert_one({
-            "user_id": uid,
-            "full_name": u["full_name"],
-            **p,
-            "created_at": now,
-        })
-        print(f"  ✅ {u['full_name']}  <{u['email']}>  (id={uid})")
+        user_res = await db.users.update_one(
+            {"email": u["email"]},
+            {
+                "$set": {
+                    **u,
+                    "role": "psychiatrist",
+                    "is_active": True,
+                    "is_verified": True,
+                    "updated_at": now,
+                },
+                "$setOnInsert": {
+                    "hashed_password": hashed_pw,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+        user_doc = await db.users.find_one({"email": u["email"]}, {"_id": 1})
+        uid = str(user_doc["_id"])
 
-    print(f"\n  Default password: {THERAPIST_PASSWORD}")
+        profile_res = await db.therapist_profiles.update_one(
+            {"user_id": uid},
+            {
+                "$set": {
+                    "user_id": uid,
+                    "full_name": u["full_name"],
+                    **p,
+                    "updated_at": now,
+                },
+                "$setOnInsert": {
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+
+        user_action = "Created" if user_res.upserted_id else "Updated"
+        profile_action = "Created" if profile_res.upserted_id else "Updated"
+        print(f"  ✅ {user_action} user, {profile_action} profile: {u['full_name']}  <{u['email']}>  (id={uid})")
+
+    print(f"\n  Default password for new therapist accounts: {THERAPIST_PASSWORD}")
 
 
 async def seed_patient(db):
     section("SEEDING SAMPLE PATIENT")
     now = datetime.now(timezone.utc)
     hashed_pw = pwd_context.hash(SAMPLE_PATIENT["password"])
-    res = await db.users.insert_one({
-        "email":           SAMPLE_PATIENT["email"],
-        "full_name":       SAMPLE_PATIENT["full_name"],
-        "role":            SAMPLE_PATIENT["role"],
-        "hashed_password": hashed_pw,
-        "is_active":       True,
-        "created_at":      now,
-        "updated_at":      now,
-    })
-    print(f"  ✅ {SAMPLE_PATIENT['full_name']}  <{SAMPLE_PATIENT['email']}>  (id={res.inserted_id})")
-    print(f"     Password: {SAMPLE_PATIENT['password']}")
+
+    res = await db.users.update_one(
+        {"email": SAMPLE_PATIENT["email"]},
+        {
+            "$set": {
+                "email": SAMPLE_PATIENT["email"],
+                "full_name": SAMPLE_PATIENT["full_name"],
+                "role": SAMPLE_PATIENT["role"],
+                "is_active": True,
+                "updated_at": now,
+            },
+            "$setOnInsert": {
+                "hashed_password": hashed_pw,
+                "created_at": now,
+            },
+        },
+        upsert=True,
+    )
+
+    user_doc = await db.users.find_one({"email": SAMPLE_PATIENT["email"]}, {"_id": 1})
+    action = "Created" if res.upserted_id else "Updated"
+    print(f"  ✅ {action} {SAMPLE_PATIENT['full_name']}  <{SAMPLE_PATIENT['email']}>  (id={user_doc['_id']})")
+    print(f"     Password (new account): {SAMPLE_PATIENT['password']}")
 
 
 async def main(args):

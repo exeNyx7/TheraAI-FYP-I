@@ -158,39 +158,57 @@ async def seed():
     now = datetime.now(timezone.utc)
     hashed_pw = pwd_context.hash(DEFAULT_PASSWORD)
 
+    await db.users.create_index("email", unique=True)
+    await db.therapist_profiles.create_index("user_id", unique=True)
+    await db.therapist_profiles.create_index("is_accepting_patients")
+
     for entry in THERAPISTS:
         user_data = entry["user"]
         profile_data = entry["profile"]
         email = user_data["email"]
 
-        # Upsert user
-        existing_user = await db.users.find_one({"email": email})
-        if existing_user:
-            user_id = str(existing_user["_id"])
-            print(f"  ↩  User already exists: {email} (id={user_id})")
-        else:
-            result = await db.users.insert_one({
-                **user_data,
-                "hashed_password": hashed_pw,
-                "created_at": now,
-                "updated_at": now,
-            })
-            user_id = str(result.inserted_id)
+        # Upsert user and ensure therapist account fields stay aligned with current schema
+        user_result = await db.users.update_one(
+            {"email": email},
+            {
+                "$set": {
+                    **user_data,
+                    "role": "psychiatrist",
+                    "is_active": True,
+                    "is_verified": True,
+                    "updated_at": now,
+                },
+                "$setOnInsert": {
+                    "hashed_password": hashed_pw,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+        user_doc = await db.users.find_one({"email": email}, {"_id": 1})
+        user_id = str(user_doc["_id"])
+        if user_result.upserted_id:
             print(f"  ✅ Created user: {email} (id={user_id})")
+        else:
+            print(f"  🔄 Updated user: {email} (id={user_id})")
 
         # Upsert therapist profile
         profile_doc = {
             "user_id": user_id,
             "full_name": user_data["full_name"],
             **profile_data,
-            "created_at": now,
+            "updated_at": now,
         }
-        await db.therapist_profiles.update_one(
+        profile_result = await db.therapist_profiles.update_one(
             {"user_id": user_id},
-            {"$set": profile_doc},
+            {
+                "$set": profile_doc,
+                "$setOnInsert": {"created_at": now},
+            },
             upsert=True,
         )
-        print(f"  ✅ Upserted profile for: {user_data['full_name']}")
+        profile_action = "Created" if profile_result.upserted_id else "Updated"
+        print(f"  ✅ {profile_action} profile for: {user_data['full_name']}")
 
     await db_manager.close_database_connection()
     print("\n✅ Therapist seed complete.")
