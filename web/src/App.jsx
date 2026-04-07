@@ -16,7 +16,10 @@ import Settings from './pages/Settings/Settings';
 import Assessments from './pages/Assessments/Assessments';
 import Appointments from './pages/Appointments/Appointments';
 import Achievements from './pages/Achievements/Achievements';
-import TherapistDashboard from './pages/Therapist/TherapistDashboard';
+import Onboarding from './pages/Onboarding/Onboarding';
+import ForgotPassword from './pages/Auth/ForgotPassword';
+import OTPVerification from './pages/Auth/OTPVerification';
+import ResetPassword from './pages/Auth/ResetPassword';
 import './App.css';
 
 function AuthAwareRedirect() {
@@ -51,6 +54,40 @@ function App() {
                 </PublicRoute>
               }
             />
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicRoute>
+                  <ForgotPassword />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/otp-verification"
+              element={
+                <PublicRoute>
+                  <OTPVerification />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicRoute>
+                  <ResetPassword />
+                </PublicRoute>
+              }
+            />
+
+            {/* Onboarding — protected, patient-only wizard */}
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <Onboarding />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Protected Routes - require authentication */}
             <Route
@@ -62,20 +99,13 @@ function App() {
               }
             />
 
-            {/* Role-based Protected Routes */}
+            {/* Legacy redirect — therapist-dashboard now served at /dashboard */}
             <Route
               path="/therapist-dashboard"
-              element={
-                <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
-                  <TherapistDashboard />
-                </ProtectedRoute>
-              }
+              element={<Navigate to="/dashboard" replace />}
             />
 
-            <Route
-              path="/patients"
-              element={<Navigate to="/therapist-dashboard" replace />}
-            />
+            <Route path="/patients" element={<Navigate to="/dashboard" replace />} />
 
             <Route
               path="/sessions"

@@ -31,8 +31,8 @@ const ROLE_LABELS = {
 
 // Nav items per role — only what each role actually needs
 const THERAPIST_NAV = [
-  { icon: LayoutDashboard, label: 'Dashboard',    href: '/therapist-dashboard' },
-  { icon: Users,           label: 'My Patients',  href: '/therapist-dashboard' },
+  { icon: LayoutDashboard, label: 'Dashboard',    href: '/dashboard' },
+  { icon: Users,           label: 'My Patients',  href: '/dashboard' },
   { icon: Calendar,        label: 'Appointments', href: '/appointments' },
   { icon: User,            label: 'Profile',      href: '/profile' },
   { icon: Settings,        label: 'Settings',     href: '/settings' },

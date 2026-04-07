@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TherapistSidebar } from '../../components/Dashboard/TherapistSidebar';
+import { SidebarNav } from '../../components/Dashboard/SidebarNav';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { VideoCallModal } from '../../components/Teletherapy/VideoCallModal';
 import { PreSessionBriefingModal } from '../../components/Therapist/PreSessionBriefingModal';
@@ -43,11 +43,6 @@ export default function TherapistDashboard() {
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
-    const allowedRoles = ['psychiatrist', 'therapist', 'admin'];
-    if (!allowedRoles.includes(user.role || user.user_type)) {
-      navigate('/dashboard');
-      return;
-    }
 
     const load = async () => {
       setLoading(true);
@@ -90,10 +85,10 @@ export default function TherapistDashboard() {
   ];
 
   return (
-    <div className="flex">
-      <TherapistSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
-        <div className="bg-background min-h-screen">
+    <div className="flex min-h-screen bg-background">
+      <SidebarNav />
+      <main className="flex-1 overflow-auto">
+        <div>
           <VideoCallModal
             isOpen={showVideoCall}
             onClose={() => { setShowVideoCall(false); setActiveAppointmentId(null); }}

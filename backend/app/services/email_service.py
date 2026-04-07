@@ -54,6 +54,28 @@ class EmailService:
             return False
 
     @staticmethod
+    async def send_otp_email(to_email: str, otp: str) -> bool:
+        """Send a password-reset OTP email."""
+        subject = "TheraAI — Your password reset code"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">TheraAI</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0;">Password Reset</p>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px;">
+                <p>You requested a password reset for your TheraAI account.</p>
+                <p>Use the following 6-digit code to verify your identity. It expires in <strong>15 minutes</strong>.</p>
+                <div style="background: white; border: 2px solid #667eea; border-radius: 8px; padding: 20px; text-align: center; margin: 24px 0;">
+                    <span style="font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #667eea;">{otp}</span>
+                </div>
+                <p style="color: #888; font-size: 13px;">If you didn't request this, you can safely ignore this email. Your account remains secure.</p>
+            </div>
+        </div>
+        """
+        return await EmailService.send_email(to_email, subject, html)
+
+    @staticmethod
     async def send_appointment_reminder(
         to_email: str,
         patient_name: str,

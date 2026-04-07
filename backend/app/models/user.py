@@ -53,6 +53,18 @@ class UserBase(BaseModel):
     avatar_url: Optional[str] = Field(default=None, description="Profile picture URL")
     preferred_language: Optional[str] = Field(default="en", max_length=10, description="ISO 639-1 language code")
 
+    # User preferences (persisted to DB)
+    theme: str = Field(default="system", description="UI theme: light | dark | system")
+    notification_preferences: dict = Field(
+        default_factory=lambda: {"email": True, "push": True, "appointments": True, "insights": True},
+        description="Notification preferences"
+    )
+    privacy_settings: dict = Field(
+        default_factory=lambda: {"share_mood_with_therapist": True},
+        description="Privacy settings"
+    )
+    onboarding_completed: bool = Field(default=False, description="Whether the user has completed onboarding")
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v):
@@ -163,6 +175,10 @@ class UserUpdate(BaseModel):
     emergency_contact: Optional[str] = Field(None, max_length=200)
     avatar_url: Optional[str] = None
     preferred_language: Optional[str] = Field(None, max_length=10)
+    theme: Optional[str] = None
+    notification_preferences: Optional[dict] = None
+    privacy_settings: Optional[dict] = None
+    onboarding_completed: Optional[bool] = None
 
     @field_validator("full_name")
     @classmethod
@@ -173,7 +189,7 @@ class UserUpdate(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    """User profile update schema (frontend — all demographic fields)"""
+    """User profile update schema (frontend — all demographic fields + preferences)"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     age: Optional[int] = Field(None, ge=13, le=120)
     gender: Optional[GenderEnum] = None
@@ -183,6 +199,10 @@ class UserProfileUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     emergency_contact: Optional[str] = Field(None, max_length=200)
     preferred_language: Optional[str] = Field(None, max_length=10)
+    theme: Optional[str] = None
+    notification_preferences: Optional[dict] = None
+    privacy_settings: Optional[dict] = None
+    onboarding_completed: Optional[bool] = None
 
 
 class Token(BaseModel):

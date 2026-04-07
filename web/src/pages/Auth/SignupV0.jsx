@@ -55,11 +55,15 @@ export default function SignupV0() {
       if (result.success) {
         showSuccess('Account created successfully!');
         if (result.requiresLogin) {
-          navigate('/login', { 
+          navigate('/login', {
             state: { message: 'Account created successfully! Please log in.' }
           });
+        } else if (selectedRole === 'patient') {
+          // New patients go through onboarding
+          navigate('/onboarding');
         } else {
-          navigate(selectedRole === 'psychiatrist' ? '/therapist-dashboard' : '/dashboard');
+          // Therapists / admins go straight to dashboard
+          navigate('/dashboard');
         }
       } else {
         showError(result.error || 'Signup failed. Please try again.');
