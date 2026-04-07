@@ -8,6 +8,7 @@ import { Bell, Moon, Lock, Trash2, Shield, Key } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import apiClient from '../../apiClient';
 
 function Toggle({ checked, onChange }) {
   return (
@@ -26,14 +27,18 @@ export default function Settings() {
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
 
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system');
-  const [notifications, setNotifications] = useState({
-    email: true, push: true, appointments: true, insights: true,
-  });
-  const [privacy, setPrivacy] = useState({ shareWithTherapist: true });
+  const [theme, setTheme] = useState(() => user?.theme || localStorage.getItem('theme') || 'system');
+  const [notifications, setNotifications] = useState(
+    user?.notification_preferences || { email: true, push: true, appointments: true, insights: true }
+  );
+  const [privacy, setPrivacy] = useState(user?.privacy_settings?.share_mood_with_therapist ?? true);
   const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const savePreference = (patch) => {
+    apiClient.put('/auth/me', patch).catch(() => {});
+  };
 
   useEffect(() => {
     if (!user) navigate('/login');
@@ -50,10 +55,15 @@ export default function Settings() {
       prefersDark ? root.classList.add('dark') : root.classList.remove('dark');
     }
     localStorage.setItem('theme', theme);
+    savePreference({ theme });
   }, [theme]);
 
   const toggleNotification = (key) => {
-    setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
+    setNotifications(prev => {
+      const updated = { ...prev, [key]: !prev[key] };
+      savePreference({ notification_preferences: updated });
+      return updated;
+    });
   };
 
   const handleChangePassword = async (e) => {
@@ -88,10 +98,10 @@ export default function Settings() {
   if (!user) return null;
 
   return (
-    <div className="flex">
+    <div className="flex min-h-screen bg-background">
       <SidebarNav />
-      <main className="flex-1 pt-16 md:pt-0">
-        <div className="bg-background min-h-screen">
+      <main className="flex-1 overflow-auto">
+        <div>
           <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-8">
             <div>
               <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>Settings</h1>
@@ -150,7 +160,11 @@ export default function Settings() {
                     <p className="font-medium">Share Mood with Therapist</p>
                     <p className="text-sm text-muted-foreground">Allow your assigned therapist to view your mood data</p>
                   </div>
-                  <Toggle checked={privacy.shareWithTherapist} onChange={() => setPrivacy(p => ({ ...p, shareWithTherapist: !p.shareWithTherapist }))} />
+                  <Toggle checked={privacy} onChange={() => {
+                    const newVal = !privacy;
+                    setPrivacy(newVal);
+                    savePreference({ privacy_settings: { share_mood_with_therapist: newVal } });
+                  }} />
                 </div>
               </CardContent>
             </Card>
@@ -213,7 +227,11 @@ export default function Settings() {
                     <p className="text-sm font-medium text-destructive">Are you sure? This action cannot be undone.</p>
                     <div className="flex gap-3">
                       <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-transparent">Cancel</Button>
-                      <Button variant="destructive" onClick={() => { logout(); navigate('/'); }} className="flex-1">
+                      <Button variant="destructive" onClick={async () => {
+                        try { await apiClient.delete('/auth/account'); } catch {}
+                        logout();
+                        navigate('/');
+                      }} className="flex-1">
                         Yes, Delete
                       </Button>
                     </div>

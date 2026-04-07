@@ -17,6 +17,10 @@ import Assessments from './pages/Assessments/Assessments';
 import Appointments from './pages/Appointments/Appointments';
 import Achievements from './pages/Achievements/Achievements';
 import TherapistDashboard from './pages/Therapist/TherapistDashboard';
+import ForgotPassword from './pages/Auth/ForgotPassword';
+import OTPVerification from './pages/Auth/OTPVerification';
+import ResetPassword from './pages/Auth/ResetPassword';
+import Onboarding from './pages/Onboarding/Onboarding';
 import './App.css';
 
 function App() {
@@ -46,6 +50,9 @@ function App() {
                 </PublicRoute>
               }
             />
+            <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+            <Route path="/otp-verification" element={<PublicRoute><OTPVerification /></PublicRoute>} />
+            <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
 
             {/* Protected Routes - require authentication */}
             <Route
@@ -56,6 +63,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
             {/* Role-based Protected Routes */}
             <Route

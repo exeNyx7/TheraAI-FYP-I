@@ -282,6 +282,197 @@ async def logout(
     }
 
 
+@router.delete(
+    "/account",
+    summary="Delete account",
+    description="Permanently deactivate and delete the current user's account and all associated data"
+)
+async def delete_account(
+    current_user: UserOut = Depends(get_current_user)
+):
+    from ..database import get_database
+    from bson import ObjectId
+    uid = ObjectId(str(current_user.id))
+    db = await get_database()
+    collections_to_clean = [
+        "chat_history", "journal_entries", "mood_entries",
+        "appointments", "assessment_results", "notifications",
+    ]
+    for col in collections_to_clean:
+        try:
+            await db[col].delete_many({"user_id": str(current_user.id)})
+        except Exception:
+            pass
+    from ..database import get_users_collection
+    users_collection = await get_users_collection()
+    await users_collection.delete_one({"_id": uid})
+    return {"message": "Account deleted successfully"}
+
+
+# ─── Password Reset Flow ──────────────────────────────────────────────────────
+
+@router.post("/forgot-password", summary="Request a password reset OTP")
+async def forgot_password(payload: dict):
+    import secrets
+    import hashlib
+    from datetime import datetime, timezone, timedelta
+    from ..database import get_database
+    from ..services.email_service import EmailService
+
+    email = payload.get("email", "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    db = await get_database()
+    user_doc = await db.users.find_one({"email": email})
+
+    MSG = {"message": "If that email is registered, an OTP has been sent."}
+
+    if not user_doc:
+        return MSG
+
+    otp = str(secrets.randbelow(900000) + 100000)
+    otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    await db.password_reset_otps.update_one(
+        {"email": email},
+        {"$set": {"email": email, "otp_hash": otp_hash, "expires_at": expires_at, "used": False}},
+        upsert=True,
+    )
+
+    import asyncio
+    asyncio.create_task(EmailService.send_otp_email(to_email=email, otp=otp))
+
+    return MSG
+
+
+@router.post("/verify-otp", summary="Verify the password reset OTP")
+async def verify_otp(payload: dict):
+    import hashlib
+    from datetime import datetime, timezone, timedelta
+    from ..database import get_database
+
+    email = payload.get("email", "").strip().lower()
+    otp   = payload.get("otp", "").strip()
+
+    if not email or not otp:
+        raise HTTPException(status_code=400, detail="Email and OTP are required")
+
+    db = await get_database()
+    record = await db.password_reset_otps.find_one({"email": email})
+
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+
+    expires_at = record.get("expires_at")
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+
+    if record.get("used"):
+        raise HTTPException(status_code=400, detail="OTP has already been used.")
+
+    otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+    if otp_hash != record.get("otp_hash"):
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please check and try again.")
+
+    await db.password_reset_otps.update_one({"email": email}, {"$set": {"used": True}})
+
+    reset_token = create_access_token(
+        data={"sub": email, "purpose": "password_reset"},
+        expires_delta=timedelta(minutes=10),
+    )
+
+    return {"reset_token": reset_token, "email": email}
+
+
+@router.post("/reset-password", summary="Reset password using a valid reset token")
+async def reset_password(payload: dict):
+    from jose import JWTError, jwt
+    from ..database import get_database
+
+    reset_token      = payload.get("reset_token", "")
+    new_password     = payload.get("new_password", "")
+    confirm_password = payload.get("confirm_password", "")
+
+    if not reset_token or not new_password:
+        raise HTTPException(status_code=400, detail="reset_token and new_password are required")
+
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not any(c.isupper() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not any(c.islower() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+    if not any(c.isdigit() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one digit")
+
+    try:
+        payload_data = jwt.decode(reset_token, settings.secret_key, algorithms=[settings.algorithm])
+        email = payload_data.get("sub")
+        purpose = payload_data.get("purpose")
+        if not email or purpose != "password_reset":
+            raise HTTPException(status_code=400, detail="Invalid reset token")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Reset token is invalid or expired")
+
+    db = await get_database()
+    hashed = hash_password(new_password)
+    result = await db.users.update_one({"email": email}, {"$set": {"hashed_password": hashed}})
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "Password reset successfully. You can now log in with your new password."}
+
+
+# ─── Google OAuth ─────────────────────────────────────────────────────────────
+
+@router.get("/google", summary="Redirect to Google OAuth consent screen")
+async def google_oauth_redirect():
+    from urllib.parse import urlencode
+    from fastapi.responses import RedirectResponse
+
+    if not settings.google_client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth is not configured on this server."
+        )
+
+    params = urlencode({
+        "client_id": settings.google_client_id,
+        "redirect_uri": f"{settings.frontend_url}/api/v1/auth/google/callback",
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+    })
+    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+
+
+@router.get("/google/callback", summary="Google OAuth callback")
+async def google_oauth_callback(code: str = None, error: str = None):
+    if error:
+        raise HTTPException(status_code=400, detail=f"Google OAuth error: {error}")
+
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Google OAuth callback is not fully configured."
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Google OAuth callback not yet implemented."
+    )
+
+
 # Health check for auth service
 @router.get(
     "/health",

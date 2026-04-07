@@ -19,10 +19,10 @@ import {
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/therapist-dashboard' },
-  { icon: Users, label: 'My Patients', href: '/patients' },
-  { icon: Calendar, label: 'Schedule', href: '/therapist-dashboard/schedule' },
-  { icon: MessageSquare, label: 'Messaging', href: '/therapist-dashboard/messaging' },
-  { icon: ClipboardList, label: 'Treatment Plans', href: '/therapist-dashboard/treatment-plans' },
+  { icon: Users, label: 'My Patients', href: '/appointments' },
+  { icon: Calendar, label: 'Schedule', href: '/appointments' },
+  { icon: MessageSquare, label: 'Messaging', href: '/chat' },
+  { icon: ClipboardList, label: 'Treatment Plans', href: '/assessments' },
   { icon: Activity, label: 'Progress', href: '/progress' },
   { icon: Settings, label: 'Settings', href: '/settings' },
 ];

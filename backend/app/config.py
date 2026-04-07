@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     )
     upload_path: str = Field(default="uploads/", alias="UPLOAD_PATH")
     
+    # Google OAuth Configuration
+    google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
+    frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
+    mail_enabled: bool = Field(default=False, alias="MAIL_ENABLED")
+
     # Email Configuration
     smtp_host: str = Field(default="smtp.gmail.com", alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")

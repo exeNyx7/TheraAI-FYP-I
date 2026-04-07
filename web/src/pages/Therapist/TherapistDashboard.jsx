@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { TherapistSidebar } from '../../components/Dashboard/TherapistSidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { VideoCallModal } from '../../components/Teletherapy/VideoCallModal';
@@ -7,7 +7,6 @@ import {
   TrendingUp, MessageSquare, ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 
@@ -27,17 +26,8 @@ const mockUpcoming = [
 
 export default function TherapistDashboard() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
-
-  useEffect(() => {
-    if (!user) { navigate('/login'); return; }
-    const allowedRoles = ['psychiatrist', 'therapist', 'admin'];
-    if (!allowedRoles.includes(user.role || user.user_type)) {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
 
   if (!user) return null;
 
@@ -45,10 +35,10 @@ export default function TherapistDashboard() {
   const displayName = user.full_name || user.name || 'Doctor';
 
   return (
-    <div className="flex">
+    <div className="flex min-h-screen bg-background">
       <TherapistSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
-        <div className="bg-background min-h-screen">
+      <main className="flex-1 overflow-auto">
+        <div>
           <VideoCallModal
             isOpen={showVideoCall}
             onClose={() => setShowVideoCall(false)}

@@ -34,7 +34,11 @@ class UserBase(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     role: UserRole = Field(default=UserRole.PATIENT, description="User role in the system")
     is_active: bool = Field(default=True, description="User account status")
-    
+    theme: str = Field(default="system")
+    notification_preferences: dict = Field(default_factory=lambda: {"email": True, "push": True, "appointments": True, "insights": True})
+    privacy_settings: dict = Field(default_factory=lambda: {"share_mood_with_therapist": True})
+    onboarding_completed: bool = Field(default=False)
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v):
@@ -132,7 +136,11 @@ class UserUpdate(BaseModel):
     """User update schema"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
-    
+    theme: Optional[str] = None
+    notification_preferences: Optional[dict] = None
+    privacy_settings: Optional[dict] = None
+    onboarding_completed: Optional[bool] = None
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v):
@@ -144,6 +152,10 @@ class UserUpdate(BaseModel):
 class UserProfileUpdate(BaseModel):
     """User profile update schema intended for frontend use"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    theme: Optional[str] = None
+    notification_preferences: Optional[dict] = None
+    privacy_settings: Optional[dict] = None
+    onboarding_completed: Optional[bool] = None
 
 
 class Token(BaseModel):

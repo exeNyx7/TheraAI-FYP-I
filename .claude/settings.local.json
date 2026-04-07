@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"Implement Phase 1: RBAC, Settings, and Assessments APIs:*)",
+      "Bash(python -m py_compile backend/app/dependencies/rbac.py backend/app/models/settings.py backend/app/models/assessments.py backend/app/services/settings_service.py backend/app/services/assessments_service.py backend/app/api/settings.py backend/app/api/assessments.py)",
+      "Bash(grep -n \"delete_one.*_id\\\\|ObjectId\" /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/.claude/worktrees/nice-bartik/backend/app/services/*.py)",
+      "Bash(venv/Scripts/python -c \":*)",
+      "Bash(xargs grep:*)",
+      "Bash(dir \"C:\\\\Users\\\\dawoo\\\\Projects\\\\GitHub\\\\TheraAI-FYP-I\\\\backend\\\\scripts\")"
+    ]
+  }
+}
