@@ -18,7 +18,7 @@ import asyncio
 import sys
 import os
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
@@ -40,6 +40,9 @@ WIPE_COLLECTIONS = [
     "assessments",
     "assessment_results",
     "appointments",
+    "session_notes",
+    "treatment_plans",
+    "sharing_preferences",
     "journals",
     "moods",
     "crisis_events",
@@ -630,6 +633,7 @@ async def seed_therapists(db):
     section("SEEDING THERAPIST ACCOUNTS")
     now = datetime.now(timezone.utc)
     hashed_pw = pwd_context.hash(THERAPIST_PASSWORD)
+    therapist_ids = []
 
     await db.users.create_index("email", unique=True)
     await db.therapist_profiles.create_index("user_id", unique=True)
@@ -657,6 +661,7 @@ async def seed_therapists(db):
         )
         user_doc = await db.users.find_one({"email": u["email"]}, {"_id": 1})
         uid = str(user_doc["_id"])
+        therapist_ids.append(uid)
 
         profile_res = await db.therapist_profiles.update_one(
             {"user_id": uid},
@@ -679,6 +684,7 @@ async def seed_therapists(db):
         print(f"  ✅ {user_action} user, {profile_action} profile: {u['full_name']}  <{u['email']}>  (id={uid})")
 
     print(f"\n  Default password for new therapist accounts: {THERAPIST_PASSWORD}")
+    return therapist_ids
 
 
 async def seed_patient(db):
@@ -694,6 +700,10 @@ async def seed_patient(db):
                 "full_name": SAMPLE_PATIENT["full_name"],
                 "role": SAMPLE_PATIENT["role"],
                 "is_active": True,
+                "is_verified": True,
+                "onboarding_completed": True,
+                "age": 28,
+                "gender": "female",
                 "updated_at": now,
             },
             "$setOnInsert": {
@@ -708,6 +718,272 @@ async def seed_patient(db):
     action = "Created" if res.upserted_id else "Updated"
     print(f"  ✅ {action} {SAMPLE_PATIENT['full_name']}  <{SAMPLE_PATIENT['email']}>  (id={user_doc['_id']})")
     print(f"     Password (new account): {SAMPLE_PATIENT['password']}")
+    return str(user_doc["_id"])
+
+
+async def seed_patient_activity(db, patient_id: str, therapist_ids: list[str]):
+    section("SEEDING PATIENT APPOINTMENTS + CARE DATA")
+
+    if not patient_id or not therapist_ids:
+        print("  ⚠️  Skipped activity seed (missing patient or therapist IDs)")
+        return
+
+    now = datetime.now(timezone.utc)
+    primary_therapist = therapist_ids[0]
+    secondary_therapist = therapist_ids[1] if len(therapist_ids) > 1 else therapist_ids[0]
+
+    # Keep seed-only runs deterministic by replacing previous seed_all fixtures.
+    for collection in (
+        "appointments",
+        "session_notes",
+        "treatment_plans",
+        "sharing_preferences",
+        "moods",
+        "journals",
+        "assessment_results",
+        "crisis_events",
+    ):
+        await db[collection].delete_many({"seed_source": "seed_all"})
+
+    appointment_docs = [
+        {
+            "patient_id": patient_id,
+            "therapist_id": primary_therapist,
+            "scheduled_at": now - timedelta(days=14),
+            "duration_minutes": 50,
+            "type": "video",
+            "status": "completed",
+            "notes": "Initial assessment session",
+            "created_at": now - timedelta(days=16),
+            "updated_at": now - timedelta(days=14),
+            "seed_source": "seed_all",
+        },
+        {
+            "patient_id": patient_id,
+            "therapist_id": primary_therapist,
+            "scheduled_at": now - timedelta(days=7),
+            "duration_minutes": 50,
+            "type": "video",
+            "status": "completed",
+            "notes": "Follow-up session",
+            "created_at": now - timedelta(days=10),
+            "updated_at": now - timedelta(days=7),
+            "seed_source": "seed_all",
+        },
+        {
+            "patient_id": patient_id,
+            "therapist_id": primary_therapist,
+            "scheduled_at": now + timedelta(days=2, hours=2),
+            "duration_minutes": 50,
+            "type": "video",
+            "status": "scheduled",
+            "notes": "Weekly check-in",
+            "created_at": now - timedelta(days=1),
+            "updated_at": now - timedelta(days=1),
+            "seed_source": "seed_all",
+        },
+        {
+            "patient_id": patient_id,
+            "therapist_id": secondary_therapist,
+            "scheduled_at": now + timedelta(days=5, hours=1),
+            "duration_minutes": 50,
+            "type": "video",
+            "status": "scheduled",
+            "notes": "Specialist consultation",
+            "created_at": now - timedelta(days=1),
+            "updated_at": now - timedelta(days=1),
+            "seed_source": "seed_all",
+        },
+        {
+            "patient_id": patient_id,
+            "therapist_id": primary_therapist,
+            "scheduled_at": now + timedelta(days=1),
+            "duration_minutes": 50,
+            "type": "video",
+            "status": "cancelled",
+            "notes": "Rescheduled by patient",
+            "created_at": now - timedelta(days=3),
+            "updated_at": now - timedelta(hours=12),
+            "seed_source": "seed_all",
+        },
+    ]
+    appointment_result = await db.appointments.insert_many(appointment_docs)
+    appointment_ids = [str(_id) for _id in appointment_result.inserted_ids]
+    completed_appointment_ids = appointment_ids[:2]
+    shared_appointment_id = appointment_ids[2]
+
+    mood_docs = [
+        {
+            "user_id": patient_id,
+            "mood": "anxious",
+            "notes": "Felt tense before work presentations.",
+            "created_at": now - timedelta(days=8),
+            "timestamp": now - timedelta(days=8),
+            "seed_source": "seed_all",
+        },
+        {
+            "user_id": patient_id,
+            "mood": "stressed",
+            "notes": "Difficulty concentrating this week.",
+            "created_at": now - timedelta(days=5),
+            "timestamp": now - timedelta(days=5),
+            "seed_source": "seed_all",
+        },
+        {
+            "user_id": patient_id,
+            "mood": "calm",
+            "notes": "Breathing exercises helped.",
+            "created_at": now - timedelta(days=1),
+            "timestamp": now - timedelta(days=1),
+            "seed_source": "seed_all",
+        },
+    ]
+    await db.moods.insert_many(mood_docs)
+
+    journal_docs = [
+        {
+            "user_id": patient_id,
+            "title": "Work pressure",
+            "content": "This week was intense, but I managed to pause and breathe before major meetings.",
+            "mood": "stressed",
+            "sentiment_label": "negative",
+            "sentiment_score": 0.82,
+            "emotion_themes": ["anxiety", "nervousness", "hope"],
+            "top_emotions": [
+                {"label": "anxiety", "score": 0.81},
+                {"label": "nervousness", "score": 0.73},
+                {"label": "optimism", "score": 0.52},
+            ],
+            "created_at": now - timedelta(days=6),
+            "updated_at": now - timedelta(days=6),
+            "seed_source": "seed_all",
+        },
+        {
+            "user_id": patient_id,
+            "title": "Family support",
+            "content": "Spent time with family and felt more grounded. Sleep quality is improving.",
+            "mood": "calm",
+            "sentiment_label": "positive",
+            "sentiment_score": 0.76,
+            "emotion_themes": ["relief", "gratitude"],
+            "top_emotions": [
+                {"label": "relief", "score": 0.71},
+                {"label": "gratitude", "score": 0.67},
+            ],
+            "created_at": now - timedelta(days=2),
+            "updated_at": now - timedelta(days=2),
+            "seed_source": "seed_all",
+        },
+    ]
+    await db.journals.insert_many(journal_docs)
+
+    assessment_doc = {
+        "user_id": patient_id,
+        "assessment_id": "seeded-phq9",
+        "assessment_slug": "phq-9",
+        "assessment_name": "PHQ-9 Depression Screening",
+        "answers": [],
+        "total_score": 9,
+        "max_possible_score": 27,
+        "percentage": 33.3,
+        "severity_label": "Mild Depression",
+        "severity_level": "medium",
+        "ai_recommendation": "Continue structured therapy sessions and monitor mood weekly.",
+        "completed_at": now - timedelta(days=4),
+        "created_at": now - timedelta(days=4),
+        "seed_source": "seed_all",
+    }
+    await db.assessment_results.insert_one(assessment_doc)
+
+    session_note_docs = [
+        {
+            "therapist_id": primary_therapist,
+            "appointment_id": completed_appointment_ids[0],
+            "patient_id": patient_id,
+            "subjective": "Patient reports persistent worry and interrupted sleep.",
+            "objective": "Appeared fatigued, engaged throughout the session.",
+            "assessment": "Generalized anxiety symptoms present; mild depressive indicators.",
+            "plan": "Introduce CBT thought record and daily grounding routine.",
+            "prescriptions": ["Continue escitalopram 10mg nightly"],
+            "exercises": ["4-7-8 breathing exercise twice daily"],
+            "conclusion": "Good insight and motivation for treatment.",
+            "created_at": now - timedelta(days=14),
+            "updated_at": now - timedelta(days=14),
+            "seed_source": "seed_all",
+        },
+        {
+            "therapist_id": primary_therapist,
+            "appointment_id": completed_appointment_ids[1],
+            "patient_id": patient_id,
+            "subjective": "Patient noted improved mood and better sleep consistency.",
+            "objective": "Calmer affect, fewer signs of psychomotor agitation.",
+            "assessment": "Symptoms improving, still occasional stress spikes.",
+            "plan": "Continue CBT tasks, add behavioral activation tracker.",
+            "prescriptions": ["Maintain current medication plan"],
+            "exercises": ["Evening journaling", "Progressive muscle relaxation"],
+            "conclusion": "Positive trajectory with sustained adherence.",
+            "created_at": now - timedelta(days=7),
+            "updated_at": now - timedelta(days=7),
+            "seed_source": "seed_all",
+        },
+    ]
+    await db.session_notes.insert_many(session_note_docs)
+
+    treatment_plan_doc = {
+        "therapist_id": primary_therapist,
+        "patient_id": patient_id,
+        "title": "Anxiety Stabilization Plan",
+        "goals": [
+            "Reduce weekly anxiety episodes from 5 to 2",
+            "Improve sleep duration to at least 7 hours/night",
+        ],
+        "interventions": [
+            "Weekly CBT sessions",
+            "Daily breathing and grounding routines",
+            "Structured sleep hygiene protocol",
+        ],
+        "status": "active",
+        "created_at": now - timedelta(days=10),
+        "updated_at": now - timedelta(days=1),
+        "seed_source": "seed_all",
+    }
+    await db.treatment_plans.insert_one(treatment_plan_doc)
+
+    sharing_doc = {
+        "appointment_id": shared_appointment_id,
+        "patient_id": patient_id,
+        "share_mood": True,
+        "share_emotions": True,
+        "share_demographics": True,
+        "share_journal": True,
+        "share_assessments": True,
+        "created_at": now - timedelta(hours=6),
+        "updated_at": now - timedelta(hours=6),
+        "seed_source": "seed_all",
+    }
+    await db.sharing_preferences.insert_one(sharing_doc)
+
+    crisis_doc = {
+        "patient_id": patient_id,
+        "patient_name": SAMPLE_PATIENT["full_name"],
+        "severity": "medium",
+        "trigger": "stress_pattern",
+        "source": "journal",
+        "message_excerpt": "Multiple stress-related journal entries in the past week.",
+        "acknowledged": False,
+        "created_at": now - timedelta(days=3),
+        "seed_source": "seed_all",
+    }
+    await db.crisis_events.insert_one(crisis_doc)
+
+    print(f"  ✅ Seeded appointments: {len(appointment_docs)}")
+    print(f"  ✅ Seeded moods: {len(mood_docs)}")
+    print(f"  ✅ Seeded journals: {len(journal_docs)}")
+    print(f"  ✅ Seeded assessment results: 1")
+    print(f"  ✅ Seeded session notes: {len(session_note_docs)}")
+    print(f"  ✅ Seeded treatment plans: 1")
+    print(f"  ✅ Seeded sharing preferences: 1")
+    print(f"  ✅ Seeded crisis events: 1")
 
 
 async def main(args):
@@ -724,8 +1000,9 @@ async def main(args):
 
     if not args.wipe_only:
         await seed_assessments(db)
-        await seed_therapists(db)
-        await seed_patient(db)
+        therapist_ids = await seed_therapists(db)
+        patient_id = await seed_patient(db)
+        await seed_patient_activity(db, patient_id, therapist_ids)
 
     print(f"\n{'═' * 55}")
     print("  Done!")

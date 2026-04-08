@@ -65,9 +65,42 @@ export default function PatientDetail() {
         apiClient.get(`/session-notes`, { params: { patient_id: id } }).catch(() => ({ data: [] })),
         apiClient.get(`/treatment-plans`, { params: { patient_id: id } }).catch(() => ({ data: [] })),
       ]);
-      setProfile(pRes.data || null);
-      setHistory(Array.isArray(hRes.data) ? hRes.data : []);
-      setNotes(Array.isArray(nRes.data) ? nRes.data : []);
+
+      const safeNotes = Array.isArray(nRes.data) ? nRes.data : [];
+      const notesByAppointment = new Map();
+      safeNotes.forEach((note) => {
+        const apptId = note?.appointment_id;
+        if (!apptId || notesByAppointment.has(apptId)) return;
+        notesByAppointment.set(apptId, note);
+      });
+
+      const historyData = hRes.data || {};
+      const historyAppointments = Array.isArray(historyData)
+        ? historyData
+        : (Array.isArray(historyData?.appointments) ? historyData.appointments : []);
+
+      const normalizedHistory = historyAppointments.map((appt) => {
+        const appointmentId = appt?.id || appt?.appointment_id;
+        return {
+          appointment_id: appointmentId,
+          date: appt?.scheduled_at || appt?.date || null,
+          status: appt?.status || 'completed',
+          note: appointmentId ? notesByAppointment.get(appointmentId) || null : null,
+        };
+      });
+
+      const profileSource = pRes.data || historyData?.patient || null;
+      const normalizedProfile = profileSource
+        ? {
+            ...profileSource,
+            name: profileSource.name || profileSource.full_name || 'Patient',
+            joined_at: profileSource.joined_at || profileSource.created_at || null,
+          }
+        : null;
+
+      setProfile(normalizedProfile);
+      setHistory(normalizedHistory);
+      setNotes(safeNotes);
       setPlans(Array.isArray(tRes.data) ? tRes.data : []);
     } finally {
       setLoading(false);
@@ -242,12 +275,13 @@ export default function PatientDetail() {
                     {history.length === 0 ? (
                       <Empty>No past sessions yet.</Empty>
                     ) : (
-                      history.map((h) => {
-                        const open = !!expanded[h.appointment_id];
+                      history.map((h, index) => {
+                        const rowId = h.appointment_id || `history-${index}`;
+                        const open = !!expanded[rowId];
                         return (
-                          <div key={h.appointment_id} className="border border-border rounded-lg">
+                          <div key={rowId} className="border border-border rounded-lg">
                             <button
-                              onClick={() => toggleExpand(h.appointment_id)}
+                              onClick={() => toggleExpand(rowId)}
                               className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 rounded-lg"
                             >
                               <div className="flex items-center gap-3">
@@ -273,7 +307,7 @@ export default function PatientDetail() {
                                 ) : (
                                   <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground">No session note recorded.</span>
-                                    <Button size="sm" variant="outline" onClick={() => openNewNote(h.appointment_id)}>
+                                    <Button size="sm" variant="outline" onClick={() => openNewNote(h.appointment_id || '')}>
                                       <Plus className="h-4 w-4 mr-1" /> Add note
                                     </Button>
                                   </div>

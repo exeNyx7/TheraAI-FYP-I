@@ -31,7 +31,7 @@ class TestAuthSignup:
     async def test_signup_success(self, async_client, test_user_data, mock_db):
         """Happy path: user can sign up with valid email and password."""
         mock_db['users'].find_one = AsyncMock(return_value=None)
-        mock_db['users'].insert_one = AsyncMock()
+        mock_db['users'].insert_one = AsyncMock(return_value=MagicMock(inserted_id=ObjectId()))
 
         response = await async_client.post(
             "/api/v1/auth/signup",
@@ -40,10 +40,10 @@ class TestAuthSignup:
 
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
-        assert data["email"] == test_user_data["email"]
-        assert data["full_name"] == test_user_data["full_name"]
         assert "access_token" in data
         assert data["token_type"] == "bearer"
+        assert data["user"]["email"] == test_user_data["email"]
+        assert data["user"]["full_name"] == test_user_data["full_name"]
 
     async def test_signup_duplicate_email(self, async_client, test_user_data, mock_db, user_factory):
         """Error: email already registered (409 Conflict)."""
@@ -203,7 +203,7 @@ class TestAuthUpdateMe:
         """Happy path: user can update their profile."""
         current_user = user_factory()
         mock_db['users'].find_one = AsyncMock(return_value=current_user)
-        mock_db['users'].update_one = AsyncMock()
+        mock_db['users'].update_one = AsyncMock(return_value=MagicMock(modified_count=1, matched_count=1))
 
         response = await async_client.put(
             "/api/v1/auth/me",
@@ -278,8 +278,9 @@ class TestAuthChangePassword:
             "/api/v1/auth/change-password",
             headers=authenticated_headers,
             json={
-                "old_password": "SecurePassword123!",
+                "current_password": "SecurePassword123!",
                 "new_password": "NewPassword456!"
+                ,"confirm_password": "NewPassword456!"
             }
         )
 
@@ -294,8 +295,9 @@ class TestAuthChangePassword:
         response = await async_client.post(
             "/api/v1/auth/change-password",
             json={
-                "old_password": "SecurePassword123!",
+                "current_password": "SecurePassword123!",
                 "new_password": "NewPassword456!"
+                ,"confirm_password": "NewPassword456!"
             }
         )
 
@@ -323,7 +325,7 @@ class TestAuthFlow:
         """Complete authentication flow."""
         # Step 1: Signup
         mock_db['users'].find_one = AsyncMock(return_value=None)
-        mock_db['users'].insert_one = AsyncMock()
+        mock_db['users'].insert_one = AsyncMock(return_value=MagicMock(inserted_id=ObjectId()))
 
         signup_response = await async_client.post(
             "/api/v1/auth/signup",

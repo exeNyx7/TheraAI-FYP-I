@@ -36,6 +36,26 @@ async def get_patients(
 
 
 @router.get(
+    "/patients/{patient_id}",
+    summary="Get therapist patient profile",
+)
+async def get_patient_profile(
+    patient_id: str,
+    current_user: UserOut = Depends(get_current_staff),
+):
+    """Get profile summary for one patient linked to this therapist."""
+    result = await TherapistService.get_patient_profile(
+        therapist_id=str(current_user.id),
+        patient_id=patient_id,
+    )
+    if "error" in result:
+        if result["error"].startswith("Access denied"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=result["error"])
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result["error"])
+    return result
+
+
+@router.get(
     "/patients/{patient_id}/history",
     summary="Get patient history",
 )

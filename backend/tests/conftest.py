@@ -15,9 +15,9 @@ Provides:
 import pytest
 import pytest_asyncio
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from bson import ObjectId
-from fastapi.testclient import TestAsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.utils.auth import create_access_token, hash_password
@@ -30,7 +30,8 @@ from app.utils.auth import create_access_token, hash_password
 @pytest_asyncio.fixture
 async def async_client():
     """FastAPI test client for async endpoints."""
-    async with TestAsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
 
@@ -57,16 +58,63 @@ def mock_db(monkeypatch):
         'users': AsyncMock(),
         'journals': AsyncMock(),
         'moods': AsyncMock(),
+        'appointments': AsyncMock(),
         'conversations': AsyncMock(),
         'chat_messages': AsyncMock(),
         'chat_history': AsyncMock(),
     }
 
-    # Patch database manager to return mocked collections
-    monkeypatch.setattr(
-        "app.database.db",
-        MagicMock(**mock_collections)
-    )
+    default_user = {
+        "_id": ObjectId(),
+        "email": "fixture_user@example.com",
+        "full_name": "Fixture User",
+        "role": "patient",
+        "is_active": True,
+        "hashed_password": hash_password("SecurePassword123!"),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+        "login_attempts": 0,
+        "locked_until": None,
+    }
+
+    mock_collections["users"].find_one = AsyncMock(return_value=default_user)
+    mock_collections["users"].insert_one = AsyncMock(return_value=MagicMock(inserted_id=ObjectId()))
+    mock_collections["users"].update_one = AsyncMock(return_value=MagicMock(modified_count=1, matched_count=1))
+    mock_collections["users"].delete_one = AsyncMock(return_value=MagicMock(deleted_count=1))
+
+    mock_database = MagicMock()
+    for name, collection in mock_collections.items():
+        setattr(mock_database, name, collection)
+
+    async def _get_database():
+        return mock_database
+
+    async def _get_users_collection():
+        return mock_collections["users"]
+
+    async def _get_journals_collection():
+        return mock_collections["journals"]
+
+    async def _get_appointments_collection():
+        return mock_collections["appointments"]
+
+    async def _get_moods_collection():
+        return mock_collections["moods"]
+
+    # Patch core database access points.
+    monkeypatch.setattr("app.database.get_database", _get_database)
+    monkeypatch.setattr("app.database.get_users_collection", _get_users_collection)
+    monkeypatch.setattr("app.database.get_journals_collection", _get_journals_collection)
+    monkeypatch.setattr("app.database.get_appointments_collection", _get_appointments_collection)
+
+    # Patch imported aliases used by service modules.
+    monkeypatch.setattr("app.services.user_service.get_users_collection", _get_users_collection)
+    monkeypatch.setattr("app.services.journal_service.get_journals_collection", _get_journals_collection, raising=False)
+    monkeypatch.setattr("app.services.journal_service.get_moods_collection", _get_moods_collection, raising=False)
+
+    # Ensure db manager fallback path returns mocked db.
+    monkeypatch.setattr("app.database.db_manager.get_database", lambda: mock_database)
+
     return mock_collections
 
 
@@ -80,6 +128,7 @@ def test_user_data():
     return {
         "email": "test@example.com",
         "password": "SecurePassword123!",
+        "confirm_password": "SecurePassword123!",
         "full_name": "Test User",
     }
 
@@ -308,6 +357,12 @@ def sample_chat_message():
 @pytest.fixture(autouse=True)
 def reset_mocks(monkeypatch):
     """Auto-reset all mocks between tests to ensure isolation."""
+    try:
+        from app.dependencies.auth import _user_cache
+        _user_cache.clear()
+    except Exception:
+        pass
+
     # Fixtures like mock_db, mock_ai_service are created fresh per test
     # This ensures no state leakage between tests
     yield

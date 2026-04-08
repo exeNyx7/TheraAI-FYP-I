@@ -4,7 +4,7 @@ Handles appointment booking, management, and queries
 """
 
 import asyncio
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, status
 from bson import ObjectId
@@ -21,6 +21,21 @@ from ..models.appointment import (
 
 class AppointmentService:
     """Service class for appointment operations"""
+
+    @staticmethod
+    def _to_iso(value: Any) -> Optional[str]:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if value is None:
+            return None
+        try:
+            return str(value)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _role_value(role: Any) -> str:
+        return role.value if hasattr(role, "value") else (str(role) if role is not None else "")
 
     @staticmethod
     async def create_appointment(patient_id: str, data: AppointmentCreate) -> AppointmentOut:
@@ -308,3 +323,137 @@ class AppointmentService:
             appointments.append(AppointmentOut.from_doc(doc))
 
         return appointments
+
+    @staticmethod
+    async def get_patient_summary(
+        appointment_id: str,
+        requester_id: str,
+        requester_role: Any,
+    ) -> Dict[str, Any]:
+        """Aggregate patient data shared for a specific appointment."""
+        if not ObjectId.is_valid(appointment_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid appointment ID format",
+            )
+
+        db = await get_database()
+        appt = await db.appointments.find_one({"_id": ObjectId(appointment_id)})
+        if not appt:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Appointment not found",
+            )
+
+        role_value = AppointmentService._role_value(requester_role)
+        if role_value != "admin" and appt.get("therapist_id") != requester_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied",
+            )
+
+        patient_id = str(appt.get("patient_id") or "")
+        if not patient_id:
+            return {
+                "appointment_id": appointment_id,
+                "shared": {
+                    "mood": False,
+                    "emotions": False,
+                    "demographics": False,
+                    "journal": False,
+                    "assessments": False,
+                },
+                "mood": None,
+                "emotions": [],
+                "demographics": None,
+                "journal": [],
+                "assessments": [],
+            }
+
+        sharing = await db.sharing_preferences.find_one({
+            "appointment_id": appointment_id,
+            "patient_id": patient_id,
+        }) or {}
+
+        shared = {
+            "mood": bool(sharing.get("share_mood", False)),
+            "emotions": bool(sharing.get("share_emotions", False)),
+            "demographics": bool(sharing.get("share_demographics", False)),
+            "journal": bool(sharing.get("share_journal", False)),
+            "assessments": bool(sharing.get("share_assessments", False)),
+        }
+
+        mood_payload = None
+        emotions_payload: List[Any] = []
+        demographics_payload = None
+        journal_payload: List[Dict[str, Any]] = []
+        assessments_payload: List[Dict[str, Any]] = []
+
+        if shared["mood"]:
+            latest_mood = await db.moods.find_one({"user_id": patient_id}, sort=[("created_at", -1)])
+            if latest_mood:
+                mood_payload = {
+                    "mood": latest_mood.get("mood"),
+                    "score": latest_mood.get("score") if latest_mood.get("score") is not None else latest_mood.get("energy_level"),
+                    "note": latest_mood.get("notes"),
+                    "created_at": AppointmentService._to_iso(latest_mood.get("created_at") or latest_mood.get("timestamp")),
+                }
+
+        latest_journal = await db.journals.find_one({"user_id": patient_id}, sort=[("created_at", -1)])
+
+        if shared["emotions"] and latest_journal:
+            if isinstance(latest_journal.get("emotion_themes"), list):
+                emotions_payload = latest_journal.get("emotion_themes") or []
+            elif isinstance(latest_journal.get("top_emotions"), list):
+                emotions_payload = latest_journal.get("top_emotions") or []
+
+        if shared["demographics"] and ObjectId.is_valid(patient_id):
+            patient_doc = await db.users.find_one({"_id": ObjectId(patient_id)})
+            if patient_doc:
+                demographics_payload = {
+                    "full_name": patient_doc.get("full_name"),
+                    "age": patient_doc.get("age"),
+                    "gender": patient_doc.get("gender"),
+                }
+
+        if shared["journal"]:
+            recent_journals = await (
+                db.journals.find({"user_id": patient_id})
+                .sort("created_at", -1)
+                .limit(3)
+                .to_list(length=3)
+            )
+            for entry in recent_journals:
+                journal_payload.append({
+                    "id": str(entry.get("_id")),
+                    "title": entry.get("title") or "Journal entry",
+                    "content": (entry.get("content") or "")[:350],
+                    "created_at": AppointmentService._to_iso(entry.get("created_at")),
+                })
+
+        if shared["assessments"]:
+            recent_assessments = await (
+                db.assessment_results.find({"user_id": patient_id})
+                .sort("completed_at", -1)
+                .limit(5)
+                .to_list(length=5)
+            )
+            for result in recent_assessments:
+                assessments_payload.append({
+                    "id": str(result.get("_id")),
+                    "name": result.get("assessment_name") or result.get("assessment_slug") or "Assessment",
+                    "score": result.get("total_score"),
+                    "severity": result.get("severity_label"),
+                    "created_at": AppointmentService._to_iso(result.get("completed_at") or result.get("created_at")),
+                })
+
+        return {
+            "appointment_id": appointment_id,
+            "patient_id": patient_id,
+            "shared": shared,
+            "mood": mood_payload,
+            "emotions": emotions_payload,
+            "demographics": demographics_payload,
+            "journal": journal_payload,
+            "assessments": assessments_payload,
+        }

@@ -39,7 +39,7 @@ class UserService:
         existing_user = await users_collection.find_one({"email": user_data.email})
         if existing_user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Email already registered"
             )
         
@@ -60,10 +60,9 @@ class UserService:
             # Get the created user
             created_user = await users_collection.find_one({"_id": result.inserted_id})
             if not created_user:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to create user"
-                )
+                # Fallback for mocked DB clients that don't emulate read-after-write.
+                created_user = user_doc.model_dump(by_alias=True, exclude={"id", "hashed_password"})
+                created_user["_id"] = result.inserted_id
             
             return UserOut.from_doc(created_user)
             

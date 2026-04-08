@@ -16,6 +16,17 @@ class TherapistService:
     """Service for therapist dashboard data aggregation"""
 
     @staticmethod
+    def _iso(value: Any) -> Optional[str]:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if value is None:
+            return None
+        try:
+            return str(value)
+        except Exception:
+            return None
+
+    @staticmethod
     async def get_dashboard_stats(therapist_id: str) -> Dict[str, Any]:
         """Get aggregate dashboard stats for a therapist"""
         db = await get_database()
@@ -47,6 +58,36 @@ class TherapistService:
             "status": AppointmentStatus.SCHEDULED,
         })
 
+        upcoming_cursor = (
+            db.appointments.find({
+                "therapist_id": therapist_id,
+                "status": AppointmentStatus.SCHEDULED,
+                "scheduled_at": {"$gte": now},
+            })
+            .sort("scheduled_at", 1)
+            .limit(8)
+        )
+        upcoming_docs = await upcoming_cursor.to_list(length=8)
+
+        upcoming_appointments: List[Dict[str, Any]] = []
+        for doc in upcoming_docs:
+            patient_name = "Unknown"
+            patient_id = str(doc.get("patient_id") or "")
+            if ObjectId.is_valid(patient_id):
+                patient = await db.users.find_one({"_id": ObjectId(patient_id)})
+                if patient:
+                    patient_name = patient.get("full_name") or patient.get("email") or "Unknown"
+
+            upcoming_appointments.append({
+                "id": str(doc.get("_id")),
+                "appointment_id": str(doc.get("_id")),
+                "patient_id": patient_id,
+                "patient_name": patient_name,
+                "scheduled_at": TherapistService._iso(doc.get("scheduled_at")),
+                "status": doc.get("status") or AppointmentStatus.SCHEDULED,
+                "type": doc.get("type") or "video",
+            })
+
         # Unacknowledged crisis alerts for therapist's patients
         # Get all patient ids for this therapist
         patient_ids_cursor = db.appointments.aggregate([
@@ -64,9 +105,11 @@ class TherapistService:
 
         return {
             "total_patients": total_patients,
+            "active_patients": total_patients,
             "sessions_this_week": sessions_this_week,
             "appointments_today": appointments_today,
             "pending_alerts": pending_alerts,
+            "upcoming_appointments": upcoming_appointments,
         }
 
     @staticmethod
@@ -106,10 +149,17 @@ class TherapistService:
                     "acknowledged": False,
                 })
 
+                status = "critical" if crisis_count > 0 else "active"
+                mood_value = latest_mood.get("mood") if latest_mood else None
+
                 patients.append({
                     "id": patient_id,
+                    "name": patient.get("full_name", "Unknown"),
                     "full_name": patient.get("full_name", "Unknown"),
                     "email": patient.get("email", ""),
+                    "status": status,
+                    "current_mood": mood_value,
+                    "mood_trend": "declining" if crisis_count > 0 else "stable",
                     "latest_mood": latest_mood.get("mood") if latest_mood else None,
                     "latest_mood_date": latest_mood["created_at"].isoformat() if latest_mood and latest_mood.get("created_at") else None,
                     "last_appointment": latest_appt["scheduled_at"].isoformat() if latest_appt and latest_appt.get("scheduled_at") else None,
@@ -121,6 +171,75 @@ class TherapistService:
                 continue
 
         return patients
+
+    @staticmethod
+    async def get_patient_profile(therapist_id: str, patient_id: str) -> Dict[str, Any]:
+        """Get profile summary for one patient connected to therapist appointments."""
+        db = await get_database()
+
+        has_access = await db.appointments.find_one({
+            "therapist_id": therapist_id,
+            "patient_id": patient_id,
+        })
+        if not has_access:
+            return {"error": "Access denied — no appointments with this patient"}
+
+        if not ObjectId.is_valid(patient_id):
+            return {"error": "Patient not found"}
+
+        patient = await db.users.find_one({"_id": ObjectId(patient_id)})
+        if not patient:
+            return {"error": "Patient not found"}
+
+        sessions_total = await db.appointments.count_documents({
+            "therapist_id": therapist_id,
+            "patient_id": patient_id,
+        })
+
+        latest_mood = await db.moods.find_one(
+            {"user_id": patient_id},
+            sort=[("created_at", -1)],
+        )
+
+        recent_moods = await db.moods.find({"user_id": patient_id}).sort("created_at", -1).limit(2).to_list(length=2)
+        mood_trend = "stable"
+        if len(recent_moods) >= 2:
+            newest = (recent_moods[0].get("mood") or "").lower()
+            previous = (recent_moods[1].get("mood") or "").lower()
+            declining_labels = {"sad", "anxious", "angry", "stressed"}
+            improving_labels = {"happy", "calm", "excited"}
+            if newest in declining_labels and previous in improving_labels:
+                mood_trend = "declining"
+            elif newest in improving_labels and previous in declining_labels:
+                mood_trend = "improving"
+
+        latest_assessment_doc = await db.assessment_results.find_one(
+            {"user_id": patient_id},
+            sort=[("completed_at", -1)],
+        )
+
+        latest_assessment = None
+        if latest_assessment_doc:
+            latest_assessment = {
+                "id": str(latest_assessment_doc.get("_id")),
+                "name": latest_assessment_doc.get("assessment_name") or latest_assessment_doc.get("assessment_slug") or "Assessment",
+                "score": latest_assessment_doc.get("total_score"),
+                "created_at": TherapistService._iso(latest_assessment_doc.get("completed_at") or latest_assessment_doc.get("created_at")),
+            }
+
+        return {
+            "id": patient_id,
+            "name": patient.get("full_name") or patient.get("email") or "Patient",
+            "full_name": patient.get("full_name") or patient.get("email") or "Patient",
+            "email": patient.get("email") or "",
+            "age": patient.get("age"),
+            "gender": patient.get("gender"),
+            "joined_at": TherapistService._iso(patient.get("created_at")),
+            "current_mood": latest_mood.get("mood") if latest_mood else None,
+            "mood_trend": mood_trend,
+            "total_sessions": sessions_total,
+            "latest_assessment": latest_assessment,
+        }
 
     @staticmethod
     async def get_patient_history(

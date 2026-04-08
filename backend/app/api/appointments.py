@@ -72,6 +72,22 @@ async def get_appointment(
     )
 
 
+@router.get(
+    "/{appointment_id}/patient-summary",
+    summary="Get patient summary for an appointment",
+)
+async def get_patient_summary(
+    appointment_id: str,
+    current_user: UserOut = Depends(get_current_staff),
+) -> dict:
+    """Return patient data shared with therapist for this appointment."""
+    return await AppointmentService.get_patient_summary(
+        appointment_id=appointment_id,
+        requester_id=str(current_user.id),
+        requester_role=current_user.role,
+    )
+
+
 @router.put(
     "/{appointment_id}/cancel",
     response_model=AppointmentOut,

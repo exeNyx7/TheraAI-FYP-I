@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -30,7 +30,16 @@ function SlotPicker({ therapistId, onSlotSelected, onBack }) {
     setLoading(true);
     setError(null);
     apiClient.get(`/therapists/${therapistId}/slots`, { params: { date } })
-      .then((res) => setSlots(res.data))
+      .then((res) => {
+        const normalized = Array.isArray(res.data)
+          ? res.data.map((slot) => ({
+              ...slot,
+              start_time: slot.start_time || slot.time,
+              is_available: slot.is_available ?? slot.available ?? false,
+            }))
+          : [];
+        setSlots(normalized);
+      })
       .catch(() => setError('Could not load slots.'))
       .finally(() => setLoading(false));
   }, [therapistId, date]);
@@ -93,10 +102,9 @@ export default function Appointments() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [step, setStep] = useState('list'); // list | select-therapist | checkout | success
+  const [step, setStep] = useState('list'); // list | select-therapist | select-slot | checkout | success
   const [selectedTherapist, setSelectedTherapist] = useState(null);
   const [selectedDateSlot, setSelectedDateSlot] = useState(null); // { date, slot }
-  const [booking, setBooking] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState(null);
 
@@ -129,22 +137,29 @@ export default function Appointments() {
     setStep('checkout');
   };
 
-  const handleBookingSuccess = async (appointmentData) => {
-    // Book via API
+  const handleBookingSuccess = async () => {
+    const therapistId = selectedTherapist?.user_id || selectedTherapist?.id;
+    const selectedDate = selectedDateSlot?.date;
+    const selectedTime = selectedDateSlot?.slot?.start_time || selectedDateSlot?.slot?.time;
+
+    if (!therapistId || !selectedDate || !selectedTime) {
+      setError('Please select a therapist and valid time slot.');
+      return;
+    }
+
+    const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00Z`).toISOString();
+
     try {
       await apiClient.post('/appointments', {
-        therapist_id: selectedTherapist?.id,
-        scheduled_at: appointmentData?.scheduled_at || new Date(Date.now() + 7 * 86400000).toISOString(),
+        therapist_id: therapistId,
+        scheduled_at: scheduledAt,
         duration_minutes: 50,
         type: 'video',
       });
       await fetchAppointments();
       setStep('success');
     } catch (err) {
-      console.error('Failed to book appointment:', err);
-      // Still show success for demo (PaymentCheckout mock flow)
-      await fetchAppointments();
-      setStep('success');
+      setError(err?.response?.data?.detail || 'Failed to book appointment. Please try again.');
     }
   };
 
@@ -303,7 +318,7 @@ export default function Appointments() {
             {/* Select slot */}
             {step === 'select-slot' && selectedTherapist && (
               <SlotPicker
-                therapistId={selectedTherapist.user_id}
+                therapistId={selectedTherapist.user_id || selectedTherapist.id}
                 onSlotSelected={handleSlotSelected}
                 onBack={() => setStep('select-therapist')}
               />
@@ -315,14 +330,18 @@ export default function Appointments() {
                 <CardHeader>
                   <CardTitle className="text-lg">Confirm & Pay</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Session with <strong>{selectedTherapist?.full_name}</strong> on{' '}
+                    Session with <strong>{selectedTherapist?.full_name || selectedTherapist?.name}</strong> on{' '}
                     <strong>{selectedDateSlot?.date}</strong> at{' '}
-                    <strong>{selectedDateSlot?.slot?.start_time}</strong>
+                    <strong>{selectedDateSlot?.slot?.start_time || selectedDateSlot?.slot?.time}</strong>
                   </p>
                 </CardHeader>
                 <CardContent>
                   <PaymentCheckout
-                    appointment={selectedTherapist ? { therapistName: selectedTherapist.name, date: 'Next available', time: 'TBD' } : null}
+                    appointment={selectedTherapist ? {
+                      therapistName: selectedTherapist.full_name || selectedTherapist.name,
+                      date: selectedDateSlot?.date,
+                      time: selectedDateSlot?.slot?.start_time || selectedDateSlot?.slot?.time,
+                    } : null}
                     onSuccess={handleBookingSuccess}
                     onClose={() => setStep('select-therapist')}
                   />
@@ -338,7 +357,7 @@ export default function Appointments() {
                 </div>
                 <h2 className="text-2xl font-bold">Appointment Booked!</h2>
                 <p className="text-muted-foreground">
-                  Your session with {selectedTherapist?.name} has been confirmed.
+                  Your session with {selectedTherapist?.full_name || selectedTherapist?.name} has been confirmed.
                 </p>
                 <Button
                   onClick={() => { setStep('list'); setSelectedTherapist(null); }}

@@ -29,6 +29,7 @@ import PostCallTherapist from './pages/Call/PostCallTherapist';
 import Patients from './pages/Therapist/Patients';
 import PatientDetail from './pages/Therapist/PatientDetail';
 import Schedule from './pages/Therapist/Schedule';
+import TreatmentPlans from './pages/Therapist/TreatmentPlans';
 import NotificationPopup from './components/Notifications/NotificationPopup';
 import './App.css';
 
@@ -233,7 +234,7 @@ function App() {
             <Route
               path="/chat"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute roles="patient">
                   <Chat />
                 </ProtectedRoute>
               }
@@ -297,10 +298,7 @@ function App() {
               path="/treatment-plans"
               element={
                 <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
-                  <div className="page-placeholder">
-                    <h2>Treatment Plans</h2>
-                    <p>Manage and review patient treatment plans.</p>
-                  </div>
+                  <TreatmentPlans />
                 </ProtectedRoute>
               }
             />

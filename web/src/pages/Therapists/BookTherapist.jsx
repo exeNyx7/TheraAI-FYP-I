@@ -58,7 +58,16 @@ export default function BookTherapist() {
     (async () => {
       try {
         const res = await apiClient.get(`/therapists/${therapistId}/availability`, { params: { date } });
-        if (!cancelled) setSlots(Array.isArray(res.data) ? res.data : []);
+        if (!cancelled) {
+          const normalized = Array.isArray(res.data)
+            ? res.data.map((s) => ({
+                ...s,
+                time: s.time || s.start_time,
+                available: s.available ?? s.is_available ?? false,
+              }))
+            : [];
+          setSlots(normalized);
+        }
       } catch (e) {
         if (!cancelled) setSlots([]);
       } finally {
@@ -76,8 +85,9 @@ export default function BookTherapist() {
       const isoDate = new Date(`${date}T${selectedTime}:00Z`).toISOString();
       const res = await apiClient.post('/appointments', {
         therapist_id: therapistId,
-        date: isoDate,
+        scheduled_at: isoDate,
         duration_minutes: 60,
+        type: 'video',
         notes: '',
       });
       setCreatedAppt(res.data);
@@ -111,10 +121,10 @@ export default function BookTherapist() {
               <Card>
                 <CardContent className="p-6 flex items-center gap-4">
                   <div className="h-16 w-16 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold text-xl">
-                    {(therapist.name || '?').split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('')}
+                    {(therapist.full_name || therapist.name || '?').split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('')}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">{therapist.name}</h2>
+                    <h2 className="text-xl font-bold">{therapist.full_name || therapist.name}</h2>
                     <p className="text-sm text-muted-foreground">{therapist.email}</p>
                     <p className="text-sm text-primary mt-1">PKR {therapist.hourly_rate || 3000}/session</p>
                   </div>
@@ -187,7 +197,7 @@ export default function BookTherapist() {
                     <CreditCard className="h-5 w-5" /> Payment
                   </h3>
                   <div className="rounded-lg bg-muted/50 p-4 space-y-1">
-                    <p className="text-sm">Session with <span className="font-semibold">{therapist?.name}</span></p>
+                    <p className="text-sm">Session with <span className="font-semibold">{therapist?.full_name || therapist?.name}</span></p>
                     <p className="text-xs text-muted-foreground">{date} at {selectedTime}</p>
                     <p className="text-lg font-bold text-primary mt-2">PKR {therapist?.hourly_rate || 3000}</p>
                   </div>
@@ -229,8 +239,8 @@ export default function BookTherapist() {
                   </div>
                   <h2 className="text-2xl font-bold">Appointment Confirmed!</h2>
                   <div className="text-muted-foreground space-y-1">
-                    <p>Your session with <span className="font-semibold text-foreground">{createdAppt.therapist_name || therapist?.name}</span></p>
-                    <p>{new Date(createdAppt.date).toLocaleString()}</p>
+                    <p>Your session with <span className="font-semibold text-foreground">{createdAppt.therapist_name || therapist?.full_name || therapist?.name}</span></p>
+                    <p>{new Date(createdAppt.scheduled_at || createdAppt.date).toLocaleString()}</p>
                     <Badge className="mt-2">{createdAppt.status}</Badge>
                   </div>
                   <div className="flex gap-3 justify-center pt-4">

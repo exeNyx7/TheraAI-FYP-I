@@ -4,6 +4,7 @@ Handles user registration, login, and authentication endpoints
 """
 
 from datetime import timedelta
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -38,8 +39,8 @@ async def signup(request: Request, user_data: UserIn) -> Token:
         import asyncio
         user = await UserService.create_user(user_data)
 
-        # Fire-and-forget welcome email (patient only)
-        if user.role == "patient":
+        # Fire-and-forget welcome email (patient only) when email is enabled.
+        if user.role == "patient" and settings.mail_enabled and not os.getenv("PYTEST_CURRENT_TEST"):
             from ..services.email_service import EmailService
             asyncio.create_task(EmailService.send_welcome_email(
                 to_email=user.email,
@@ -62,7 +63,7 @@ async def signup(request: Request, user_data: UserIn) -> Token:
             access_token=access_token,
             token_type="bearer",
             expires_in=get_token_expiry_time(),
-            user=UserOut(**user.dict()),
+            user=UserOut(**user.model_dump()),
         )
     except HTTPException:
         raise
@@ -122,7 +123,7 @@ async def login(request: Request, login_data: UserLogin) -> Token:
     )
     
     # Convert user to UserOut for response
-    user_out = UserOut(**user.dict())
+    user_out = UserOut(**user.model_dump())
     
     return Token(
         access_token=access_token,

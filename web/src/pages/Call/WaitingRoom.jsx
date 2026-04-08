@@ -36,7 +36,8 @@ export default function WaitingRoom() {
     return () => clearInterval(t);
   }, []);
 
-  const scheduledMs = appt?.date ? new Date(appt.date).getTime() : null;
+  const scheduledIso = appt?.scheduled_at || appt?.date || null;
+  const scheduledMs = scheduledIso ? new Date(scheduledIso).getTime() : null;
   const diffMs = scheduledMs ? scheduledMs - now : null;
   const canJoin = diffMs !== null && diffMs <= 2 * 60 * 1000; // T-2 min
 
@@ -120,7 +121,7 @@ export default function WaitingRoom() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Scheduled</span>
-                  <span className="font-medium">{appt.date ? new Date(appt.date).toLocaleString() : '—'}</span>
+                  <span className="font-medium">{scheduledIso ? new Date(scheduledIso).toLocaleString() : '—'}</span>
                 </div>
               </div>
 
