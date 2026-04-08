@@ -22,7 +22,7 @@ export default function Patients() {
 
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? patients.filter(p => (p.name || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q))
+    ? patients.filter(p => (p.name || p.full_name || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q))
     : patients;
 
   return (
@@ -65,24 +65,24 @@ export default function Patients() {
               <div className="space-y-3">
                 {!loading && filtered.map((p) => (
                   <Link
-                    key={p.id}
-                    to={`/patients/${p.id}`}
+                    key={p.id || p._id || p.email}
+                    to={`/patients/${p.id || p._id}`}
                     className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-sm hover:border-primary/40 transition-all"
                   >
                     <div className="flex items-center gap-4">
                       <div className="h-11 w-11 rounded-full bg-gradient-to-br from-primary/50 to-primary/20 flex items-center justify-center text-primary font-bold">
-                        {(p.name || '?')[0]}
+                        {(p.name || p.full_name || '?')[0]}
                       </div>
                       <div>
-                        <p className="font-semibold">{p.name}</p>
+                        <p className="font-semibold">{p.name || p.full_name || 'Unknown Patient'}</p>
                         <p className="text-sm text-muted-foreground">
                           {p.email}{p.last_appointment ? ` · Last session ${p.last_appointment}` : ''}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Badge variant={p.status === 'critical' ? 'destructive' : p.status === 'active' ? 'secondary' : 'outline'}>
-                        {p.status || 'active'}
+                      <Badge variant={(p.status === 'critical' || Number(p.unacknowledged_alerts ?? 0) > 0) ? 'destructive' : p.status === 'active' ? 'secondary' : 'outline'}>
+                        {p.status || (Number(p.unacknowledged_alerts ?? 0) > 0 ? 'critical' : 'active')}
                       </Badge>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>

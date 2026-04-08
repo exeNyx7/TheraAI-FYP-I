@@ -5,7 +5,12 @@
       "Bash(git commit -m \"Implement Phase 1: RBAC, Settings, and Assessments APIs:*)",
       "Bash(python -m py_compile backend/app/dependencies/rbac.py backend/app/models/settings.py backend/app/models/assessments.py backend/app/services/settings_service.py backend/app/services/assessments_service.py backend/app/api/settings.py backend/app/api/assessments.py)",
       "Bash(grep -n \"delete_one.*_id\\\\|ObjectId\" /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/.claude/worktrees/nice-bartik/backend/app/services/*.py)",
-      "Bash(venv/Scripts/python -c \":*)"
+      "Bash(venv/Scripts/python -c \":*)",
+      "Bash(node --input-type=module --experimental-vm-modules)",
+      "Bash(npx --no vite build --mode development)",
+      "Bash(python -c \"from app.api.escalations import router; from app.api.treatment_plans import router; from app.api.session_notes import router; from app.api.therapists_public import router; from app.api.sharing_preferences import router; print\\('All routers import OK'\\)\")",
+      "Bash([ -f \"C:/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/$f\" ])",
+      "Bash(xargs grep:*)"
     ]
   }
 }

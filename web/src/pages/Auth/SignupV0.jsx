@@ -53,17 +53,12 @@ export default function SignupV0() {
       const result = await signup(userData);
       
       if (result.success) {
-        showSuccess('Account created successfully!');
-        if (result.requiresLogin) {
-          navigate('/login', {
-            state: { message: 'Account created successfully! Please log in.' }
-          });
-        } else if (selectedRole === 'patient') {
-          // New patients go through onboarding
-          navigate('/onboarding');
+        showSuccess('Account created successfully! Welcome to Thera-AI!');
+        // Auto-logged in — go straight to role-specific onboarding
+        if (selectedRole === 'psychiatrist') {
+          navigate('/therapist-onboarding');
         } else {
-          // Therapists / admins go straight to dashboard
-          navigate('/dashboard');
+          navigate('/onboarding');
         }
       } else {
         showError(result.error || 'Signup failed. Please try again.');

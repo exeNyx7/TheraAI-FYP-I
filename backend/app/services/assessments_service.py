@@ -162,6 +162,17 @@ class AssessmentsService:
         insert_result = await db.assessment_results.insert_one(result_doc)
         result_doc["_id"] = str(insert_result.inserted_id)
 
+        # Fire-and-forget gamification (non-blocking)
+        import asyncio
+        async def _award():
+            try:
+                from .gamification_service import award_xp, check_achievements
+                await award_xp(user_id, 50)
+                await check_achievements(user_id)
+            except Exception:
+                pass
+        asyncio.create_task(_award())
+
         return AssessmentResult(**result_doc)
 
     @staticmethod

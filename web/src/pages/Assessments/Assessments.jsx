@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -8,6 +8,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
 import apiClient from '../../apiClient';
+import { useGamification } from '../../hooks/useGamification';
+import { XpToast } from '../../components/Gamification/XpToast';
+import { AchievementUnlockedModal } from '../../components/Gamification/AchievementUnlockedModal';
 
 function TherapistAssessmentsView() {
   return (
@@ -77,6 +80,11 @@ export default function Assessments() {
   // Result detail view
   const [detailResult, setDetailResult] = useState(null);
 
+  // Gamification
+  const { refresh: refreshGamification } = useGamification();
+  const [xpToast, setXpToast] = useState({ visible: false, delta: 0, levelUp: false });
+  const [achievementModal, setAchievementModal] = useState([]);
+
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
   }, [user, navigate]);
@@ -140,7 +148,13 @@ export default function Assessments() {
       };
       const response = await apiClient.post(`/assessments/${activeAssessment.slug}/submit`, payload);
       setResult(response.data);
-      showSuccess('Assessment completed!');
+      showSuccess('Assessment completed! +50 XP earned!');
+      // Award XP and check achievements (backend fires async; we just re-fetch after short delay)
+      setTimeout(async () => {
+        const { xpDelta, levelUp, newlyUnlocked } = await refreshGamification();
+        if (xpDelta > 0) setXpToast({ visible: true, delta: xpDelta, levelUp });
+        if (newlyUnlocked.length > 0) setAchievementModal(newlyUnlocked);
+      }, 800);
     } catch (err) {
       console.error('Failed to submit assessment:', err);
       showInfo('Failed to submit assessment. Please try again.');
@@ -226,6 +240,16 @@ export default function Assessments() {
       : 0;
     return (
       <div className="flex">
+        <XpToast
+          xpDelta={xpToast.delta}
+          levelUp={xpToast.levelUp}
+          visible={xpToast.visible}
+          onDone={() => setXpToast(v => ({ ...v, visible: false }))}
+        />
+        <AchievementUnlockedModal
+          achievements={achievementModal}
+          onClose={() => setAchievementModal([])}
+        />
         <AppSidebar />
         <main className="flex-1 pt-16 md:pt-0">
           <div className="bg-background min-h-screen">

@@ -21,6 +21,12 @@ from .api.assessments import router as assessments_router
 from .api.therapist import router as therapist_router
 from .api.ws import router as ws_router
 from .api.admin import router as admin_router
+from .api.escalations import router as escalations_router
+from .api.treatment_plans import router as treatment_plans_router
+from .api.session_notes import router as session_notes_router
+from .api.therapists_public import router as therapists_public_router
+from .api.sharing_preferences import router as sharing_preferences_router
+from .api.gamification import router as gamification_router
 
 # Load settings
 settings = get_settings()
@@ -136,6 +142,12 @@ app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(calendar_router, prefix="/api/v1")
 app.include_router(ws_router)
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(escalations_router, prefix="/api/v1")
+app.include_router(treatment_plans_router, prefix="/api/v1")
+app.include_router(session_notes_router, prefix="/api/v1")
+app.include_router(therapists_public_router, prefix="/api/v1")
+app.include_router(sharing_preferences_router, prefix="/api/v1")
+app.include_router(gamification_router, prefix="/api/v1")
 
 
 @app.get(

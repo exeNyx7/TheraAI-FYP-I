@@ -21,28 +21,23 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post(
     "/signup",
-    response_model=UserOut,
+    response_model=Token,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user",
-    description="Register a new user account with email, password, and role"
+    description="Register a new user account and return a JWT token for immediate login"
 )
 @limiter.limit("5/minute")
-async def signup(request: Request, user_data: UserIn) -> UserOut:
+async def signup(request: Request, user_data: UserIn) -> Token:
     """
-    Register a new user account
-    
-    - **email**: Valid email address (must be unique)
-    - **password**: Strong password (min 8 chars, must contain uppercase, lowercase, digit)
-    - **confirm_password**: Password confirmation (must match password)
-    - **full_name**: User's full name
-    - **role**: User role (patient, psychiatrist, admin) - defaults to patient
-    - **is_active**: Account status - defaults to True
-    
-    Returns the created user data (without password)
+    Register a new user account and auto-login.
+
+    Returns the same Token shape as /login so the frontend can authenticate
+    the user immediately after registration without a separate login step.
     """
     try:
         import asyncio
         user = await UserService.create_user(user_data)
+
         # Fire-and-forget welcome email (patient only)
         if user.role == "patient":
             from ..services.email_service import EmailService
@@ -50,7 +45,25 @@ async def signup(request: Request, user_data: UserIn) -> UserOut:
                 to_email=user.email,
                 full_name=user.full_name or "User",
             ))
-        return user
+
+        # Issue a JWT so the frontend can auto-login
+        token_payload = create_token_payload(
+            user_id=str(user.id),
+            email=user.email,
+            role=user.role,
+        )
+        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+        access_token = create_access_token(
+            data=token_payload,
+            expires_delta=access_token_expires,
+        )
+
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=get_token_expiry_time(),
+            user=UserOut(**user.dict()),
+        )
     except HTTPException:
         raise
     except Exception as e:

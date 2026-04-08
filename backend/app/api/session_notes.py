@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from ..database import get_database
 from ..models.user import UserOut
 from ..models.session_note import SessionNoteCreate, SessionNoteUpdate
-from .therapist import require_therapist
+from ..dependencies.rbac import require_therapist
 
 router = APIRouter(prefix="/session-notes", tags=["Session Notes"])
 

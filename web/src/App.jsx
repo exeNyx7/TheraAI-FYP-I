@@ -17,14 +17,36 @@ import Assessments from './pages/Assessments/Assessments';
 import Appointments from './pages/Appointments/Appointments';
 import Achievements from './pages/Achievements/Achievements';
 import Onboarding from './pages/Onboarding/Onboarding';
+import TherapistOnboarding from './pages/Onboarding/TherapistOnboarding';
 import ForgotPassword from './pages/Auth/ForgotPassword';
 import OTPVerification from './pages/Auth/OTPVerification';
 import ResetPassword from './pages/Auth/ResetPassword';
+import BrowseTherapists from './pages/Therapists/BrowseTherapists';
+import BookTherapist from './pages/Therapists/BookTherapist';
+import WaitingRoom from './pages/Call/WaitingRoom';
+import PostCallPatient from './pages/Call/PostCallPatient';
+import PostCallTherapist from './pages/Call/PostCallTherapist';
+import Patients from './pages/Therapist/Patients';
+import PatientDetail from './pages/Therapist/PatientDetail';
+import Schedule from './pages/Therapist/Schedule';
+import NotificationPopup from './components/Notifications/NotificationPopup';
 import './App.css';
 
 function AuthAwareRedirect() {
   const { isAuthenticated } = useAuth();
   return <Navigate to={isAuthenticated ? '/dashboard' : '/'} replace />;
+}
+
+/** Redirects authenticated users who haven't completed onboarding. */
+function OnboardingGate({ children }) {
+  const { user, isAuthenticated, loading } = useAuth();
+  if (loading) return null;
+  if (!isAuthenticated) return children;
+  if (user && !user.onboarding_completed) {
+    const dest = user.role === 'psychiatrist' ? '/therapist-onboarding' : '/onboarding';
+    return <Navigate to={dest} replace />;
+  }
+  return children;
 }
 
 function App() {
@@ -80,12 +102,20 @@ function App() {
               }
             />
 
-            {/* Onboarding — protected, patient-only wizard */}
+            {/* Onboarding wizards — protected, not gated (new users land here) */}
             <Route
               path="/onboarding"
               element={
                 <ProtectedRoute>
                   <Onboarding />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/therapist-onboarding"
+              element={
+                <ProtectedRoute>
+                  <TherapistOnboarding />
                 </ProtectedRoute>
               }
             />
@@ -95,7 +125,9 @@ function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <OnboardingGate>
+                    <Dashboard />
+                  </OnboardingGate>
                 </ProtectedRoute>
               }
             />
@@ -106,7 +138,32 @@ function App() {
               element={<Navigate to="/dashboard" replace />}
             />
 
-            <Route path="/patients" element={<Navigate to="/dashboard" replace />} />
+            <Route
+              path="/patients"
+              element={
+                <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
+                  <Patients />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/patients/:id"
+              element={
+                <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
+                  <PatientDetail />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/schedule"
+              element={
+                <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
+                  <Schedule />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/sessions"

@@ -16,7 +16,7 @@ from ..models.treatment_plan import (
     TreatmentPlanCreate,
     TreatmentPlanUpdate,
 )
-from .therapist import require_therapist
+from ..dependencies.rbac import require_therapist
 
 router = APIRouter(prefix="/treatment-plans", tags=["Treatment Plans"])
 

@@ -19,8 +19,8 @@ import {
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard',       href: '/dashboard' },
-  { icon: Users,           label: 'My Patients',     href: '/appointments' },
-  { icon: Calendar,        label: 'Schedule',        href: '/appointments' },
+  { icon: Users,           label: 'My Patients',     href: '/patients' },
+  { icon: Calendar,        label: 'Schedule',        href: '/schedule' },
   { icon: MessageSquare,   label: 'Messaging',       href: '/chat' },
   { icon: ClipboardList,   label: 'Treatment Plans', href: '/treatment-plans' },
   { icon: Activity,        label: 'Progress',        href: '/assessments' },
@@ -90,7 +90,7 @@ export function TherapistSidebar() {
               (item.href !== '/therapist-dashboard' && location.pathname.startsWith(item.href));
             return (
               <Link
-                key={item.href}
+                key={`${item.href}-${item.label}`}
                 to={item.href}
                 onClick={() => setIsOpen(false)}
                 title={isCollapsed ? item.label : ''}

@@ -56,6 +56,7 @@ export default function AdminDashboardV0() {
   const [users, setUsers] = useState([]);
   const [usersTotal, setUsersTotal] = useState(0);
   const [crisisEvents, setCrisisEvents] = useState([]);
+  const [escalationLoading, setEscalationLoading] = useState({});
   const [loading, setLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -127,6 +128,40 @@ export default function AdminDashboardV0() {
       showSuccess('User deleted.');
     } catch {
       showError('Failed to delete user.');
+    }
+  };
+
+  const handleGrantFreeSession = async (escalationId) => {
+    setEscalationLoading(prev => ({ ...prev, [escalationId]: 'grant' }));
+    try {
+      await apiClient.post(`/escalations/${escalationId}/grant-free-session`);
+      showSuccess('Free session granted to patient.');
+      setCrisisEvents(prev => prev.map(ev =>
+        (ev.id === escalationId || ev._id === escalationId)
+          ? { ...ev, free_session_granted: true }
+          : ev
+      ));
+    } catch (err) {
+      showError(err?.response?.data?.detail || 'Failed to grant free session.');
+    } finally {
+      setEscalationLoading(prev => ({ ...prev, [escalationId]: null }));
+    }
+  };
+
+  const handleBookOnBehalf = async (escalationId, patientId) => {
+    const dateStr = window.prompt('Enter appointment date (YYYY-MM-DD):');
+    if (!dateStr) return;
+    setEscalationLoading(prev => ({ ...prev, [escalationId]: 'book' }));
+    try {
+      await apiClient.post(`/escalations/${escalationId}/book-on-behalf`, {
+        patient_id: patientId,
+        date: dateStr,
+      });
+      showSuccess('Appointment booked on behalf of patient.');
+    } catch (err) {
+      showError(err?.response?.data?.detail || 'Failed to book appointment.');
+    } finally {
+      setEscalationLoading(prev => ({ ...prev, [escalationId]: null }));
     }
   };
 
@@ -393,6 +428,37 @@ export default function AdminDashboardV0() {
                             </p>
                           )}
                         </div>
+                      </div>
+                      {/* Action buttons */}
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!!ev.free_session_granted || escalationLoading[ev.id || ev._id] === 'grant'}
+                          onClick={() => handleGrantFreeSession(ev.id || ev._id)}
+                          className="text-xs gap-1"
+                        >
+                          {escalationLoading[ev.id || ev._id] === 'grant' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-3 w-3" />
+                          )}
+                          {ev.free_session_granted ? 'Free Session Granted' : 'Grant Free Session'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={escalationLoading[ev.id || ev._id] === 'book'}
+                          onClick={() => handleBookOnBehalf(ev.id || ev._id, ev.patient_id)}
+                          className="text-xs gap-1"
+                        >
+                          {escalationLoading[ev.id || ev._id] === 'book' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Calendar className="h-3 w-3" />
+                          )}
+                          Book on Behalf
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>

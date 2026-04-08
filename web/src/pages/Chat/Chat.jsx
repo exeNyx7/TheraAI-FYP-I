@@ -5,6 +5,8 @@ import { Input } from '../../components/ui/input';
 import { MessageBubble } from '../../components/Chat/MessageBubble';
 import { EscalationModal } from '../../components/Chat/EscalationModal';
 import SessionHistoryModal from '../../components/Chat/SessionHistoryModal';
+import { SessionHistory } from '../../components/Chat/SessionHistory';
+import { VoiceInput } from '../../components/Chat/VoiceInput';
 import { Card } from '../../components/ui/card';
 import { Send, RotateCcw, Zap, History, X, AlertTriangle, Phone, Calendar, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -111,8 +113,15 @@ export default function Chat() {
     setIsLoading(false);
   }, [showError]);
 
-  const handleWsCrisis = useCallback(({ severity }) => {
+  const handleWsCrisis = useCallback(({ severity, message_excerpt }) => {
     setCrisisState({ visible: true, severity });
+    if (severity && severity !== 'none') {
+      apiClient.post('/escalations', {
+        severity,
+        message_excerpt: (message_excerpt || '').slice(0, 300),
+        triggered_by: 'keyword',
+      }).catch(() => {});
+    }
   }, []);
 
   const { sendMessage: wsSend, isTyping, connected: wsConnected } = useWebSocketChat({
@@ -161,6 +170,12 @@ export default function Chat() {
       setMessages(prev => [...prev, aiMsg]);
       if (data.show_book_therapist && data.crisis_severity && data.crisis_severity !== 'none') {
         setCrisisState({ visible: true, severity: data.crisis_severity });
+        // Create escalation record so admin can see and act on it
+        apiClient.post('/escalations', {
+          severity: data.crisis_severity,
+          message_excerpt: content.slice(0, 300),
+          triggered_by: 'keyword',
+        }).catch(() => {});
       }
     } catch (err) {
       showError(err.response?.data?.detail || 'Could not reach the AI. Please try again.');
@@ -242,27 +257,6 @@ export default function Chat() {
                 </Button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowHistoryModal(true)}
-                className="gap-2 rounded-full"
-              >
-                <History className="h-4 w-4" />
-                <span className="hidden sm:inline">History</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={clearHistory}
-                className="gap-2 rounded-full"
-              >
-                <RotateCcw className="h-4 w-4" />
-                <span className="hidden sm:inline">Clear</span>
-              </Button>
-            </div>
-          </div>
 
             {/* Crisis Banner */}
             {crisisState.visible && (

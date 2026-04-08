@@ -114,8 +114,10 @@ class AuthService {
         throw new Error(data.detail || 'Registration failed');
       }
 
-      // Backend signup only returns user data, no token
-      // User will need to login separately
+      // Backend now returns a Token on signup — store it for auto-login
+      if (data.access_token) {
+        this.setToken(data.access_token);
+      }
       return data;
     } catch (error) {
       console.error('Registration error:', error);

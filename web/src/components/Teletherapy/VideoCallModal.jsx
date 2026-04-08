@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Phone, ExternalLink, X } from 'lucide-react';
 import apiClient from '../../apiClient';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * VideoCallModal — Jitsi Meet integration via External API.
@@ -21,6 +23,10 @@ import apiClient from '../../apiClient';
  *   therapistName  string  — participant display name
  */
 export function VideoCallModal({ isOpen, onClose, appointmentId, patientName, therapistName }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const role = user?.role;
+  const isTherapist = role === 'psychiatrist';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [roomData, setRoomData] = useState(null); // { roomName, jitsiUrl, domain }
@@ -151,23 +157,21 @@ export function VideoCallModal({ isOpen, onClose, appointmentId, patientName, th
     setLoading(false);
   };
 
-  const handleEndCall = () => {
-    cleanup();
-    onClose();
-  };
-
   const openInNewTab = () => {
     if (roomData?.jitsiUrl) window.open(roomData.jitsiUrl, '_blank');
   };
 
   const handleEndCall = () => {
+    cleanup();
     if (appointmentId) {
       if (isTherapist) {
         navigate(`/call/${appointmentId}/post-therapist`);
+        if (onClose) onClose();
         return;
       }
       if (role === 'patient') {
         navigate(`/call/${appointmentId}/post-patient`);
+        if (onClose) onClose();
         return;
       }
     }

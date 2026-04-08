@@ -30,9 +30,19 @@ export default function LoginV0() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      // AuthContext handles navigation based on role
-      navigate('/dashboard');
+      const result = await login(email, password);
+      const user = result?.user;
+      if (user && !user.onboarding_completed) {
+        if (user.role === 'psychiatrist') {
+          navigate('/therapist-onboarding');
+        } else {
+          navigate('/onboarding');
+        }
+      } else if (user?.role === 'psychiatrist') {
+        navigate('/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       showError(err.response?.data?.detail || err.message || 'Login failed. Please check your credentials.');
     } finally {

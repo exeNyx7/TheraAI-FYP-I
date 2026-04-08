@@ -27,7 +27,19 @@ class MoodService:
         
         result = await db.moods.insert_one(mood_dict)
         mood_dict["_id"] = str(result.inserted_id)
-        
+
+        # Fire-and-forget gamification (non-blocking)
+        import asyncio
+        async def _award():
+            try:
+                from .gamification_service import award_xp, update_streak, check_achievements
+                await update_streak(user_id)
+                await award_xp(user_id, 10)
+                await check_achievements(user_id)
+            except Exception:
+                pass
+        asyncio.create_task(_award())
+
         return mood_dict
     
     @staticmethod

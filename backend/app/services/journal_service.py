@@ -85,8 +85,21 @@ class JournalService:
                     detail="Failed to create journal entry"
                 )
             
-            return JournalOut.from_doc(created_journal)
-            
+            journal_out = JournalOut.from_doc(created_journal)
+
+            # Fire-and-forget gamification (non-blocking)
+            import asyncio
+            async def _award():
+                try:
+                    from .gamification_service import award_xp, check_achievements
+                    await award_xp(user_id, 20)
+                    await check_achievements(user_id)
+                except Exception:
+                    pass
+            asyncio.create_task(_award())
+
+            return journal_out
+
         except HTTPException:
             raise
         except Exception as e:

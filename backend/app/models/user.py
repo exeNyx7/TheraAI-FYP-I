@@ -4,7 +4,7 @@ User Models and Schemas for TheraAI Authentication System
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from typing import Optional, List, Literal, Annotated
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from bson import ObjectId
 from enum import Enum
 
@@ -64,6 +64,13 @@ class UserBase(BaseModel):
         description="Privacy settings"
     )
     onboarding_completed: bool = Field(default=False, description="Whether the user has completed onboarding")
+
+    # Gamification fields
+    xp: int = Field(default=0, ge=0, description="Total experience points earned")
+    level: int = Field(default=1, ge=1, description="User level (1 + xp // 500)")
+    streak_days: int = Field(default=0, ge=0, description="Current daily activity streak")
+    last_active_date: Optional[date] = Field(default=None, description="Last date the user performed an activity")
+    unlocked_achievements: List[str] = Field(default_factory=list, description="List of unlocked achievement IDs")
 
     @field_validator("full_name")
     @classmethod
@@ -179,6 +186,12 @@ class UserUpdate(BaseModel):
     notification_preferences: Optional[dict] = None
     privacy_settings: Optional[dict] = None
     onboarding_completed: Optional[bool] = None
+    # Gamification (internal updates only)
+    xp: Optional[int] = None
+    level: Optional[int] = None
+    streak_days: Optional[int] = None
+    last_active_date: Optional[date] = None
+    unlocked_achievements: Optional[List[str]] = None
 
     @field_validator("full_name")
     @classmethod

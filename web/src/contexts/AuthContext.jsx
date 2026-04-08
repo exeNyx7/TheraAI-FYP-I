@@ -130,23 +130,20 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Signup function
+  // Signup function — auto-logs in the user after successful registration
   const signup = async (userData) => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
       dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
 
+      // authService.signup stores the token from the response
       const response = await authService.signup(userData);
-      
-      // Backend signup returns user data but no token
-      // User needs to login separately
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
-      return { 
-        success: true, 
-        user: response, 
-        message: 'Account created successfully! Please log in with your credentials.',
-        requiresLogin: true 
-      };
+
+      // response is a Token shape: { access_token, user, ... }
+      const user = response.user || response;
+      dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: user });
+
+      return { success: true, user, message: 'Account created successfully!' };
     } catch (error) {
       const errorMessage = error.message || 'Registration failed. Please try again.';
       dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: errorMessage });

@@ -7,6 +7,16 @@ import { Calendar, Clock, Plus, Video } from 'lucide-react';
 import apiClient from '../../apiClient';
 import { useNavigate } from 'react-router-dom';
 
+function toDateTimeParts(value) {
+  if (!value) return { date: '', time: '' };
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return { date: String(value), time: '' };
+  return {
+    date: parsed.toLocaleDateString(),
+    time: parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
 export default function Schedule() {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
@@ -14,14 +24,41 @@ export default function Schedule() {
 
   useEffect(() => {
     let cancelled = false;
-    apiClient.get('/therapist/dashboard')
-      .then(r => {
+    const loadSchedule = async () => {
+      try {
+        const [dashboardRes, appointmentsRes] = await Promise.all([
+          apiClient.get('/therapist/dashboard').catch(() => ({ data: null })),
+          apiClient.get('/appointments', { params: { status: 'scheduled' } }).catch(() => ({ data: [] })),
+        ]);
         if (cancelled) return;
-        const appts = r.data?.upcoming_appointments;
-        setAppointments(Array.isArray(appts) ? appts : []);
-      })
-      .catch(() => { if (!cancelled) setAppointments([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+
+        const fromDashboard = Array.isArray(dashboardRes.data?.upcoming_appointments)
+          ? dashboardRes.data.upcoming_appointments
+          : [];
+
+        if (fromDashboard.length > 0) {
+          setAppointments(fromDashboard);
+          return;
+        }
+
+        const fromAppointments = Array.isArray(appointmentsRes.data)
+          ? appointmentsRes.data.map((a) => {
+              const dt = toDateTimeParts(a.scheduled_at);
+              return {
+                ...a,
+                date: a.date || dt.date,
+                time: a.time || dt.time,
+              };
+            })
+          : [];
+
+        setAppointments(fromAppointments);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadSchedule();
     return () => { cancelled = true; };
   }, []);
 
@@ -71,14 +108,14 @@ export default function Schedule() {
                 <div key={date} className="space-y-3">
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{date}</p>
                   {grouped[date].map((s) => (
-                    <div key={s.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-sm transition-all">
+                    <div key={s.id || s._id || `${s.patient_name || 'patient'}-${s.date || s.scheduled_at || ''}`} className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-sm transition-all">
                       <div className="flex items-center gap-4">
                         <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                           <Clock className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="font-semibold">{s.patient_name}</p>
-                          <p className="text-sm text-muted-foreground">{s.date}{s.time ? ` · ${s.time}` : ''}</p>
+                          <p className="font-semibold">{s.patient_name || 'Patient'}</p>
+                          <p className="text-sm text-muted-foreground">{s.date || 'Scheduled'}{s.time ? ` · ${s.time}` : ''}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
