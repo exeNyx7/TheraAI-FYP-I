@@ -4,6 +4,7 @@ Handles user registration, login, and authentication endpoints
 """
 
 from datetime import timedelta
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -21,28 +22,49 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post(
     "/signup",
-    response_model=UserOut,
+    response_model=Token,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user",
-    description="Register a new user account with email, password, and role"
+    description="Register a new user account and return a JWT token for immediate login"
 )
 @limiter.limit("5/minute")
-async def signup(request: Request, user_data: UserIn) -> UserOut:
+async def signup(request: Request, user_data: UserIn) -> Token:
     """
-    Register a new user account
-    
-    - **email**: Valid email address (must be unique)
-    - **password**: Strong password (min 8 chars, must contain uppercase, lowercase, digit)
-    - **confirm_password**: Password confirmation (must match password)
-    - **full_name**: User's full name
-    - **role**: User role (patient, psychiatrist, admin) - defaults to patient
-    - **is_active**: Account status - defaults to True
-    
-    Returns the created user data (without password)
+    Register a new user account and auto-login.
+
+    Returns the same Token shape as /login so the frontend can authenticate
+    the user immediately after registration without a separate login step.
     """
     try:
+        import asyncio
         user = await UserService.create_user(user_data)
-        return user
+
+        # Fire-and-forget welcome email (patient only) when email is enabled.
+        if user.role == "patient" and settings.mail_enabled and not os.getenv("PYTEST_CURRENT_TEST"):
+            from ..services.email_service import EmailService
+            asyncio.create_task(EmailService.send_welcome_email(
+                to_email=user.email,
+                full_name=user.full_name or "User",
+            ))
+
+        # Issue a JWT so the frontend can auto-login
+        token_payload = create_token_payload(
+            user_id=str(user.id),
+            email=user.email,
+            role=user.role,
+        )
+        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+        access_token = create_access_token(
+            data=token_payload,
+            expires_delta=access_token_expires,
+        )
+
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=get_token_expiry_time(),
+            user=UserOut(**user.model_dump()),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -101,7 +123,7 @@ async def login(request: Request, login_data: UserLogin) -> Token:
     )
     
     # Convert user to UserOut for response
-    user_out = UserOut(**user.dict())
+    user_out = UserOut(**user.model_dump())
     
     return Token(
         access_token=access_token,
@@ -280,6 +302,194 @@ async def logout(
         "message": f"User {current_user.email} logged out successfully",
         "note": "Please discard your access token"
     }
+
+
+@router.delete(
+    "/account",
+    summary="Delete account",
+    description="Permanently deactivate and delete the current user's account and all associated data"
+)
+async def delete_account(
+    current_user: UserOut = Depends(get_current_user)
+):
+    """
+    Delete the current user's account.
+    Removes user data and deactivates the account.
+    Requires valid JWT token in Authorization header.
+    """
+    from ..database import get_database
+    from bson import ObjectId
+    from datetime import datetime, timezone
+
+    uid = ObjectId(str(current_user.id))
+    db = await get_database()
+
+    # Hard-delete all user-owned data across collections
+    collections_to_clean = [
+        "chat_history", "journal_entries", "mood_entries",
+        "appointments", "assessment_results", "notifications",
+    ]
+    for col in collections_to_clean:
+        try:
+            await db[col].delete_many({"user_id": str(current_user.id)})
+        except Exception:
+            pass  # best-effort cleanup
+
+    # Hard-delete the user document itself
+    users_collection = await get_users_collection()
+    await users_collection.delete_one({"_id": uid})
+
+    return {"message": "Account deleted successfully"}
+
+
+# ─── Password Reset Flow ──────────────────────────────────────────────────────
+
+@router.post("/forgot-password", summary="Request a password reset OTP")
+async def forgot_password(payload: dict):
+    """
+    Send a 6-digit OTP to the user's email if the address is registered.
+    Always returns the same message to prevent email enumeration.
+    """
+    import secrets
+    import hashlib
+    from datetime import datetime, timezone, timedelta
+    from ..database import get_database
+    from ..services.email_service import EmailService
+
+    email = payload.get("email", "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    db = await get_database()
+    user_doc = await db.users.find_one({"email": email})
+
+    # Always return success-like message (no email enumeration)
+    MSG = {"message": "If that email is registered, an OTP has been sent."}
+
+    if not user_doc:
+        return MSG
+
+    # Generate OTP and store hashed copy
+    otp = str(secrets.randbelow(900000) + 100000)  # 100000–999999
+    otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    await db.password_reset_otps.update_one(
+        {"email": email},
+        {"$set": {"email": email, "otp_hash": otp_hash, "expires_at": expires_at, "used": False}},
+        upsert=True,
+    )
+
+    import asyncio
+    asyncio.create_task(EmailService.send_otp_email(to_email=email, otp=otp))
+
+    return MSG
+
+
+@router.post("/verify-otp", summary="Verify the password reset OTP")
+async def verify_otp(payload: dict):
+    """
+    Validate the OTP and return a short-lived reset token (10 min JWT).
+    """
+    import hashlib
+    from datetime import datetime, timezone, timedelta
+    from ..database import get_database
+
+    email = payload.get("email", "").strip().lower()
+    otp   = payload.get("otp", "").strip()
+
+    if not email or not otp:
+        raise HTTPException(status_code=400, detail="Email and OTP are required")
+
+    db = await get_database()
+    record = await db.password_reset_otps.find_one({"email": email})
+
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+
+    # Check expiry
+    expires_at = record.get("expires_at")
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+
+    # Check used
+    if record.get("used"):
+        raise HTTPException(status_code=400, detail="OTP has already been used.")
+
+    # Verify hash
+    otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+    if otp_hash != record.get("otp_hash"):
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please check and try again.")
+
+    # Mark as used
+    await db.password_reset_otps.update_one({"email": email}, {"$set": {"used": True}})
+
+    # Issue a short-lived reset token (email as sub, 10 min)
+    reset_token = create_access_token(
+        data={"sub": email, "purpose": "password_reset"},
+        expires_delta=timedelta(minutes=10),
+    )
+
+    return {"reset_token": reset_token, "email": email}
+
+
+@router.post("/reset-password", summary="Reset password using a valid reset token")
+async def reset_password(payload: dict):
+    """
+    Set a new password given a valid reset_token returned by /verify-otp.
+    """
+    from jose import JWTError, jwt
+    from ..database import get_database
+
+    reset_token   = payload.get("reset_token", "")
+    new_password  = payload.get("new_password", "")
+    confirm_password = payload.get("confirm_password", "")
+
+    if not reset_token or not new_password:
+        raise HTTPException(status_code=400, detail="reset_token and new_password are required")
+
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    # Validate password strength
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not any(c.isupper() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not any(c.islower() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+    if not any(c.isdigit() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one digit")
+
+    # Verify the reset token
+    try:
+        payload_data = jwt.decode(
+            reset_token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
+        )
+        email = payload_data.get("sub")
+        purpose = payload_data.get("purpose")
+        if not email or purpose != "password_reset":
+            raise HTTPException(status_code=400, detail="Invalid reset token")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Reset token is invalid or expired")
+
+    # Update password
+    db = await get_database()
+    hashed = hash_password(new_password)
+    result = await db.users.update_one(
+        {"email": email},
+        {"$set": {"hashed_password": hashed}},
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "Password reset successfully. You can now log in with your new password."}
 
 
 # Health check for auth service

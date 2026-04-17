@@ -2,8 +2,8 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PatientDashboardV0 from './PatientDashboardV0';
-import PsychiatristDashboardV0 from './PsychiatristDashboardV0';
 import AdminDashboardV0 from './AdminDashboardV0';
+import TherapistDashboard from '../Therapist/TherapistDashboard';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardV0() {
@@ -24,12 +24,13 @@ export default function DashboardV0() {
     );
   }
 
-  // Route to appropriate dashboard based on user role
+  // Route to appropriate dashboard based on user role — all served at /dashboard
   switch (user.role) {
     case 'patient':
       return <PatientDashboardV0 />;
     case 'psychiatrist':
-      return <PsychiatristDashboardV0 />;
+    case 'therapist':
+      return <TherapistDashboard />;
     case 'admin':
       return <AdminDashboardV0 />;
     default:

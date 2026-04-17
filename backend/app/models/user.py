@@ -3,8 +3,8 @@ User Models and Schemas for TheraAI Authentication System
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
-from typing import Optional, Literal, Annotated
-from datetime import datetime
+from typing import Optional, List, Literal, Annotated
+from datetime import datetime, timezone, date
 from bson import ObjectId
 from enum import Enum
 
@@ -28,13 +28,50 @@ def validate_object_id(value: str) -> str:
 PyObjectId = Annotated[str, Field(description="MongoDB ObjectId")]
 
 
+class GenderEnum(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+    NON_BINARY = "non_binary"
+    PREFER_NOT_TO_SAY = "prefer_not_to_say"
+
+
 class UserBase(BaseModel):
     """Base user model with common fields"""
     email: EmailStr
     full_name: str = Field(..., min_length=2, max_length=100)
     role: UserRole = Field(default=UserRole.PATIENT, description="User role in the system")
     is_active: bool = Field(default=True, description="User account status")
-    
+
+    # Demographics (all optional — collected after signup on Profile page)
+    age: Optional[int] = Field(default=None, ge=13, le=120, description="User age")
+    gender: Optional[GenderEnum] = Field(default=None, description="User gender")
+    profession: Optional[str] = Field(default=None, max_length=100, description="User profession")
+    location: Optional[str] = Field(default=None, max_length=150, description="City / region")
+    bio: Optional[str] = Field(default=None, max_length=500, description="Short personal bio")
+    phone: Optional[str] = Field(default=None, max_length=20, description="Phone number")
+    emergency_contact: Optional[str] = Field(default=None, max_length=200, description="Emergency contact name + phone")
+    avatar_url: Optional[str] = Field(default=None, description="Profile picture URL")
+    preferred_language: Optional[str] = Field(default="en", max_length=10, description="ISO 639-1 language code")
+
+    # User preferences (persisted to DB)
+    theme: str = Field(default="system", description="UI theme: light | dark | system")
+    notification_preferences: dict = Field(
+        default_factory=lambda: {"email": True, "push": True, "appointments": True, "insights": True},
+        description="Notification preferences"
+    )
+    privacy_settings: dict = Field(
+        default_factory=lambda: {"share_mood_with_therapist": True},
+        description="Privacy settings"
+    )
+    onboarding_completed: bool = Field(default=False, description="Whether the user has completed onboarding")
+
+    # Gamification fields
+    xp: int = Field(default=0, ge=0, description="Total experience points earned")
+    level: int = Field(default=1, ge=1, description="User level (1 + xp // 500)")
+    streak_days: int = Field(default=0, ge=0, description="Current daily activity streak")
+    last_active_date: Optional[date] = Field(default=None, description="Last date the user performed an activity")
+    unlocked_achievements: List[str] = Field(default_factory=list, description="List of unlocked achievement IDs")
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v):
@@ -87,6 +124,7 @@ class UserOut(UserBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
+    google_calendar_connected: bool = Field(default=False)
     
     @classmethod
     def from_doc(cls, doc: dict):
@@ -107,11 +145,14 @@ class UserInDB(UserBase):
     """User database model with hashed password"""
     id: Optional[str] = Field(default=None, alias="_id")
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
     login_attempts: int = Field(default=0, description="Failed login attempts counter")
     locked_until: Optional[datetime] = None
+    # Google Calendar integration
+    google_refresh_token: Optional[str] = Field(default=None, description="Google OAuth2 refresh token")
+    google_calendar_connected: bool = Field(default=False, description="Whether Google Calendar is connected")
     
     @classmethod
     def from_doc(cls, doc: dict):
@@ -129,10 +170,29 @@ class UserInDB(UserBase):
 
 
 class UserUpdate(BaseModel):
-    """User update schema"""
+    """User update schema (internal — accepts all mutable fields)"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
-    
+    age: Optional[int] = Field(None, ge=13, le=120)
+    gender: Optional[GenderEnum] = None
+    profession: Optional[str] = Field(None, max_length=100)
+    location: Optional[str] = Field(None, max_length=150)
+    bio: Optional[str] = Field(None, max_length=500)
+    phone: Optional[str] = Field(None, max_length=20)
+    emergency_contact: Optional[str] = Field(None, max_length=200)
+    avatar_url: Optional[str] = None
+    preferred_language: Optional[str] = Field(None, max_length=10)
+    theme: Optional[str] = None
+    notification_preferences: Optional[dict] = None
+    privacy_settings: Optional[dict] = None
+    onboarding_completed: Optional[bool] = None
+    # Gamification (internal updates only)
+    xp: Optional[int] = None
+    level: Optional[int] = None
+    streak_days: Optional[int] = None
+    last_active_date: Optional[date] = None
+    unlocked_achievements: Optional[List[str]] = None
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v):
@@ -142,8 +202,20 @@ class UserUpdate(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    """User profile update schema intended for frontend use"""
+    """User profile update schema (frontend — all demographic fields + preferences)"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    age: Optional[int] = Field(None, ge=13, le=120)
+    gender: Optional[GenderEnum] = None
+    profession: Optional[str] = Field(None, max_length=100)
+    location: Optional[str] = Field(None, max_length=150)
+    bio: Optional[str] = Field(None, max_length=500)
+    phone: Optional[str] = Field(None, max_length=20)
+    emergency_contact: Optional[str] = Field(None, max_length=200)
+    preferred_language: Optional[str] = Field(None, max_length=10)
+    theme: Optional[str] = None
+    notification_preferences: Optional[dict] = None
+    privacy_settings: Optional[dict] = None
+    onboarding_completed: Optional[bool] = None
 
 
 class Token(BaseModel):

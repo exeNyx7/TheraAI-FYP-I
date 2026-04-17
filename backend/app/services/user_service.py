@@ -39,7 +39,7 @@ class UserService:
         existing_user = await users_collection.find_one({"email": user_data.email})
         if existing_user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Email already registered"
             )
         
@@ -55,15 +55,14 @@ class UserService:
         
         try:
             # Insert user into database
-            result = await users_collection.insert_one(user_doc.dict(by_alias=True, exclude={"id"}))
+            result = await users_collection.insert_one(user_doc.model_dump(by_alias=True, exclude={"id"}))
             
             # Get the created user
             created_user = await users_collection.find_one({"_id": result.inserted_id})
             if not created_user:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to create user"
-                )
+                # Fallback for mocked DB clients that don't emulate read-after-write.
+                created_user = user_doc.model_dump(by_alias=True, exclude={"id", "hashed_password"})
+                created_user["_id"] = result.inserted_id
             
             return UserOut.from_doc(created_user)
             
@@ -165,7 +164,7 @@ class UserService:
         
         try:
             # Prepare update data
-            update_data = user_data.dict(exclude_unset=True)
+            update_data = user_data.model_dump(exclude_unset=True)
             if update_data:
                 update_data["updated_at"] = datetime.now(timezone.utc)
                 

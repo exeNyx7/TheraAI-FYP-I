@@ -9,6 +9,7 @@ import {
   TrendingUp,
   Trophy,
   Calendar,
+  UserPlus,
   User,
   Settings,
   LogOut,
@@ -16,23 +17,55 @@ import {
   Menu,
   X,
   Zap,
+  Users,
+  ClipboardList,
+  ShieldCheck,
 } from 'lucide-react';
 
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-  { icon: BookOpen, label: 'Journal', href: '/journal' },
-  { icon: MessageCircle, label: 'Mindful Chat', href: '/chat' },
-  { icon: TrendingUp, label: 'Mood Tracking', href: '/mood' },
-  { icon: Trophy, label: 'Assessments', href: '/assessments' },
-  { icon: Zap, label: 'Achievements', href: '/achievements' },
-  { icon: Calendar, label: 'Appointments', href: '/appointments' },
-  { icon: User, label: 'Profile', href: '/profile' },
-  { icon: Settings, label: 'Settings', href: '/settings' },
+// Human-readable role labels — DB stores 'psychiatrist' but we display 'Therapist'
+const ROLE_LABELS = {
+  patient:      'Patient',
+  psychiatrist: 'Therapist',  // legacy DB value → display as Therapist
+  therapist:    'Therapist',
+  admin:        'Admin',
+};
+
+// Nav items per role — only what each role actually needs
+const THERAPIST_NAV = [
+  { icon: LayoutDashboard, label: 'Dashboard',    href: '/dashboard' },
+  { icon: Users,           label: 'My Patients',  href: '/dashboard' },
+  { icon: Calendar,        label: 'Appointments', href: '/appointments' },
+  { icon: User,            label: 'Profile',      href: '/profile' },
+  { icon: Settings,        label: 'Settings',     href: '/settings' },
 ];
+
+const NAV_BY_ROLE = {
+  patient: [
+    { icon: LayoutDashboard, label: 'Dashboard',     href: '/dashboard' },
+    { icon: BookOpen,        label: 'Journal',        href: '/journal' },
+    { icon: MessageCircle,   label: 'Mindful Chat',   href: '/chat' },
+    { icon: TrendingUp,      label: 'Mood Tracking',  href: '/mood' },
+    { icon: ClipboardList,   label: 'Assessments',    href: '/assessments' },
+    { icon: Zap,             label: 'Achievements',   href: '/achievements' },
+    { icon: Calendar,        label: 'Appointments',   href: '/appointments' },
+    { icon: User,            label: 'Profile',        href: '/profile' },
+    { icon: Settings,        label: 'Settings',       href: '/settings' },
+  ],
+  // Both 'psychiatrist' (legacy DB value) and 'therapist' get the same nav
+  psychiatrist: THERAPIST_NAV,
+  therapist:    THERAPIST_NAV,
+  admin: [
+    { icon: LayoutDashboard, label: 'Dashboard',      href: '/dashboard' },
+    { icon: Users,           label: 'Users',          href: '/users' },
+    { icon: ShieldCheck,     label: 'Reports',        href: '/resources' },
+    { icon: User,            label: 'Profile',        href: '/profile' },
+    { icon: Settings,        label: 'Settings',       href: '/settings' },
+  ],
+};
 
 export function SidebarNav() {
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -58,6 +91,9 @@ export function SidebarNav() {
     logout();
     navigate('/');
   };
+
+  const role = user?.role || 'patient';
+  const navItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.patient;
 
   return (
     <>
@@ -88,7 +124,7 @@ export function SidebarNav() {
       >
         {/* Logo */}
         <Link
-          to="/dashboard"
+          to={['psychiatrist', 'therapist'].includes(role) ? '/therapist-dashboard' : '/dashboard'}
           className={`flex items-center gap-3 mb-10 group ${isCollapsed ? 'justify-center' : ''}`}
           onClick={() => setIsOpen(false)}
         >
@@ -98,9 +134,14 @@ export function SidebarNav() {
             </span>
           </div>
           {!isCollapsed && (
-            <span className="text-2xl font-semibold transition-opacity duration-300" style={{ fontFamily: 'Montserrat' }}>
-              Thera-AI
-            </span>
+            <div>
+              <span className="text-2xl font-semibold transition-opacity duration-300" style={{ fontFamily: 'Montserrat' }}>
+                Thera-AI
+              </span>
+              {role !== 'patient' && (
+                <p className="text-xs text-muted-foreground">{ROLE_LABELS[role] || role}</p>
+              )}
+            </div>
           )}
         </Link>
 
@@ -109,10 +150,10 @@ export function SidebarNav() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href ||
-              (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
+              (item.href !== '/dashboard' && item.href !== '/therapist-dashboard' && location.pathname.startsWith(item.href));
             return (
               <Link
-                key={item.href}
+                key={item.label}
                 to={item.href}
                 onClick={() => setIsOpen(false)}
                 title={isCollapsed ? item.label : ''}

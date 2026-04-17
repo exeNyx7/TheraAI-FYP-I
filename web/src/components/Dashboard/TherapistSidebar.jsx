@@ -6,8 +6,6 @@ import {
   LayoutDashboard,
   Users,
   Calendar,
-  MessageSquare,
-  FileText,
   Settings,
   LogOut,
   ChevronRight,
@@ -18,13 +16,12 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/therapist-dashboard' },
-  { icon: Users, label: 'My Patients', href: '/patients' },
-  { icon: Calendar, label: 'Schedule', href: '/therapist-dashboard/schedule' },
-  { icon: MessageSquare, label: 'Messaging', href: '/therapist-dashboard/messaging' },
-  { icon: ClipboardList, label: 'Treatment Plans', href: '/therapist-dashboard/treatment-plans' },
-  { icon: Activity, label: 'Progress', href: '/progress' },
-  { icon: Settings, label: 'Settings', href: '/settings' },
+  { icon: LayoutDashboard, label: 'Dashboard',       href: '/dashboard' },
+  { icon: Users,           label: 'My Patients',     href: '/patients' },
+  { icon: Calendar,        label: 'Schedule',        href: '/schedule' },
+  { icon: ClipboardList,   label: 'Treatment Plans', href: '/treatment-plans' },
+  { icon: Activity,        label: 'Progress',        href: '/assessments' },
+  { icon: Settings,        label: 'Settings',        href: '/settings' },
 ];
 
 export function TherapistSidebar() {
@@ -67,7 +64,7 @@ export function TherapistSidebar() {
       >
         {/* Logo */}
         <Link
-          to="/therapist-dashboard"
+          to="/dashboard"
           className={`flex items-center gap-3 mb-10 group ${isCollapsed ? 'justify-center' : ''}`}
           onClick={() => setIsOpen(false)}
         >
@@ -90,7 +87,7 @@ export function TherapistSidebar() {
               (item.href !== '/therapist-dashboard' && location.pathname.startsWith(item.href));
             return (
               <Link
-                key={item.href}
+                key={`${item.href}-${item.label}`}
                 to={item.href}
                 onClick={() => setIsOpen(false)}
                 title={isCollapsed ? item.label : ''}

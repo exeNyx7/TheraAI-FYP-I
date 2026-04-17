@@ -36,6 +36,8 @@ secrets/
 backend/.env
 web/.env
 .env.docker
+!backend/.env.example
+!web/.env.example
 
 # Team member specific files
 team-notes/
@@ -225,8 +227,10 @@ containers/
 !.env.example
 backend/.env
 backend/.env.*
+!backend/.env.example
 web/.env
 web/.env.*
+!web/.env.example
 
 # API keys and secrets
 backend/secrets/
@@ -236,6 +240,13 @@ web/secrets/
 *.crt
 api-keys.txt
 secrets.json
+
+# Firebase service account (contains private key — never commit)
+backend/firebase-service-account.json
+firebase-service-account.json
+
+# CI requirements subset (generated during CI, not needed in repo)
+backend/requirements-ci.txt
 
 # =============================================================================
 # IDE & EDITOR FILES

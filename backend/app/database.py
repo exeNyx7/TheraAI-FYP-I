@@ -4,7 +4,7 @@ Database Configuration and Connection Management for TheraAI
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from .config import get_settings
 
 settings = get_settings()
@@ -66,6 +66,24 @@ async def get_journals_collection():
     return db.journals
 
 
+async def get_appointments_collection():
+    """Get appointments collection"""
+    db = await get_database()
+    return db.appointments
+
+
+async def get_crisis_events_collection():
+    """Get crisis events collection"""
+    db = await get_database()
+    return db.crisis_events
+
+
+async def get_device_tokens_collection():
+    """Get device tokens collection"""
+    db = await get_database()
+    return db.device_tokens
+
+
 async def init_database():
     """Initialize database with indexes and constraints"""
     try:
@@ -107,8 +125,26 @@ async def init_database():
         # Index on created_at for sorting
         await journals_collection.create_index("created_at")
         
-        print("✅ Database indexes created successfully (users + journals)")
-        
+        # Create indexes for appointments collection
+        appointments_collection = db.appointments
+        await appointments_collection.create_index([("therapist_id", 1), ("scheduled_at", -1)])
+        await appointments_collection.create_index("patient_id")
+        await appointments_collection.create_index("status")
+        await appointments_collection.create_index([("scheduled_at", 1), ("reminder_sent", 1)])
+
+        # Create indexes for crisis_events collection
+        crisis_collection = db.crisis_events
+        await crisis_collection.create_index("patient_id")
+        await crisis_collection.create_index("acknowledged")
+        await crisis_collection.create_index("created_at")
+
+        # Create indexes for device_tokens collection
+        device_tokens_collection = db.device_tokens
+        await device_tokens_collection.create_index([("user_id", 1), ("token", 1)], unique=True)
+        await device_tokens_collection.create_index("user_id")
+
+        print("✅ Database indexes created successfully (users + journals + appointments + crisis_events + device_tokens)")
+
     except Exception as e:
         print(f"❌ Failed to initialize database: {e}")
         raise e

@@ -15,14 +15,7 @@ async def create_mood(
     current_user: UserOut = Depends(get_current_user)
 ):
     """Create a new mood entry"""
-    # Validate mood value
-    valid_moods = ['happy', 'sad', 'anxious', 'angry', 'calm', 'excited', 'stressed', 'neutral']
-    if mood_data.mood not in valid_moods:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid mood. Must be one of: {', '.join(valid_moods)}"
-        )
-    
+    # Mood validation is handled by MoodCreate.validate_mood() field validator
     mood = await mood_service.create_mood(current_user.id, mood_data)
     
     return MoodResponse(
@@ -30,8 +23,8 @@ async def create_mood(
         user_id=mood["user_id"],
         mood=mood["mood"],
         notes=mood.get("notes"),
-        timestamp=mood["timestamp"],
-        created_at=mood["created_at"]
+        timestamp=mood.get("timestamp") or mood.get("created_at"),
+        created_at=mood.get("created_at") or mood.get("timestamp"),
     )
 
 
@@ -50,8 +43,8 @@ async def get_moods(
             user_id=mood["user_id"],
             mood=mood["mood"],
             notes=mood.get("notes"),
-            timestamp=mood["timestamp"],
-            created_at=mood["created_at"]
+            timestamp=mood.get("timestamp") or mood.get("created_at"),
+            created_at=mood.get("created_at") or mood.get("timestamp"),
         )
         for mood in moods
     ]
@@ -86,8 +79,8 @@ async def get_mood(
         user_id=mood["user_id"],
         mood=mood["mood"],
         notes=mood.get("notes"),
-        timestamp=mood["timestamp"],
-        created_at=mood["created_at"]
+        timestamp=mood.get("timestamp") or mood.get("created_at"),
+        created_at=mood.get("created_at") or mood.get("timestamp"),
     )
 
 
@@ -98,15 +91,7 @@ async def update_mood(
     current_user: UserOut = Depends(get_current_user)
 ):
     """Update a mood entry"""
-    # Validate mood value if provided
-    if mood_data.mood:
-        valid_moods = ['happy', 'sad', 'anxious', 'angry', 'calm', 'excited', 'stressed', 'neutral']
-        if mood_data.mood not in valid_moods:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid mood. Must be one of: {', '.join(valid_moods)}"
-            )
-    
+    # Mood validation is handled by MoodUpdate.validate_mood() field validator
     mood = await mood_service.update_mood(mood_id, current_user.id, mood_data)
     
     if not mood:
@@ -120,8 +105,8 @@ async def update_mood(
         user_id=mood["user_id"],
         mood=mood["mood"],
         notes=mood.get("notes"),
-        timestamp=mood["timestamp"],
-        created_at=mood["created_at"]
+        timestamp=mood.get("timestamp") or mood.get("created_at"),
+        created_at=mood.get("created_at") or mood.get("timestamp"),
     )
 
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { ArrowLeft, Share2, Trash2, Loader2, Smile, Frown, Heart, Wind, Circle, Sparkles, TrendingUp } from 'lucide-react';
@@ -78,7 +78,7 @@ export default function JournalDetailV0() {
   if (loading) {
     return (
       <div className="flex">
-        <SidebarNav />
+        <AppSidebar />
         <main className="flex-1 sidebar-content">
           <div className="flex items-center justify-center min-h-screen">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -91,7 +91,7 @@ export default function JournalDetailV0() {
   if (!journal) {
     return (
       <div className="flex">
-        <SidebarNav />
+        <AppSidebar />
         <main className="flex-1 sidebar-content">
           <div className="max-w-4xl mx-auto p-6 md:p-8 text-center">
             <p className="text-muted-foreground text-lg mb-4">Entry not found</p>
@@ -110,7 +110,7 @@ export default function JournalDetailV0() {
 
   return (
     <div className="flex">
-      <SidebarNav />
+      <AppSidebar />
       <main className="flex-1 sidebar-content">
         <div className="bg-background min-h-screen">
           <div className="max-w-4xl mx-auto p-6 md:p-8 space-y-8">

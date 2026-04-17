@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
-import { SidebarNav } from '../../components/Dashboard/SidebarNav';
+import { useState, useEffect, useRef } from 'react';
+import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Input } from '../../components/ui/input';
-import { Bell, Moon, Lock, Trash2, Shield, Key } from 'lucide-react';
+import { Bell, Moon, Lock, Trash2, Shield, Key, Calendar, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import apiClient from '../../apiClient';
 
 function Toggle({ checked, onChange }) {
   return (
@@ -24,20 +25,80 @@ function Toggle({ checked, onChange }) {
 export default function Settings() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showSuccess, showError } = useToast();
 
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'system');
-  const [notifications, setNotifications] = useState({
-    email: true, push: true, appointments: true, insights: true,
+  const [theme, setTheme] = useState(() => {
+    // Prefer backend-persisted value (from user object), fall back to localStorage
+    return user?.theme || localStorage.getItem('theme') || 'system';
   });
-  const [privacy, setPrivacy] = useState({ shareWithTherapist: true });
+  const isFirstRender = useRef(true);
+  const [notifications, setNotifications] = useState(() => ({
+    email: true, push: true, appointments: true, insights: true,
+    ...(user?.notification_preferences || {}),
+  }));
+  const [privacy, setPrivacy] = useState(() => ({
+    shareWithTherapist: true,
+    ...(user?.privacy_settings ? { shareWithTherapist: user.privacy_settings.share_mood_with_therapist ?? true } : {}),
+  }));
   const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarConfigured, setCalendarConfigured] = useState(true); // assume true until status loaded
+  const [calendarLoading, setCalendarLoading] = useState(false);
 
   useEffect(() => {
     if (!user) navigate('/login');
   }, [user, navigate]);
+
+  // Check Google Calendar connection + configuration status on mount
+  useEffect(() => {
+    if (!user) return;
+    apiClient.get('/calendar/status')
+      .then(res => {
+        setCalendarConnected(res.data.connected);
+        // `configured` tells us whether Google credentials are set on the backend
+        if (res.data.configured === false) setCalendarConfigured(false);
+      })
+      .catch(() => setCalendarConfigured(false));
+  }, [user]);
+
+  // Handle redirect from Google OAuth callback
+  useEffect(() => {
+    const connected = searchParams.get('calendar_connected');
+    if (connected === 'true') {
+      setCalendarConnected(true);
+      showSuccess('Google Calendar connected successfully!');
+    } else if (connected === 'false') {
+      showError('Failed to connect Google Calendar. Please try again.');
+    }
+  }, [searchParams]);
+
+  const handleConnectCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      const res = await apiClient.get('/calendar/auth-url');
+      window.location.href = res.data.auth_url;
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Google Calendar integration is not configured.';
+      showError(msg);
+      setCalendarLoading(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      await apiClient.post('/calendar/disconnect');
+      setCalendarConnected(false);
+      showSuccess('Google Calendar disconnected.');
+    } catch {
+      showError('Failed to disconnect Google Calendar.');
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -50,10 +111,30 @@ export default function Settings() {
       prefersDark ? root.classList.add('dark') : root.classList.remove('dark');
     }
     localStorage.setItem('theme', theme);
-  }, [theme]);
+
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    // Persist to backend only when user explicitly changes theme (not on mount)
+    if (user) savePreference({ theme });
+  }, [theme, user]);
+
+  // Persist a preference update to backend (fire-and-forget — no blocking UI)
+  const savePreference = async (patch) => {
+    try {
+      await apiClient.put('/auth/me', patch);
+    } catch {
+      // silently ignore — preference will resync on next login
+    }
+  };
 
   const toggleNotification = (key) => {
-    setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
+    setNotifications(prev => {
+      const updated = { ...prev, [key]: !prev[key] };
+      savePreference({ notification_preferences: updated });
+      return updated;
+    });
   };
 
   const handleChangePassword = async (e) => {
@@ -64,17 +145,14 @@ export default function Settings() {
     }
     setIsChangingPassword(true);
     try {
-      const token = localStorage.getItem(import.meta.env.VITE_AUTH_TOKEN_KEY || 'theraai_auth_token');
-      const res = await fetch('/api/v1/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ current_password: passwords.current, new_password: passwords.newPass }),
+      await apiClient.post('/auth/change-password', {
+        current_password: passwords.current,
+        new_password: passwords.newPass,
       });
-      if (!res.ok) throw new Error();
       showSuccess('Password changed successfully!');
       setPasswords({ current: '', newPass: '', confirm: '' });
-    } catch {
-      showError('Failed to change password. Check current password.');
+    } catch (err) {
+      showError(err.response?.data?.detail || 'Failed to change password. Check current password.');
     } finally { setIsChangingPassword(false); }
   };
 
@@ -88,10 +166,10 @@ export default function Settings() {
   if (!user) return null;
 
   return (
-    <div className="flex">
-      <SidebarNav />
-      <main className="flex-1 pt-16 md:pt-0">
-        <div className="bg-background min-h-screen">
+    <div className="flex min-h-screen bg-background">
+      <AppSidebar />
+      <main className="flex-1 overflow-auto">
+        <div>
           <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-8">
             <div>
               <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>Settings</h1>
@@ -150,8 +228,80 @@ export default function Settings() {
                     <p className="font-medium">Share Mood with Therapist</p>
                     <p className="text-sm text-muted-foreground">Allow your assigned therapist to view your mood data</p>
                   </div>
-                  <Toggle checked={privacy.shareWithTherapist} onChange={() => setPrivacy(p => ({ ...p, shareWithTherapist: !p.shareWithTherapist }))} />
+                  <Toggle checked={privacy.shareWithTherapist} onChange={() => setPrivacy(p => {
+                    const updated = { ...p, shareWithTherapist: !p.shareWithTherapist };
+                    savePreference({ privacy_settings: { share_mood_with_therapist: updated.shareWithTherapist } });
+                    return updated;
+                  })} />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Google Calendar Integration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" /> Google Calendar
+                </CardTitle>
+                <CardDescription>Sync your therapy appointments to Google Calendar</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!calendarConfigured ? (
+                  /* ── Not configured — credentials not set on backend ── */
+                  <div className="flex items-start gap-3 p-4 border border-border rounded-lg bg-muted/40">
+                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-muted-foreground">Google Calendar Not Available</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        This integration requires Google OAuth credentials to be configured
+                        in the backend. Set <code className="text-xs bg-muted px-1 rounded">GOOGLE_CLIENT_ID</code> and{' '}
+                        <code className="text-xs bg-muted px-1 rounded">GOOGLE_CLIENT_SECRET</code> in{' '}
+                        <code className="text-xs bg-muted px-1 rounded">backend/.env</code> to enable this feature.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Configured — show connect / disconnect ── */
+                  <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {calendarConnected ? (
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <Calendar className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <div>
+                        <p className="font-medium">
+                          {calendarConnected ? 'Google Calendar Connected' : 'Google Calendar Not Connected'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {calendarConnected
+                            ? 'New appointments are automatically added to your calendar'
+                            : 'Connect to automatically sync appointments'}
+                        </p>
+                      </div>
+                    </div>
+                    {calendarConnected ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDisconnectCalendar}
+                        disabled={calendarLoading}
+                        className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                      >
+                        {calendarLoading ? 'Disconnecting...' : 'Disconnect'}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleConnectCalendar}
+                        disabled={calendarLoading}
+                      >
+                        {calendarLoading ? 'Redirecting...' : 'Connect'}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -213,7 +363,13 @@ export default function Settings() {
                     <p className="text-sm font-medium text-destructive">Are you sure? This action cannot be undone.</p>
                     <div className="flex gap-3">
                       <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-transparent">Cancel</Button>
-                      <Button variant="destructive" onClick={() => { logout(); navigate('/'); }} className="flex-1">
+                      <Button variant="destructive" onClick={async () => {
+                        try {
+                          await apiClient.delete('/auth/account');
+                        } catch { /* ignore — account may already be gone */ }
+                        logout();
+                        navigate('/');
+                      }} className="flex-1">
                         Yes, Delete
                       </Button>
                     </div>
