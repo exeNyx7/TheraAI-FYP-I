@@ -3,8 +3,10 @@ Appointments API Routes for TheraAI Teletherapy System
 Handles appointment booking, listing, cancellation, and status updates
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel, Field
 
 from ..models.appointment import (
     AppointmentCreate,
@@ -14,6 +16,7 @@ from ..models.appointment import (
 from ..models.user import UserOut
 from ..services.appointment_service import AppointmentService
 from ..dependencies.auth import get_current_user, get_current_staff
+from ..database import get_database
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -120,3 +123,43 @@ async def update_appointment_status(
         user_id=str(current_user.id),
         update=update,
     )
+
+
+class SessionFeedback(BaseModel):
+    rating: int = Field(..., ge=1, le=5, description="Session rating 1-5")
+    comment: Optional[str] = Field(default=None, max_length=1000)
+
+
+@router.post(
+    "/{appointment_id}/feedback",
+    summary="Submit post-session feedback (patient)",
+)
+async def submit_session_feedback(
+    appointment_id: str,
+    feedback: SessionFeedback,
+    current_user: UserOut = Depends(get_current_user),
+) -> dict:
+    """Persist patient's post-call rating and comment."""
+    from bson import ObjectId
+
+    db = await get_database()
+
+    if not ObjectId.is_valid(appointment_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment ID")
+
+    appt = await db.appointments.find_one({"_id": ObjectId(appointment_id)})
+    if not appt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+
+    if appt.get("patient_id") != str(current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    await db.appointments.update_one(
+        {"_id": ObjectId(appointment_id)},
+        {"$set": {
+            "patient_rating": feedback.rating,
+            "patient_comment": feedback.comment or "",
+            "feedback_at": datetime.now(timezone.utc),
+        }},
+    )
+    return {"message": "Feedback submitted", "rating": feedback.rating}

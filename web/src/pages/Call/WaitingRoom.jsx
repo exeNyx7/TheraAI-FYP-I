@@ -39,7 +39,10 @@ export default function WaitingRoom() {
   const scheduledIso = appt?.scheduled_at || appt?.date || null;
   const scheduledMs = scheduledIso ? new Date(scheduledIso).getTime() : null;
   const diffMs = scheduledMs ? scheduledMs - now : null;
-  const canJoin = diffMs !== null && diffMs <= 2 * 60 * 1000; // T-2 min
+  // [DEMO MODE] Time gate disabled for evaluation purposes.
+  // Original: const canJoin = diffMs !== null && diffMs <= 2 * 60 * 1000; // T-2 min
+  // DEMO: bypassing time check — re-enable before production
+  const canJoin = true;
 
   const fmtCountdown = (ms) => {
     if (ms === null) return '—';
@@ -137,7 +140,7 @@ export default function WaitingRoom() {
                 onClick={handleJoinClick}
               >
                 <Video className="h-4 w-4" />
-                {canJoin ? 'Join Call' : 'Join available 2 min before'}
+                Join Call
               </Button>
             </>
           )}

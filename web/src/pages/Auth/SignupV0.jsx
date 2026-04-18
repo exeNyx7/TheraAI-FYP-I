@@ -101,7 +101,7 @@ export default function SignupV0() {
           </Link>
         </div>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-lg">
+        <Card className="border-border bg-card shadow-xl">
           <CardHeader className="space-y-2">
             <CardTitle className="text-2xl" style={{ fontFamily: 'Montserrat' }}>
               Create Your Account
@@ -126,7 +126,7 @@ export default function SignupV0() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
-                  className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                  className="border-input bg-background"
                 />
               </div>
 
@@ -143,7 +143,7 @@ export default function SignupV0() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                  className="border-input bg-background"
                 />
               </div>
 
@@ -160,7 +160,7 @@ export default function SignupV0() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                  className="border-input bg-background"
                 />
                 <p className="text-xs text-muted-foreground">Minimum 8 characters for security</p>
               </div>
@@ -179,7 +179,7 @@ export default function SignupV0() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    className="bg-background/50 border-border/50 focus:border-primary transition-colors pr-10"
+                    className="border-input bg-background pr-10"
                   />
                   {passwordMatch && (
                     <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
@@ -257,7 +257,7 @@ export default function SignupV0() {
                 <div className="w-full border-t border-border"></div>
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or</span>
+                <span className="bg-card px-3 text-muted-foreground">or</span>
               </div>
             </div>
 

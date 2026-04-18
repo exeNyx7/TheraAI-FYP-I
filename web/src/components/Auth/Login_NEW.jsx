@@ -196,7 +196,7 @@ function Login() {
         <div className="features-preview">
           <div className="feature-item">
             <div className="feature-icon">📝</div>
-            <span>Daily Journaling</span>
+            <span>Daily Diary</span>
           </div>
           <div className="feature-item">
             <div className="feature-icon">😊</div>

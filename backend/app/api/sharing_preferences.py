@@ -14,20 +14,9 @@ from ..database import get_database
 from ..dependencies.auth import get_current_user
 from ..models.user import UserOut
 from ..models.sharing_preference import SharingPreferenceCreate
+from ..utils.router_helpers import safe_str as _safe_str, role_val as _role_val
 
 router = APIRouter(prefix="/sharing-preferences", tags=["Sharing Preferences"])
-
-
-def _role_val(user: UserOut) -> str:
-    role = getattr(user, "role", None)
-    return role.value if hasattr(role, "value") else (role or "")
-
-
-def _safe_str(val) -> str:
-    try:
-        return str(val) if val is not None else ""
-    except Exception:
-        return ""
 
 
 def _format(doc: dict) -> dict:

@@ -41,7 +41,7 @@ const JournalForm = ({ onSubmit, onCancel, initialData = null }) => {
 
     // Content validation
     if (!formData.content.trim()) {
-      newErrors.content = 'Journal content is required';
+      newErrors.content = 'Diary content is required';
     } else if (formData.content.trim().length < MIN_CONTENT_LENGTH) {
       newErrors.content = `Content must be at least ${MIN_CONTENT_LENGTH} characters`;
     } else if (formData.content.length > MAX_CONTENT_LENGTH) {
@@ -90,13 +90,13 @@ const JournalForm = ({ onSubmit, onCancel, initialData = null }) => {
 
       showToast(
         initialData 
-          ? 'Journal entry updated successfully! AI is re-analyzing...' 
-          : 'Journal entry created successfully! AI analysis complete.', 
+          ? 'Diary entry updated successfully! AI is re-analyzing...' 
+          : 'Diary entry created successfully! AI analysis complete.', 
         'success'
       );
     } catch (error) {
       console.error('Submit error:', error);
-      showToast(error.message || 'Failed to save journal entry', 'error');
+      showToast(error.message || 'Failed to save diary entry', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -117,7 +117,7 @@ const JournalForm = ({ onSubmit, onCancel, initialData = null }) => {
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">
-                {initialData ? 'Edit Journal Entry' : 'New Journal Entry'}
+                {initialData ? 'Edit Diary Entry' : 'New Diary Entry'}
               </h2>
               <p className="text-sm text-gray-500">
                 Share your thoughts and feelings

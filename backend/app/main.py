@@ -27,6 +27,7 @@ from .api.session_notes import router as session_notes_router
 from .api.therapists_public import router as therapists_public_router
 from .api.sharing_preferences import router as sharing_preferences_router
 from .api.gamification import router as gamification_router
+from .api.sessions import router as sessions_router
 
 # Load settings
 settings = get_settings()
@@ -46,19 +47,23 @@ async def lifespan(app: FastAPI):
         # Initialize database (create indexes)
         await init_database()
         
-        # Initialize AI service (loads model) in background
-        import threading
-        from .services.ai_service import get_ai_service
-        
-        def load_ai_background():
-            try:
-                ai = get_ai_service()
-                device_info = ai.get_device_info()
-                print(f"🤖 AI Service Loaded in background: {device_info}")
-            except Exception as e:
-                print(f"❌ AI Service Load Error: {e}")
-                
-        threading.Thread(target=load_ai_background, daemon=True).start()
+        # AI models (DistilBERT/RoBERTa) load lazily on first journal analysis.
+        # Set AI_MODELS_PRELOAD=true to warm them up at startup instead.
+        if settings.ai_models_preload:
+            import threading
+            from .services.ai_service import get_ai_service
+
+            def _preload_ai():
+                try:
+                    ai = get_ai_service()
+                    ai._ensure_loaded()
+                    print(f"🤖 AI models pre-loaded: {ai.get_device_info()}")
+                except Exception as e:
+                    print(f"⚠️ AI pre-load skipped: {e}")
+
+            threading.Thread(target=_preload_ai, daemon=True).start()
+        else:
+            print("ℹ️  AI models (DistilBERT/RoBERTa) will load on first journal analysis (lazy)")
         
         # Initialize notification service (FCM) if configured
         try:
@@ -148,6 +153,7 @@ app.include_router(session_notes_router, prefix="/api/v1")
 app.include_router(therapists_public_router, prefix="/api/v1")
 app.include_router(sharing_preferences_router, prefix="/api/v1")
 app.include_router(gamification_router, prefix="/api/v1")
+app.include_router(sessions_router, prefix="/api/v1")
 
 
 @app.get(

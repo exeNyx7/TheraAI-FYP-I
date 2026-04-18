@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Button } from '../ui/button';
-import { Mic, MicOff, Volume2 } from 'lucide-react';
+import { Mic, MicOff } from 'lucide-react';
 
 export function VoiceInput({ onVoiceInput, onTranscriptChange, onListeningChange }) {
   const [isListening, setIsListening] = useState(false);
@@ -45,35 +44,28 @@ export function VoiceInput({ onVoiceInput, onTranscriptChange, onListeningChange
         }
       }
       finalTranscriptRef.current = finalTranscript;
-      const combinedTranscript = `${finalTranscript} ${interimTranscript}`.trim();
-      latestTranscriptRef.current = combinedTranscript;
-      setTranscript(combinedTranscript);
-      onTranscriptChange?.(combinedTranscript);
+      const combined = `${finalTranscript} ${interimTranscript}`.trim();
+      latestTranscriptRef.current = combined;
+      setTranscript(combined);
+      onTranscriptChange?.(combined);
     };
 
     recognition.onend = () => {
       if (shouldKeepListeningRef.current) {
-        try {
-          recognition.start();
-          return;
-        } catch {
-          shouldKeepListeningRef.current = false;
-        }
+        try { recognition.start(); return; } catch { shouldKeepListeningRef.current = false; }
       }
-
       setIsListening(false);
       onListeningChange?.(false);
-      const spokenText = finalTranscriptRef.current.trim() || latestTranscriptRef.current.trim();
-      if (spokenText) {
-        onVoiceInput?.(spokenText);
-      }
+      const spoken = finalTranscriptRef.current.trim() || latestTranscriptRef.current.trim();
+      if (spoken) onVoiceInput?.(spoken);
       setTranscript('');
       finalTranscriptRef.current = '';
       latestTranscriptRef.current = '';
     };
 
     recognition.onerror = (event) => {
-      if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed' || event?.error === 'audio-capture') {
+      const fatal = ['not-allowed', 'service-not-allowed', 'audio-capture'];
+      if (fatal.includes(event?.error)) {
         shouldKeepListeningRef.current = false;
         setIsListening(false);
         onListeningChange?.(false);
@@ -97,34 +89,36 @@ export function VoiceInput({ onVoiceInput, onTranscriptChange, onListeningChange
   if (!supported) return null;
 
   return (
-    <div className="flex items-center gap-3">
-      <Button
+    <div className="flex items-center gap-2">
+      <button
         type="button"
-        variant={isListening ? 'destructive' : 'outline'}
-        size="sm"
         onClick={isListening ? stopListening : startListening}
-        className={`gap-2 transition-all duration-300 ${isListening ? 'animate-pulse' : ''}`}
+        title={isListening ? 'Stop listening' : 'Voice input'}
+        className={`relative flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 border ${
+          isListening
+            ? 'border-destructive/50 bg-destructive/10 text-destructive'
+            : 'border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
+        }`}
       >
         {isListening ? (
           <>
-            <MicOff className="h-4 w-4" />
+            <MicOff className="h-3.5 w-3.5" />
             Stop
+            {/* Pulsing ring */}
+            <span className="absolute -inset-0.5 rounded-full border border-destructive/40 animate-ping opacity-60" />
           </>
         ) : (
           <>
-            <Mic className="h-4 w-4" />
+            <Mic className="h-3.5 w-3.5" />
             Voice
           </>
         )}
-      </Button>
-      {isListening && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
-          <Volume2 className="h-4 w-4 text-destructive" />
-          Listening...
-        </div>
-      )}
-      {transcript && !isListening && (
-        <p className="text-xs text-muted-foreground truncate max-w-xs">{transcript}</p>
+      </button>
+
+      {transcript && (
+        <span className="text-xs text-muted-foreground italic truncate max-w-[200px]">
+          "{transcript}"
+        </span>
       )}
     </div>
   );

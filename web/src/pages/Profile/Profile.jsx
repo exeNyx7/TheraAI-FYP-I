@@ -100,7 +100,7 @@ export default function Profile() {
         <div className="bg-background min-h-screen">
           <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-8">
             <div>
-              <h1 className="text-3xl font-bold font-sans">Profile</h1>
+              <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>Profile</h1>
               <p className="text-muted-foreground mt-2">Manage your account information</p>
             </div>
 

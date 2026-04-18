@@ -1,9 +1,3 @@
-/**
- * Toast Notification Styles
- * Modern notification system styling
- * Integrated with Thera-AI Tailwwind CSS Variables
- */
-
 .toast-container {
   position: fixed;
   bottom: 24px;
@@ -11,115 +5,16 @@
   z-index: 10000;
   display: flex;
   flex-direction: column-reverse;
-  gap: 12px;
+  gap: 10px;
   pointer-events: none;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
 }
 
-.toast {
-  background: hsl(var(--card));
-  border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-  border: 1px solid hsl(var(--border));
-  padding: 14px 18px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  min-width: 320px;
-  max-width: 480px;
-  pointer-events: all;
-  animation: slideInFromBottom 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  transition: all 0.2s ease;
-  overflow: hidden;
-  position: relative;
-}
-
-.toast::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-}
-
-.toast:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
-}
-
-.toast-content {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex: 1;
-}
-
-.toast-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.toast-message {
-  color: hsl(var(--card-foreground));
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.5;
-}
-
-.toast-close {
-  background: none;
-  border: none;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  font-size: 20px;
-  font-weight: 400;
-  padding: 4px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin-left: 12px;
-  flex-shrink: 0;
-}
-
-.toast-close:hover {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
-}
-
-.toast-close:focus {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}
-
-/* Toast Types - Using minimal elegant design */
-.toast-success::before {
-  background-color: hsl(var(--therapy-success, 142 76% 36%));
-}
-
-.toast-error::before {
-  background-color: hsl(var(--therapy-danger, 0 84% 60%));
-}
-
-.toast-warning::before {
-  background-color: hsl(var(--therapy-warning, 38 92% 50%));
-}
-
-.toast-info::before {
-  background-color: hsl(var(--therapy-primary, 262 83% 58%));
-}
-
-/* Animations */
 @keyframes slideInFromBottom {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.95);
+    transform: translateY(16px) scale(0.97);
   }
   to {
     opacity: 1;
@@ -127,27 +22,16 @@
   }
 }
 
-/* Responsive Design */
 @media (max-width: 640px) {
   .toast-container {
     bottom: 16px;
     right: 16px;
     left: 16px;
   }
-  
-  .toast {
-    min-width: auto;
-    width: 100%;
-  }
 }
 
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .toast {
-    animation: none;
-  }
-  
-  .toast:hover {
-    transform: none;
+  .toast-item {
+    animation: none !important;
   }
 }

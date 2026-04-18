@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { VideoCallModal } from '../../components/Teletherapy/VideoCallModal';
 import {
-  Users, Calendar, AlertCircle, Activity, Smile, Frown, Heart, Wind,
+  Users, Calendar, AlertCircle, Activity, Smile, Frown, Heart, Wind, Video,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
@@ -30,8 +31,10 @@ function normalizeDashboard(data) {
 
 export default function TherapistDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [activeAppointment, setActiveAppointment] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(defaultDashboard);
@@ -100,15 +103,16 @@ export default function TherapistDashboard() {
         <div>
           <VideoCallModal
             isOpen={showVideoCall}
-            onClose={() => setShowVideoCall(false)}
-            patientName={selectedPatient?.name || selectedPatient?.full_name || 'Patient'}
+            onClose={() => { setShowVideoCall(false); setActiveAppointment(null); setSelectedPatient(null); }}
+            appointmentId={activeAppointment?.id || activeAppointment?.appointment_id || activeAppointment?._id}
+            patientName={selectedPatient?.name || selectedPatient?.full_name || activeAppointment?.patient_name || 'Patient'}
             therapistName={`Dr. ${displayName}`}
           />
 
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
             <div>
               <h1
-                className="text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent"
+                className="text-3xl font-bold"
                 style={{ fontFamily: 'Montserrat' }}
               >
                 Welcome, Dr. {displayName}
@@ -177,9 +181,9 @@ export default function TherapistDashboard() {
                             <Button
                               size="sm"
                               className="bg-primary hover:bg-primary/90"
-                              onClick={() => { setSelectedPatient(patient); setShowVideoCall(true); }}
+                              onClick={() => navigate('/appointments')}
                             >
-                              Call
+                              <Video className="h-3.5 w-3.5 mr-1" /> Call
                             </Button>
                           </div>
                         </div>
@@ -202,11 +206,20 @@ export default function TherapistDashboard() {
                     <p className="text-sm text-muted-foreground">No upcoming sessions.</p>
                   )}
                   {!loading && upcomingAppointments.map((appt) => (
-                    <div key={appt.id || appt._id || `${appt.patient_name || 'patient'}-${appt.date || appt.scheduled_at || ''}`} className="p-3 border border-border rounded-lg">
+                    <div key={appt.id || appt._id || `${appt.patient_name || 'patient'}-${appt.date || appt.scheduled_at || ''}`} className="p-3 border border-border rounded-lg space-y-2">
                       <p className="font-medium text-sm">{appt.patient_name || appt.patient || 'Patient'}</p>
                       <p className="text-xs text-muted-foreground">
                         {appt.date || appt.scheduled_at || 'Scheduled'} {appt.time && `at ${appt.time}`}
                       </p>
+                      {(appt.id || appt.appointment_id || appt._id) && (
+                        <Button
+                          size="sm"
+                          className="w-full gap-1.5 bg-primary hover:bg-primary/90 h-8 text-xs"
+                          onClick={() => navigate(`/waiting-room/${appt.id || appt.appointment_id || appt._id}`)}
+                        >
+                          <Video className="h-3.5 w-3.5" /> Join Session
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </CardContent>

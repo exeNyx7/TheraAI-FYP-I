@@ -66,7 +66,7 @@ async def create_journal_entry(
 )
 async def get_journal_entries(
     skip: int = Query(default=0, ge=0, description="Number of entries to skip"),
-    limit: int = Query(default=50, ge=1, le=100, description="Maximum number of entries to return"),
+    limit: int = Query(default=50, ge=1, le=500, description="Maximum number of entries to return"),
     current_user: UserOut = Depends(get_current_user)
 ) -> List[JournalOut]:
     """

@@ -76,14 +76,14 @@ export default function JournalV0() {
         content: content.trim(),
         mood: selectedMood,
       });
-      showSuccess('Your journal entry has been saved');
+      showSuccess('Your diary entry has been saved');
       setJournals([newJournal, ...journals]);
       setTitle('');
       setContent('');
       setSelectedMood('neutral');
       setModalOpen(false);
     } catch (error) {
-      showError(error.message || 'Failed to save journal entry');
+      showError(error.message || 'Failed to save diary entry');
     } finally {
       setIsSubmitting(false);
     }
@@ -93,7 +93,7 @@ export default function JournalV0() {
     try {
       await deleteJournal(id);
       setJournals(journals.filter((j) => j.id !== id));
-      showSuccess('Journal entry deleted');
+      showSuccess('Diary entry deleted');
       setDeleteConfirm(null);
     } catch (error) {
       showError('Failed to delete entry');
@@ -175,7 +175,7 @@ export default function JournalV0() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>
-                  My Journal
+                  My Diary
                 </h1>
                 <p className="text-muted-foreground mt-2">
                   {journals.length} {journals.length === 1 ? 'entry' : 'entries'}

@@ -1,9 +1,19 @@
 /**
  * useGamification — fetches and caches gamification data (XP, level, streak, achievements).
- * Call refresh() after any action that awards XP to re-fetch and show toasts.
+ * Fires 'achievement:unlocked' CustomEvents for newly unlocked achievements so the
+ * AchievementUnlockPopup and NotificationPopup can react without prop drilling.
  */
 import { useState, useCallback, useRef } from 'react';
 import apiClient from '../apiClient';
+
+const LS_KEY = 'theraai_seen_achievements';
+
+function getSeenIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]')); } catch { return new Set(); }
+}
+function saveSeenIds(ids) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify([...ids])); } catch {}
+}
 
 export function useGamification() {
   const [summary, setSummary] = useState(null);
@@ -21,17 +31,35 @@ export function useGamification() {
       const newSummary = sumRes.data;
       const newAchievements = achRes.data;
 
-      // Calculate XP delta and newly unlocked achievements since last fetch
       const prevSummary = prevSummaryRef.current;
       const xpDelta = prevSummary ? newSummary.xp - prevSummary.xp : 0;
       const levelUp = prevSummary ? newSummary.level > prevSummary.level : false;
 
-      const prevUnlocked = new Set(
-        (prevSummary?.unlocked_achievements || [])
-      );
+      // Detect newly unlocked achievements using both localStorage and previous fetch
+      const seenIds = getSeenIds();
+      const prevUnlocked = new Set(prevSummary?.unlocked_achievements || []);
+
       const newlyUnlocked = newAchievements.filter(
-        a => a.unlocked && !prevUnlocked.has(a.id)
+        a => a.unlocked && !seenIds.has(a.id)
       );
+
+      // Fire events for each newly unlocked achievement
+      newlyUnlocked.forEach(ach => {
+        // confetti + popup
+        window.dispatchEvent(new CustomEvent('achievement:unlocked', { detail: ach }));
+        // in-app notification bell
+        window.dispatchEvent(new CustomEvent('notification:new', {
+          detail: {
+            id: `ach-${ach.id}-${Date.now()}`,
+            type: 'achievement',
+            title: `Achievement Unlocked: ${ach.title}`,
+            body: `You earned +${ach.xp} XP!`,
+          },
+        }));
+        seenIds.add(ach.id);
+      });
+
+      if (newlyUnlocked.length > 0) saveSeenIds(seenIds);
 
       prevSummaryRef.current = newSummary;
       setSummary(newSummary);

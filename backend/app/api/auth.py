@@ -8,12 +8,12 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
+from fastapi import Request
 from ..models.user import UserIn, UserLogin, UserOut, Token, PasswordChange, UserProfileUpdate
 from ..services.user_service import UserService
 from ..utils.auth import create_access_token, create_token_payload, get_token_expiry_time, verify_password, hash_password
 from ..dependencies.auth import get_current_user, security
 from ..dependencies.rate_limit import limiter
-from fastapi import Request
 from ..config import get_settings
 
 settings = get_settings()
@@ -345,7 +345,8 @@ async def delete_account(
 # ─── Password Reset Flow ──────────────────────────────────────────────────────
 
 @router.post("/forgot-password", summary="Request a password reset OTP")
-async def forgot_password(payload: dict):
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, payload: dict):
     """
     Send a 6-digit OTP to the user's email if the address is registered.
     Always returns the same message to prevent email enumeration.
@@ -387,7 +388,8 @@ async def forgot_password(payload: dict):
 
 
 @router.post("/verify-otp", summary="Verify the password reset OTP")
-async def verify_otp(payload: dict):
+@limiter.limit("5/minute")
+async def verify_otp(request: Request, payload: dict):
     """
     Validate the OTP and return a short-lived reset token (10 min JWT).
     """
@@ -437,7 +439,8 @@ async def verify_otp(payload: dict):
 
 
 @router.post("/reset-password", summary="Reset password using a valid reset token")
-async def reset_password(payload: dict):
+@limiter.limit("5/minute")
+async def reset_password(request: Request, payload: dict):
     """
     Set a new password given a valid reset_token returned by /verify-otp.
     """

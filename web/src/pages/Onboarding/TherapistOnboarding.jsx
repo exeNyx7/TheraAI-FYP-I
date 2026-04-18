@@ -317,7 +317,7 @@ function StepFinish({ data, onChange, onSubmit, onBack, saving }) {
 
 export default function TherapistOnboarding() {
   const navigate = useNavigate();
-  const { updateUser } = useAuth();
+  const { user, updateUser } = useAuth();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState({
@@ -366,7 +366,8 @@ export default function TherapistOnboarding() {
       navigate('/dashboard');
     } catch (err) {
       console.error('Therapist onboarding save failed:', err);
-      // Still navigate — profile can be completed later
+      // Still navigate — update context so OnboardingGate doesn't loop
+      updateUser({ ...user, onboarding_completed: true });
       navigate('/dashboard');
     } finally {
       setSaving(false);

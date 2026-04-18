@@ -29,8 +29,8 @@ export default function Settings() {
   const { showSuccess, showError } = useToast();
 
   const [theme, setTheme] = useState(() => {
-    // Prefer backend-persisted value (from user object), fall back to localStorage
-    return user?.theme || localStorage.getItem('theme') || 'system';
+    // Prefer locally-stored value so dark mode persists across navigation
+    return localStorage.getItem('theme') || user?.theme || 'system';
   });
   const isFirstRender = useRef(true);
   const [notifications, setNotifications] = useState(() => ({

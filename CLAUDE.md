@@ -16,12 +16,23 @@ cd backend && uvicorn app.main:app --reload --port 8000
 cd web && npm run dev  # http://localhost:3000
 ```
 
-**Seed (first time):**
+**Seed (first time or reset):**
 ```bash
 cd backend
-python -m scripts.seed_assessments
-python -m scripts.seed_therapist_profiles   # password: TheraAI@2024!
+python -m scripts.seed_all            # wipe + seed everything
+python -m scripts.seed_all --wipe-only # wipe only
+python -m scripts.seed_all --seed-only # seed without wiping
 ```
+
+**Seeded accounts:**
+| Email | Password | Role |
+|-------|----------|------|
+| `patient@test.com` | `Test@1234` | patient |
+| `admin@theraai.com` | `Admin@2024!` | admin |
+| `dr.ayesha.khan@theraai.com` | `TheraAI@2024!` | psychiatrist |
+| `dr.usman.sheikh@theraai.com` | `TheraAI@2024!` | psychiatrist |
+| `dr.sana.mirza@theraai.com` | `TheraAI@2024!` | psychiatrist |
+| `dr.bilal.chaudhry@theraai.com` | `TheraAI@2024!` | psychiatrist |
 
 ---
 

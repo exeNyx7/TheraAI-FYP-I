@@ -47,12 +47,17 @@ export default function PostCallPatient() {
     }
   };
 
-  const handleDone = () => {
-    // Store feedback locally for now
-    try {
-      const key = `theraai_feedback_${appointmentId}`;
-      localStorage.setItem(key, JSON.stringify({ rating, comment, at: new Date().toISOString() }));
-    } catch {}
+  const handleDone = async () => {
+    if (rating > 0) {
+      try {
+        await apiClient.post(`/appointments/${appointmentId}/feedback`, {
+          rating,
+          comment: comment || undefined,
+        });
+      } catch {
+        // best-effort — navigate regardless
+      }
+    }
     navigate('/dashboard');
   };
 

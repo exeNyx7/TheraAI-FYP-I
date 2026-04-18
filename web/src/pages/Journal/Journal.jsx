@@ -40,9 +40,9 @@ export default function Journal() {
     try {
       await apiClient.post('/journals', entry);
       await fetchJournals();
-      showSuccess('Journal entry created successfully!');
+      showSuccess('Diary entry created successfully!');
     } catch (error) {
-      showError(error.response?.data?.detail || 'Failed to create journal entry.');
+      showError(error.response?.data?.detail || 'Failed to create diary entry.');
     }
   };
 
@@ -50,7 +50,7 @@ export default function Journal() {
     try {
       await apiClient.delete(`/journals/${id}`);
       setJournals(prev => prev.filter(j => (j._id || j.id) !== id));
-      showSuccess('Journal entry deleted.');
+      showSuccess('Diary entry deleted.');
     } catch { showError('Failed to delete entry.'); }
   };
 
@@ -72,7 +72,7 @@ export default function Journal() {
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>My Journal</h1>
+                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>My Diary</h1>
                 <p className="text-muted-foreground mt-2">
                   {journals.length} {journals.length === 1 ? 'entry' : 'entries'}
                 </p>
@@ -130,7 +130,7 @@ export default function Journal() {
                   <BookOpen className="h-10 w-10 text-primary" />
                 </div>
                 <p className="text-muted-foreground text-lg mb-4">
-                  {searchQuery || moodFilter !== 'all' ? 'No entries match your filters' : 'No journal entries yet'}
+                  {searchQuery || moodFilter !== 'all' ? 'No entries match your filters' : 'No diary entries yet'}
                 </p>
                 <Button onClick={() => setModalOpen(true)} variant="outline">
                   Create your first entry

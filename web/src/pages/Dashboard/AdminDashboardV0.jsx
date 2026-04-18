@@ -228,7 +228,7 @@ export default function AdminDashboardV0() {
                         colorClass="text-orange-500"
                         sub={`${stats?.new_users_this_month ?? 0} new this month`}
                       />
-                      <StatCard label="Journal Entries" value={stats?.total_journal_entries} icon={BookOpen} />
+                      <StatCard label="Diary Entries" value={stats?.total_journal_entries} icon={BookOpen} />
                       <StatCard label="Chat Messages" value={stats?.total_chat_messages} icon={MessageSquare} />
                       <StatCard label="Appointments" value={stats?.total_appointments} icon={Calendar} />
                       <StatCard
@@ -316,7 +316,7 @@ export default function AdminDashboardV0() {
                                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
                                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
                                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Joined</th>
-                                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Journals</th>
+                                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Diary Entries</th>
                                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Chats</th>
                                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
                                 <th className="px-4 py-3" />

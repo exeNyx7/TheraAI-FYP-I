@@ -53,7 +53,18 @@ export function WeeklyMoodSummary() {
     );
   }
 
-  if (!summary) return null;
+  if (!summary) return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">This Week's Mood</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground text-center py-6">
+          Start logging moods and journal entries to see your weekly trend here.
+        </p>
+      </CardContent>
+    </Card>
+  );
 
   const maxScore = 10;
 

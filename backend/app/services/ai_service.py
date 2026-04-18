@@ -50,13 +50,19 @@ class AIService:
     # _chatbot_model: Optional[AutoModelForSeq2SeqLM] = None
     _device: Optional[int] = None
     _gpu_config: Optional[Dict[str, Any]] = None
-    
+    _models_loaded: bool = False  # lazy-load flag
+
     def __new__(cls):
-        """Singleton pattern - only one instance of AIService"""
+        """Singleton — cheap creation; models load on first analysis call."""
         if cls._instance is None:
             cls._instance = super(AIService, cls).__new__(cls)
-            cls._instance._initialize_model()
         return cls._instance
+
+    def _ensure_loaded(self) -> None:
+        """Load DistilBERT + RoBERTa on first use (lazy). Thread-safe via GIL."""
+        if not AIService._models_loaded:
+            self._initialize_model()
+            AIService._models_loaded = True
     
     def _detect_gpu_config(self) -> Dict[str, Any]:
         """
@@ -232,18 +238,16 @@ class AIService:
 
             logger.info("🎉 Sentiment + Emotion models initialized and ready!")
             logger.info("💬 Chat responses: Ollama + Llama 3.1 8B (see model_service.py)")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to initialize AI models: {str(e)}")
-            logger.error("⚠️  AI features will not be available")
+            logger.warning("⚠️  Sentiment/emotion analysis unavailable — journal AI features degraded")
             self._sentiment_model = None
-            self._chatbot_model = None
-            raise RuntimeError(f"AI model initialization failed: {str(e)}")
+            self._emotion_model = None
     
     def is_available(self) -> bool:
-        """Check if AI service (sentiment + emotion models) is available"""
+        """Check if sentiment/emotion models are loaded and ready."""
         # DEPRECATED check removed: chatbot_model (BlenderBot) no longer needed
-        # Original: return self._sentiment_model is not None and self._chatbot_model is not None
         return self._sentiment_model is not None
     
     def get_device_info(self) -> dict:
@@ -272,17 +276,10 @@ class AIService:
     
     def analyze_sentiment(self, text: str) -> dict:
         """
-        Run sentiment analysis on text using DistilBERT
-        
-        Args:
-            text: Input text to analyze
-            
-        Returns:
-            dict with 'label' and 'score' from the model
-            
-        Raises:
-            RuntimeError: If model is not available
+        Run sentiment analysis on text using DistilBERT.
+        Lazily loads the model on first call.
         """
+        self._ensure_loaded()
         if not self.is_available():
             raise RuntimeError("AI model is not available")
         
@@ -421,22 +418,10 @@ class AIService:
     
     def analyze_emotions(self, text: str) -> List[Dict[str, float]]:
         """
-        Analyze detailed emotions using RoBERTa GoEmotions
-        
-        Args:
-            text: Journal entry text to analyze
-            
-        Returns:
-            List of top emotions with scores (up to 5)
-            Example: [
-                {"label": "joy", "score": 0.85},
-                {"label": "optimism", "score": 0.62},
-                ...
-            ]
-            
-        Raises:
-            RuntimeError: If emotion model is not available
+        Analyze detailed emotions using RoBERTa GoEmotions.
+        Lazily loads the model on first call.
         """
+        self._ensure_loaded()
         if not self._emotion_model:
             logger.warning("Emotion model not available")
             return []

@@ -19,7 +19,7 @@ function LandingPage() {
   const features = [
     {
       icon: BookOpen,
-      title: 'Daily Journaling',
+      title: 'Daily Diary',
       description: 'Express yourself freely with AI-powered insights and sentiment analysis',
       color: 'purple'
     },
@@ -81,7 +81,7 @@ function LandingPage() {
     },
     {
       number: '02',
-      title: 'Start Journaling',
+      title: 'Start Writing',
       description: 'Write your thoughts and track your mood'
     },
     {
@@ -98,7 +98,7 @@ function LandingPage() {
 
   const stats = [
     { value: '10K+', label: 'Active Users' },
-    { value: '50K+', label: 'Journal Entries' },
+    { value: '50K+', label: 'Diary Entries' },
     { value: '95%', label: 'Satisfaction Rate' },
     { value: '24/7', label: 'AI Support' }
   ];
@@ -150,7 +150,7 @@ function LandingPage() {
           </h1>
           
           <p className="hero-subtitle">
-            Journal, track, and grow with AI-powered insights. 
+            Write, track, and grow with AI-powered insights. 
             Join thousands who are improving their mental health every day.
           </p>
           

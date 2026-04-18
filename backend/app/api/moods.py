@@ -1,12 +1,56 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List
 
-from app.models.mood import MoodCreate, MoodUpdate, MoodResponse
-from app.models.user import UserOut
-from app.dependencies.auth import get_current_user
-from app.services.mood_service import mood_service
+from ..models.mood import MoodCreate, MoodUpdate, MoodResponse
+from ..models.user import UserOut
+from ..dependencies.auth import get_current_user
+from ..services.mood_service import mood_service
 
 router = APIRouter(prefix="/moods", tags=["moods"])
+
+# Moods that indicate high distress and should trigger a crisis check
+_CRISIS_MOODS = {"sad", "anxious", "stressed", "angry"}
+# Consecutive crisis-level moods needed to fire an escalation
+_CRISIS_MOOD_THRESHOLD = 3
+
+
+_CRISIS_COOLDOWN_HOURS = 4  # minimum hours between escalations for the same user
+
+
+async def _check_mood_escalation(user_id: str, current_mood: str) -> None:
+    """Fire-and-forget: if last N moods are all crisis-level AND no recent escalation, record one."""
+    try:
+        from ..database import get_database
+        from ..services.crisis_service import CrisisService
+        from datetime import datetime, timezone, timedelta
+
+        db = await get_database()
+
+        # Check cooldown: skip if a crisis event was already recorded within the window
+        cooldown_cutoff = datetime.now(timezone.utc) - timedelta(hours=_CRISIS_COOLDOWN_HOURS)
+        existing = await db.crisis_events.find_one(
+            {"user_id": user_id, "created_at": {"$gte": cooldown_cutoff}}
+        )
+        if existing:
+            return  # already escalated recently — don't spam
+
+        recent = await db.moods.find(
+            {"user_id": user_id}
+        ).sort("created_at", -1).limit(_CRISIS_MOOD_THRESHOLD).to_list(length=_CRISIS_MOOD_THRESHOLD)
+
+        if len(recent) < _CRISIS_MOOD_THRESHOLD:
+            return
+        if all(m.get("mood", "").lower() in _CRISIS_MOODS for m in recent):
+            await CrisisService.record_crisis_event(
+                user_id=user_id,
+                message=f"Persistent low mood detected: {[m.get('mood') for m in recent]}",
+                severity="moderate",
+                keywords_matched=[],
+                emotions_detected=[current_mood],
+            )
+    except Exception:
+        pass  # non-blocking; errors must not affect the mood save response
 
 
 @router.post("", response_model=MoodResponse, status_code=status.HTTP_201_CREATED)
@@ -15,13 +59,17 @@ async def create_mood(
     current_user: UserOut = Depends(get_current_user)
 ):
     """Create a new mood entry"""
-    # Mood validation is handled by MoodCreate.validate_mood() field validator
     mood = await mood_service.create_mood(current_user.id, mood_data)
-    
+
+    # Fire mood-based escalation check if mood is crisis-level (non-blocking)
+    if mood_data.mood and mood_data.mood.lower() in _CRISIS_MOODS:
+        asyncio.create_task(_check_mood_escalation(str(current_user.id), mood_data.mood))
+
     return MoodResponse(
         id=mood["_id"],
         user_id=mood["user_id"],
         mood=mood["mood"],
+        intensity=mood.get("intensity", 3),
         notes=mood.get("notes"),
         timestamp=mood.get("timestamp") or mood.get("created_at"),
         created_at=mood.get("created_at") or mood.get("timestamp"),
@@ -30,7 +78,7 @@ async def create_mood(
 
 @router.get("", response_model=List[MoodResponse])
 async def get_moods(
-    limit: int = Query(30, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=500),
     skip: int = Query(0, ge=0),
     current_user: UserOut = Depends(get_current_user)
 ):
@@ -42,6 +90,7 @@ async def get_moods(
             id=mood["_id"],
             user_id=mood["user_id"],
             mood=mood["mood"],
+            intensity=mood.get("intensity", 3),
             notes=mood.get("notes"),
             timestamp=mood.get("timestamp") or mood.get("created_at"),
             created_at=mood.get("created_at") or mood.get("timestamp"),
@@ -78,6 +127,7 @@ async def get_mood(
         id=mood["_id"],
         user_id=mood["user_id"],
         mood=mood["mood"],
+        intensity=mood.get("intensity", 3),
         notes=mood.get("notes"),
         timestamp=mood.get("timestamp") or mood.get("created_at"),
         created_at=mood.get("created_at") or mood.get("timestamp"),
@@ -104,6 +154,7 @@ async def update_mood(
         id=mood["_id"],
         user_id=mood["user_id"],
         mood=mood["mood"],
+        intensity=mood.get("intensity", 3),
         notes=mood.get("notes"),
         timestamp=mood.get("timestamp") or mood.get("created_at"),
         created_at=mood.get("created_at") or mood.get("timestamp"),

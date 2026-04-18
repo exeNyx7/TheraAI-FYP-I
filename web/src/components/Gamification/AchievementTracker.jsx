@@ -2,7 +2,7 @@ import { Trophy, Zap, BookOpen, MessageCircle, Calendar, Target, Star, Award, Mo
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 
 const ACHIEVEMENTS = [
-  { id: 'first_entry', name: 'First Step', description: 'Write your first journal entry', icon: BookOpen, color: 'text-blue-500 bg-blue-500/10', xp: 50 },
+  { id: 'first_entry', name: 'First Step', description: 'Write your first diary entry', icon: BookOpen, color: 'text-blue-500 bg-blue-500/10', xp: 50 },
   { id: 'streak_7', name: '7-Day Streak', description: 'Log in 7 days in a row', icon: Flame, color: 'text-orange-500 bg-orange-500/10', xp: 100 },
   { id: 'chat_10', name: 'Chat Master', description: 'Have 10 conversations with AI', icon: MessageCircle, color: 'text-purple-500 bg-purple-500/10', xp: 75 },
   { id: 'mood_log', name: 'Mood Tracker', description: 'Log your mood 5 times', icon: Heart, color: 'text-red-500 bg-red-500/10', xp: 50 },
@@ -11,7 +11,7 @@ const ACHIEVEMENTS = [
   { id: 'assessment', name: 'Self-Aware', description: 'Complete your first assessment', icon: Trophy, color: 'text-emerald-500 bg-emerald-500/10', xp: 75 },
   { id: 'appointment', name: 'Session Booked', description: 'Book your first therapy session', icon: Calendar, color: 'text-teal-500 bg-teal-500/10', xp: 100 },
   { id: 'streak_30', name: 'Dedicated', description: '30-day streak', icon: Star, color: 'text-amber-500 bg-amber-500/10', xp: 250 },
-  { id: 'entries_10', name: 'Journaling Hero', description: 'Write 10 journal entries', icon: Award, color: 'text-primary bg-primary/10', xp: 150 },
+  { id: 'entries_10', name: 'Diary Hero', description: 'Write 10 diary entries', icon: Award, color: 'text-primary bg-primary/10', xp: 150 },
   { id: 'level_5', name: 'Level Up', description: 'Reach level 5', icon: Zap, color: 'text-violet-500 bg-violet-500/10', xp: 200 },
   { id: 'goals_week', name: 'Goal Getter', description: 'Complete all weekly goals', icon: Target, color: 'text-cyan-500 bg-cyan-500/10', xp: 120 },
 ];
@@ -26,7 +26,7 @@ export function AchievementTracker({ unlockedIds = [] }) {
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 text-center">
         <div className="p-4 bg-primary/10 rounded-xl">
-          <p className="text-3xl font-bold text-primary">{unlocked.length}</p>
+          <p className="text-3xl font-bold">{unlocked.length}</p>
           <p className="text-sm text-muted-foreground mt-1">Unlocked</p>
         </div>
         <div className="p-4 bg-muted rounded-xl">

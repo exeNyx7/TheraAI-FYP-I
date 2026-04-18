@@ -42,10 +42,10 @@ class AppointmentService:
         """Book a new appointment"""
         db = await get_database()
 
-        # Validate therapist exists and is a psychiatrist/staff
+        # Validate therapist exists and is a psychiatrist/staff (accepts both role values)
         therapist = await db.users.find_one({
             "_id": ObjectId(data.therapist_id),
-            "role": "psychiatrist",
+            "role": {"$in": ["psychiatrist", "therapist"]},
             "is_active": True,
         })
         if not therapist:
@@ -122,6 +122,23 @@ class AppointmentService:
         except Exception:
             pass
 
+        # Send appointment confirmation email (non-blocking)
+        try:
+            from .email_service import EmailService
+            from ..config import get_settings
+            _settings = get_settings()
+            if _settings.mail_enabled and patient:
+                asyncio.create_task(
+                    EmailService.send_appointment_confirmation(
+                        to_email=patient.get("email", ""),
+                        patient_name=patient.get("full_name", "Patient"),
+                        therapist_name=therapist.get("full_name", "Therapist"),
+                        scheduled_at=data.scheduled_at,
+                    )
+                )
+        except Exception:
+            pass
+
         return AppointmentOut.from_doc(created)
 
     @staticmethod
@@ -138,7 +155,7 @@ class AppointmentService:
         query = {}
         if role == "patient":
             query["patient_id"] = user_id
-        elif role in ("psychiatrist", "admin"):
+        elif role in ("psychiatrist", "therapist", "admin"):
             query["therapist_id"] = user_id
         else:
             query["patient_id"] = user_id

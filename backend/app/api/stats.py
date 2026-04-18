@@ -79,7 +79,7 @@ async def get_user_stats(current_user: UserOut = Depends(get_current_user)):
         
         # Get journal entries
         entries = await db.journals.find(
-            {"user_id": current_user.id}
+            {"user_id": str(current_user.id)}
         ).sort("created_at", -1).to_list(length=None)
         
         # Calculate statistics
@@ -143,7 +143,7 @@ async def get_user_achievements(current_user: UserOut = Depends(get_current_user
         
         # Get journal entries for achievement calculation
         entries = await db.journals.find(
-            {"user_id": current_user.id}
+            {"user_id": str(current_user.id)}
         ).to_list(length=None)
         
         total_entries = len(entries)

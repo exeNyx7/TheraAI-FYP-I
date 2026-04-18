@@ -80,7 +80,7 @@ export default function LoginV0() {
           </Link>
         </div>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-lg">
+        <Card className="border-border bg-card shadow-xl">
           <CardHeader className="space-y-2">
             <CardTitle className="text-2xl" style={{ fontFamily: 'Montserrat' }}>
               Welcome Back
@@ -105,7 +105,7 @@ export default function LoginV0() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                  className="border-input bg-background"
                 />
               </div>
 
@@ -127,7 +127,7 @@ export default function LoginV0() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                  className="border-input bg-background"
                 />
               </div>
 
@@ -147,7 +147,7 @@ export default function LoginV0() {
                 <div className="w-full border-t border-border"></div>
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or</span>
+                <span className="bg-card px-3 text-muted-foreground">or</span>
               </div>
             </div>
 

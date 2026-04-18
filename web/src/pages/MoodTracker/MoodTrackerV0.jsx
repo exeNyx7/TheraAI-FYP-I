@@ -459,7 +459,7 @@ export default function MoodTrackerV0() {
               How are you feeling today?
             </h2>
             <p className="text-muted-foreground">
-              Select your current mood to create a journal entry
+              Select your current mood to create a diary entry
             </p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

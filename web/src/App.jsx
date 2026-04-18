@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { MessageCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
@@ -31,11 +32,32 @@ import PatientDetail from './pages/Therapist/PatientDetail';
 import Schedule from './pages/Therapist/Schedule';
 import TreatmentPlans from './pages/Therapist/TreatmentPlans';
 import NotificationPopup from './components/Notifications/NotificationPopup';
+import AchievementUnlockPopup from './components/Achievements/AchievementUnlockPopup';
+import TherapistProgress from './pages/Therapist/TherapistProgress';
+import SessionsPage from './pages/Sessions/SessionsPage';
+import ResourcesPage from './pages/Resources/ResourcesPage';
 import './App.css';
 
 function AuthAwareRedirect() {
   const { isAuthenticated } = useAuth();
   return <Navigate to={isAuthenticated ? '/dashboard' : '/'} replace />;
+}
+
+function FloatingChatButton() {
+  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Only show for authenticated patients, and not on the chat page itself
+  if (!isAuthenticated || user?.role !== 'patient' || location.pathname === '/chat') return null;
+  return (
+    <button
+      onClick={() => navigate('/chat')}
+      title="Chat with AI"
+      className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 hover:scale-105 hover:shadow-xl transition-all duration-200 flex items-center justify-center active:scale-95"
+    >
+      <MessageCircle className="h-6 w-6" />
+    </button>
+  );
 }
 
 /** Redirects authenticated users who haven't completed onboarding. */
@@ -57,6 +79,8 @@ function App() {
         <Router>
           <div className="app">
             <NotificationPopup />
+            <AchievementUnlockPopup />
+            <FloatingChatButton />
             <Routes>
             {/* Landing Page - Public, no auth check */}
             <Route path="/" element={<LandingPage />} />
@@ -170,10 +194,7 @@ function App() {
               path="/sessions"
               element={
                 <ProtectedRoute roles="patient">
-                  <div className="page-placeholder">
-                    <h2>My Sessions</h2>
-                    <p>View and manage your wellness sessions and consultations.</p>
-                  </div>
+                  <SessionsPage />
                 </ProtectedRoute>
               }
             />
@@ -304,13 +325,19 @@ function App() {
             />
 
             <Route
+              path="/therapist-progress"
+              element={
+                <ProtectedRoute roles={['psychiatrist', 'therapist', 'admin']}>
+                  <TherapistProgress />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/resources"
               element={
                 <ProtectedRoute>
-                  <div className="page-placeholder">
-                    <h2>Resources</h2>
-                    <p>Mental health resources and educational materials.</p>
-                  </div>
+                  <ResourcesPage />
                 </ProtectedRoute>
               }
             />

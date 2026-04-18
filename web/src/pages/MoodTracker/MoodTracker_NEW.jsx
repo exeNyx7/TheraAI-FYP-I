@@ -218,7 +218,7 @@ const MoodTracker = () => {
                 <BarChart3 size={64} />
               </div>
               <h2>Start Your Mood Journey</h2>
-              <p>Write your first journal entry to begin tracking your emotional patterns and insights.</p>
+              <p>Write your first diary entry to begin tracking your emotional patterns and insights.</p>
               <Button 
                 onClick={() => navigate('/journal')}
                 className="cta-button"

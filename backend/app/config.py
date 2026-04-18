@@ -3,7 +3,7 @@ Configuration settings for TheraAI Backend
 Using Pydantic Settings for environment variable management
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import List, Optional
 import os
@@ -122,14 +122,21 @@ class Settings(BaseSettings):
     # AI Models — set true on 8 GB VRAM laptops to keep DistilBERT/RoBERTa
     # on CPU and give all VRAM to Ollama (Llama 3.1 8B)
     ai_models_force_cpu: bool = Field(default=False, alias="AI_MODELS_FORCE_CPU")
+    # Lazy-load DistilBERT/RoBERTa — don't load at startup, load on first journal analysis.
+    # Recommended True on laptops to prevent RAM/VRAM spike at startup.
+    ai_models_preload: bool = Field(default=False, alias="AI_MODELS_PRELOAD")
+
+    # Demo mode — prints crisis alerts in bright red to server console
+    demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
     # Health Check
     health_check_interval: int = Field(default=30, alias="HEALTH_CHECK_INTERVAL")  # seconds
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
         
     @property
     def is_development(self) -> bool:

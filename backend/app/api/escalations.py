@@ -14,20 +14,9 @@ from ..database import get_database
 from ..dependencies.auth import get_current_user
 from ..models.user import UserOut
 from ..models.escalation import EscalationCreate, BookOnBehalfRequest
+from ..utils.router_helpers import safe_str as _safe_str, role_val as _role_val
 
 router = APIRouter(prefix="/escalations", tags=["Escalations"])
-
-
-def _safe_str(val) -> str:
-    try:
-        return str(val) if val is not None else ""
-    except Exception:
-        return ""
-
-
-def _role_val(user: UserOut) -> str:
-    role = getattr(user, "role", None)
-    return role.value if hasattr(role, "value") else (role or "")
 
 
 async def _format(db, doc: dict) -> dict:

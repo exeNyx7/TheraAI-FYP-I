@@ -5,8 +5,8 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
-from app.database import get_database
-from app.models.mood import MoodCreate, MoodUpdate
+from ..database import get_database
+from ..models.mood import MoodCreate, MoodUpdate
 
 
 class MoodService:
@@ -20,6 +20,7 @@ class MoodService:
         mood_dict = {
             "user_id": user_id,
             "mood": mood_data.mood,
+            "intensity": mood_data.intensity if mood_data.intensity is not None else 3,
             "notes": mood_data.notes or "",
             "timestamp": mood_data.timestamp or datetime.now(timezone.utc),
             "created_at": datetime.now(timezone.utc)

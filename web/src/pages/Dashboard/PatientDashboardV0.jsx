@@ -1,8 +1,3 @@
-/**
- * Patient Dashboard Component V0
- * Modern, dynamic dashboard for patient wellness journey
- */
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,6 +7,7 @@ import { QuickActions } from '../../components/Dashboard/QuickActions';
 import { ActivityHeatmap } from '../../components/Dashboard/ActivityHeatmap';
 import { WeeklyMoodSummary } from '../../components/Dashboard/WeeklyMoodSummary';
 import { getUserStats } from '../../services/statsService';
+import apiClient from '../../apiClient';
 import { Loader2 } from 'lucide-react';
 
 export default function PatientDashboardV0() {
@@ -21,50 +17,53 @@ export default function PatientDashboardV0() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    // Fetch user stats from backend
-    fetchStats();
+    if (!user) { navigate('/login'); return; }
+    fetchData();
   }, [user, navigate]);
 
-  const fetchStats = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await getUserStats();
-      
-      // Transform backend stats to dashboard format
+
+      // Fetch stats and most recent mood in parallel
+      const [statsResult, moodsResult] = await Promise.allSettled([
+        getUserStats(),
+        apiClient.get('/moods', { params: { limit: 1 } }),
+      ]);
+
+      const s = statsResult.status === 'fulfilled' ? statsResult.value : {};
+
+      // Extract most recent mood label
+      let currentMood = 'neutral';
+      if (moodsResult.status === 'fulfilled') {
+        const raw = moodsResult.value.data;
+        const list = Array.isArray(raw) ? raw : raw?.moods || [];
+        if (list.length > 0) currentMood = list[0].mood || 'neutral';
+      }
+
       setStats({
-        streak: data.streak || 0,
-        currentMood: data.recent_mood || 'Neutral',
-        goalsCompleted: data.weekly_progress || 0,
-        totalGoals: data.weekly_goal || 5,
-        wellnessScore: data.mood_score || 0,
-        journalEntries: data.journal_count || 0,
-        moodScore: data.mood_score || 0,
+        streak:        s.streak         ?? 0,
+        currentMood,
+        goalsCompleted: s.weekly_progress ?? 0,
+        totalGoals:    s.weekly_goal     ?? 5,
+        wellnessScore: s.mood_score      ?? 0,
+        journalEntries: s.journal_entries ?? 0,
+        level:         s.level           ?? 1,
+        totalPoints:   s.total_points    ?? 0,
       });
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-      // Set default stats on error
+    } catch {
       setStats({
-        streak: 0,
-        currentMood: 'Neutral',
-        goalsCompleted: 0,
-        totalGoals: 5,
-        wellnessScore: 0,
-        journalEntries: 0,
-        moodScore: 0,
+        streak: 0, currentMood: 'neutral',
+        goalsCompleted: 0, totalGoals: 5,
+        wellnessScore: 0, journalEntries: 0,
+        level: 1, totalPoints: 0,
       });
     } finally {
       setLoading(false);
     }
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   if (loading) {
     return (
@@ -82,14 +81,8 @@ export default function PatientDashboardV0() {
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
             <DashboardHeader stats={stats} />
             <QuickActions />
-            
-            {/* Activity Heatmap + Weekly Mood Summary */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <ActivityHeatmap />
-              </div>
-              <WeeklyMoodSummary />
-            </div>
+            <ActivityHeatmap />
+            <WeeklyMoodSummary />
           </div>
         </div>
       </main>

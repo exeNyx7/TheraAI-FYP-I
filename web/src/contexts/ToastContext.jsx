@@ -4,6 +4,7 @@
  */
 
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 import './Toast.css';
 
 // Toast types
@@ -129,36 +130,53 @@ function ToastContainer() {
           toast={toast}
           onClose={() => removeToast(toast.id)}
         />
+
       ))}
     </div>
   );
 }
 
+const TOAST_CONFIG = {
+  success: {
+    Icon: CheckCircle2,
+    iconClass: 'text-emerald-500',
+    borderClass: 'border-l-emerald-500',
+  },
+  error: {
+    Icon: XCircle,
+    iconClass: 'text-red-500',
+    borderClass: 'border-l-red-500',
+  },
+  warning: {
+    Icon: AlertTriangle,
+    iconClass: 'text-amber-500',
+    borderClass: 'border-l-amber-500',
+  },
+  info: {
+    Icon: Info,
+    iconClass: 'text-blue-500',
+    borderClass: 'border-l-blue-500',
+  },
+};
+
 // Individual Toast Component
 function Toast({ toast, onClose }) {
-  const getIcon = () => {
-    switch (toast.type) {
-      case TOAST_TYPES.SUCCESS:
-        return '✅';
-      case TOAST_TYPES.ERROR:
-        return '❌';
-      case TOAST_TYPES.WARNING:
-        return '⚠️';
-      case TOAST_TYPES.INFO:
-        return 'ℹ️';
-      default:
-        return 'ℹ️';
-    }
-  };
+  const config = TOAST_CONFIG[toast.type] || TOAST_CONFIG.info;
+  const { Icon, iconClass, borderClass } = config;
 
   return (
-    <div className={`toast toast-${toast.type}`}>
-      <div className="toast-content">
-        <span className="toast-icon">{getIcon()}</span>
-        <span className="toast-message">{toast.message}</span>
-      </div>
-      <button className="toast-close" onClick={onClose} aria-label="Close notification">
-        ×
+    <div
+      className={`toast-item flex items-start gap-3 p-4 rounded-xl bg-card border border-border border-l-4 ${borderClass} shadow-lg min-w-[300px] max-w-[420px] pointer-events-auto`}
+      style={{ animation: 'slideInFromBottom 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
+    >
+      <Icon className={`h-5 w-5 flex-shrink-0 mt-0.5 ${iconClass}`} />
+      <p className="flex-1 text-sm font-medium text-card-foreground leading-relaxed">{toast.message}</p>
+      <button
+        onClick={onClose}
+        aria-label="Close notification"
+        className="text-muted-foreground hover:text-foreground transition-colors ml-1 flex-shrink-0"
+      >
+        <X className="h-4 w-4" />
       </button>
     </div>
   );

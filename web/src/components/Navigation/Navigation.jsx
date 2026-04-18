@@ -78,7 +78,7 @@ function Navigation() {
     if (isMember()) {
       return [
         ...commonItems,
-        { path: '/journal', label: 'Journal', icon: BookOpen },
+        { path: '/journal', label: 'Diary', icon: BookOpen },
         { path: '/mood-tracker', label: 'Moods', icon: BarChart3 },
         { path: '/sessions', label: 'My Sessions', icon: MessageSquare },
         { path: '/progress', label: 'My Progress', icon: TrendingUp },

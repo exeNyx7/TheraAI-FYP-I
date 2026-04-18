@@ -17,21 +17,9 @@ from ..models.treatment_plan import (
     TreatmentPlanUpdate,
 )
 from ..dependencies.rbac import require_therapist
+from ..utils.router_helpers import safe_str as _safe_str, is_admin as _is_admin, therapist_scope_filter as _scope_filter
 
 router = APIRouter(prefix="/treatment-plans", tags=["Treatment Plans"])
-
-
-def _is_admin(user: UserOut) -> bool:
-    role = getattr(user, "role", None)
-    role_val = role.value if hasattr(role, "value") else role
-    return role_val == "admin"
-
-
-def _safe_str(val) -> str:
-    try:
-        return str(val) if val is not None else ""
-    except Exception:
-        return ""
 
 
 def _serialize(doc: dict) -> dict:
@@ -48,12 +36,6 @@ def _serialize(doc: dict) -> dict:
         "created_at": doc.get("created_at").isoformat() if isinstance(doc.get("created_at"), datetime) else doc.get("created_at"),
         "updated_at": doc.get("updated_at").isoformat() if isinstance(doc.get("updated_at"), datetime) else doc.get("updated_at"),
     }
-
-
-def _scope_filter(current_user: UserOut) -> dict:
-    if _is_admin(current_user):
-        return {}
-    return {"therapist_id": str(current_user.id)}
 
 
 @router.post("", summary="Create treatment plan")

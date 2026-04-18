@@ -1,44 +1,115 @@
+import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "../ui/button"
+import { Menu, X } from "lucide-react"
+
+function LogoMark() {
+  const [imgError, setImgError] = useState(false)
+  if (imgError) {
+    return (
+      <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center shadow-md flex-shrink-0">
+        <span className="text-sm font-bold text-primary-foreground">T</span>
+      </div>
+    )
+  }
+  return (
+    <img
+      src="/logo.png"
+      alt="TheraAI logo"
+      className="h-9 w-9 rounded-xl object-contain flex-shrink-0"
+      onError={() => setImgError(true)}
+    />
+  )
+}
 
 export default function Navbar() {
   const location = useLocation()
-  const pathname = location.pathname
+  const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Hide navbar on login/signup pages
-  if (pathname === "/login" || pathname === "/signup") {
-    return null
-  }
+  if (location.pathname === "/login" || location.pathname === "/signup") return null
+
+  const navLinks = [
+    { label: "Features", href: "#features" },
+    { label: "How It Works", href: "#how-it-works" },
+    { label: "Why TheraAI", href: "#why-us" },
+  ]
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/85 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
+
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-md">
-              <span className="text-sm font-bold text-primary-foreground">T</span>
-            </div>
-            <span className="text-xl font-semibold" style={{ fontFamily: "Montserrat" }}>
-              Thera-AI
+          <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+            <LogoMark />
+            <span className="text-xl font-bold tracking-tight" style={{ fontFamily: "Montserrat" }}>
+              TheraAI
             </span>
           </Link>
 
-          {/* Auth Buttons */}
-          <div className="flex items-center gap-3">
+          {/* Desktop nav links */}
+          <div className="hidden md:flex items-center gap-7">
+            {navLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+
+          {/* Desktop CTA */}
+          <div className="hidden md:flex items-center gap-2">
             <Link to="/login">
-              <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-                Login
+              <Button variant="ghost" size="sm" className="hover:bg-primary/8 font-medium">
+                Log In
               </Button>
             </Link>
             <Link to="/signup">
-              <Button size="sm" className="bg-primary hover:bg-primary/90 shadow-md">
-                Sign Up
+              <Button size="sm" className="bg-primary hover:bg-primary/90 shadow-md font-medium px-5">
+                Get Started Free
               </Button>
             </Link>
           </div>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle menu"
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile menu */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl">
+          <div className="px-4 py-4 space-y-1">
+            {navLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                className="block py-2.5 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </a>
+            ))}
+            <div className="flex flex-col gap-2 pt-3 mt-2 border-t border-border/50">
+              <Link to="/login" onClick={() => setMobileOpen(false)}>
+                <Button variant="outline" className="w-full">Log In</Button>
+              </Link>
+              <Link to="/signup" onClick={() => setMobileOpen(false)}>
+                <Button className="w-full bg-primary hover:bg-primary/90">Get Started Free</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   )
 }

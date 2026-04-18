@@ -200,8 +200,8 @@ def verify_password_reset_token(token: str) -> Optional[str]:
         if email is None or token_type != "password_reset":
             return None
             
-        # Check if token is expired
-        if exp and datetime.utcfromtimestamp(exp) < datetime.now(timezone.utc):
+        # Check if token is expired (use timezone-aware comparison)
+        if exp and datetime.fromtimestamp(exp, tz=timezone.utc) < datetime.now(timezone.utc):
             return None
             
         return email

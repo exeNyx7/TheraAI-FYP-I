@@ -10,6 +10,16 @@
       content="TheraAI - AI-powered therapy assistance platform"
     />
     <title>TheraAI</title>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch(e) {}
+    })();
+  </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

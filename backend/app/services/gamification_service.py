@@ -158,10 +158,10 @@ async def check_achievements(user_id: str) -> list[str]:
         level = int(user.get("level", 1))
 
         # Fetch counts
-        journals_count = await _count_docs(db, "journal_entries", user_id)
-        moods_count = await _count_docs(db, "mood_entries", user_id)
+        journals_count = await _count_docs(db, "journals", user_id)
+        moods_count = await _count_docs(db, "moods", user_id)
         assessments_count = await _count_docs(db, "assessment_results", user_id)
-        chat_count = await _count_docs(db, "chat_messages", user_id)
+        chat_count = await _count_docs(db, "chat_history", user_id)
 
         ctx = {
             "journals_count": journals_count,

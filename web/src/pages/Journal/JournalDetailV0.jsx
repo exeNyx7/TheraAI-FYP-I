@@ -48,7 +48,7 @@ export default function JournalDetailV0() {
       setJournal(data);
     } catch (error) {
       console.error('Failed to fetch journal:', error);
-      showError('Failed to load journal entry');
+      showError('Failed to load diary entry');
       navigate('/journal');
     } finally {
       setLoading(false);
@@ -58,10 +58,22 @@ export default function JournalDetailV0() {
   const handleDelete = async () => {
     try {
       await deleteJournal(id);
-      showSuccess('Journal entry deleted');
+      showSuccess('Entry deleted.');
       navigate('/journal');
-    } catch (error) {
-      showError('Failed to delete entry');
+    } catch {
+      showError('Failed to delete entry.');
+    }
+  };
+
+  const handleShare = async () => {
+    const text = `${journal.title}\n\n${journal.content}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: journal.title, text });
+      } catch { /* user cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(text);
+      showSuccess('Copied to clipboard!');
     }
   };
 
@@ -77,9 +89,9 @@ export default function JournalDetailV0() {
 
   if (loading) {
     return (
-      <div className="flex">
+      <div className="flex bg-background min-h-screen">
         <AppSidebar />
-        <main className="flex-1 sidebar-content">
+        <main className="flex-1 bg-background">
           <div className="flex items-center justify-center min-h-screen">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -90,15 +102,13 @@ export default function JournalDetailV0() {
 
   if (!journal) {
     return (
-      <div className="flex">
+      <div className="flex bg-background min-h-screen">
         <AppSidebar />
-        <main className="flex-1 sidebar-content">
+        <main className="flex-1 bg-background">
           <div className="max-w-4xl mx-auto p-6 md:p-8 text-center">
             <p className="text-muted-foreground text-lg mb-4">Entry not found</p>
             <Link to="/journal">
-              <Button variant="outline" className="bg-transparent">
-                Back to Journal
-              </Button>
+              <Button variant="outline">Back to Diary</Button>
             </Link>
           </div>
         </main>
@@ -118,7 +128,7 @@ export default function JournalDetailV0() {
             <Link to="/journal">
               <Button variant="ghost" className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
-                Back to Journal
+                Back to Diary
               </Button>
             </Link>
 
@@ -126,7 +136,7 @@ export default function JournalDetailV0() {
             <Card className="p-8 space-y-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h1 className="text-4xl font-bold" style={{ fontFamily: 'Montserrat' }}>
+                  <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>
                     {journal.title || 'Untitled Entry'}
                   </h1>
                   <p className="text-muted-foreground mt-2">{formatDate(journal.created_at)}</p>
@@ -247,9 +257,13 @@ export default function JournalDetailV0() {
 
               {/* Actions */}
               <div className="flex gap-3 border-t border-border pt-6">
+                <Button variant="outline" className="gap-2" onClick={handleShare}>
+                  <Share2 className="h-4 w-4" />
+                  Share
+                </Button>
                 <Button
                   variant="outline"
-                  className="gap-2 text-destructive hover:text-destructive bg-transparent"
+                  className="gap-2 text-destructive hover:text-destructive"
                   onClick={() => setDeleteConfirm(true)}
                 >
                   <Trash2 className="h-4 w-4" />

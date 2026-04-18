@@ -167,9 +167,12 @@ async def list_users(
         if is_active is not None:
             query["is_active"] = is_active
         if search:
+            # Escape special regex chars to prevent ReDoS
+            import re
+            safe_search = re.escape(search)
             query["$or"] = [
-                {"full_name": {"$regex": search, "$options": "i"}},
-                {"email": {"$regex": search, "$options": "i"}},
+                {"full_name": {"$regex": safe_search, "$options": "i"}},
+                {"email": {"$regex": safe_search, "$options": "i"}},
             ]
 
         total = await db.users.count_documents(query)

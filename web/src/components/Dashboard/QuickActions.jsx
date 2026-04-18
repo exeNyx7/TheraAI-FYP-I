@@ -40,7 +40,7 @@ export function QuickActions() {
               <BookOpen className="h-7 w-7 text-blue-500 group-hover:animate-pulse" />
             </div>
             <div className="space-y-1">
-              <p className="font-semibold text-base">Journal</p>
+              <p className="font-semibold text-base">Diary</p>
               <p className="text-xs text-muted-foreground">Write & Reflect</p>
             </div>
           </div>

@@ -23,7 +23,7 @@ export default function Messaging() {
         <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
           <div>
             <h1
-              className="text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent"
+              className="text-3xl font-bold"
               style={{ fontFamily: 'Montserrat' }}
             >
               Messaging

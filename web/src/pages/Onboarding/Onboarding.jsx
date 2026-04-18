@@ -24,7 +24,7 @@ const REASONS = [
 
 const GOALS = [
   { id: 'mood',      label: 'Track my mood daily' },
-  { id: 'journal',   label: 'Journal my thoughts' },
+  { id: 'journal',   label: 'Keep a diary' },
   { id: 'therapist', label: 'Connect with a therapist' },
   { id: 'chat',      label: 'Talk to the AI companion' },
   { id: 'assessments', label: 'Take mental health assessments' },
@@ -77,7 +77,7 @@ function MultiChip({ items, selected, onToggle }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -99,12 +99,21 @@ export default function Onboarding() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-  const handleSkip = () => navigate('/dashboard');
+  const handleSkip = async () => {
+    // Must update context so OnboardingGate doesn't redirect back
+    try {
+      const res = await apiClient.put('/auth/me', { onboarding_completed: true });
+      updateUser(res.data);
+    } catch {
+      updateUser({ ...user, onboarding_completed: true });
+    }
+    navigate('/dashboard');
+  };
 
   const handleFinish = async () => {
     setSaving(true);
     try {
-      await apiClient.put('/auth/me', {
+      const res = await apiClient.put('/auth/me', {
         onboarding_completed: true,
         notification_preferences: {
           email: notifyReminders,
@@ -113,8 +122,10 @@ export default function Onboarding() {
           insights: notifyInsights,
         },
       });
+      updateUser(res.data);
     } catch {
-      // best-effort — still navigate even if save fails
+      // best-effort — update context locally so navigation works
+      updateUser({ ...user, onboarding_completed: true });
     } finally {
       setSaving(false);
       navigate('/dashboard');

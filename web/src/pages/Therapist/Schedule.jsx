@@ -78,7 +78,7 @@ export default function Schedule() {
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
               <h1
-                className="text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent"
+                className="text-3xl font-bold"
                 style={{ fontFamily: 'Montserrat' }}
               >
                 Schedule
