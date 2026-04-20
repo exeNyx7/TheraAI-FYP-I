@@ -10,7 +10,16 @@
       "Bash(npx --no vite build --mode development)",
       "Bash(python -c \"from app.api.escalations import router; from app.api.treatment_plans import router; from app.api.session_notes import router; from app.api.therapists_public import router; from app.api.sharing_preferences import router; print\\('All routers import OK'\\)\")",
       "Bash([ -f \"C:/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/$f\" ])",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(sed -i 's/Write your first journal entry/Write your first diary entry/g; \\\\ *)",
+      "Bash(sed -i 's/label: '\\\\''Journal'\\\\''/label: '\\\\''Diary'\\\\''/g' /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/web/src/components/Navigation/Navigation.jsx)",
+      "Bash(sed -i 's/Journal Entries/Diary Entries/g; \\\\ *)",
+      "Bash(sed -i 's/Journal my thoughts/Keep a diary/g' /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/web/src/pages/Onboarding/Onboarding.jsx)",
+      "Bash(sed -i 's/Your journal entry has been saved/Your diary entry has been saved/g; \\\\ *)",
+      "Bash(sed -i 's/create a journal entry/create a diary entry/g' /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/web/src/pages/MoodTracker/MoodTrackerV0.jsx)",
+      "Bash(sed -i 's/Write your first journal entry/Write your first diary entry/g' /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/web/src/pages/MoodTracker/MoodTracker_NEW.jsx)",
+      "Bash(python -c \"import scripts.seed_all; print\\('✅ Syntax OK'\\)\")",
+      "Bash(python -m py_compile scripts/seed_all.py)"
     ]
   }
 }
