@@ -1,0 +1,52 @@
+# =========================================================================
+# TheraAI Backend — Production Dependencies (Render / Cloud Deployment)
+# Python 3.11+ | No PyTorch, no Ollama — uses Groq cloud LLM API instead.
+#
+# Install: pip install -r requirements.prod.txt
+# =========================================================================
+
+# Web Framework
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+slowapi>=0.1.9,<0.2.0
+
+# Database
+motor>=3.3.0,<4.0.0
+pymongo>=4.7.0,<5.0.0
+
+# Data Validation & Settings
+pydantic>=2.7.0,<3.0.0
+pydantic-settings>=2.3.0,<3.0.0
+email-validator>=2.1.0,<3.0.0
+
+# Authentication & Security
+bcrypt>=4.1.0,<5.0.0
+python-jose[cryptography]>=3.3.0,<4.0.0
+passlib[bcrypt]>=1.7.4,<2.0.0
+
+# Email (async SMTP)
+aiosmtplib>=3.0.0
+
+# Scheduling (appointment reminders)
+apscheduler>=3.10.0
+
+# Firebase Cloud Messaging (push notifications)
+firebase-admin>=6.0.0
+
+# Google Calendar OAuth2 sync
+google-auth>=2.0.0
+google-api-python-client>=2.0.0
+google-auth-oauthlib>=1.0.0
+
+# Caching & Utilities
+cachetools>=5.0.0
+python-dotenv>=1.0.0,<2.0.0
+pytz>=2024.1
+httpx>=0.27.0,<1.0.0
+
+# Email Notifications
+fastapi-mail>=1.4.0,<2.0.0
+jinja2>=3.1.0,<4.0.0
+
+# LLM Chat — Groq Cloud API (replaces local Ollama)
+groq>=0.8.0

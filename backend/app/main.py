@@ -185,7 +185,7 @@ async def health_check():
         # Check database health
         db_health = await check_database_health()
 
-        # Check Ollama / ModelService health
+        # Check Groq / ModelService health
         from .services.model_service import ModelService
         model_health = await ModelService.check_health()
 
@@ -208,7 +208,7 @@ async def health_check():
                 "jwt_auth": "enabled",
                 "sentiment_analysis": "distilbert-base-uncased-finetuned-sst-2-english",
                 "emotion_detection": "SamLowe/roberta-base-go_emotions",
-                "chat_llm": model_health.get("model", "llama3.1:8b"),
+                "chat_llm": model_health.get("model", "groq/llama-3.1-8b-instant"),
             }
         }
     except Exception as e:

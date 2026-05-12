@@ -5,11 +5,54 @@ import { Input } from '../../components/ui/input';
 import { AddJournalModal } from '../../components/Journal/AddJournalModal';
 import { JournalCard } from '../../components/Journal/JournalCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Plus, Search, BookOpen } from 'lucide-react';
+import { Plus, Search, BookOpen, X, AlertTriangle, Phone } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
 import apiClient from '../../apiClient';
+
+const CRISIS_COLORS = {
+  emergency: { bg: 'bg-red-50 border-red-400 dark:bg-red-950/40', icon: 'text-red-500', title: 'text-red-700 dark:text-red-400' },
+  high:      { bg: 'bg-orange-50 border-orange-400 dark:bg-orange-950/40', icon: 'text-orange-500', title: 'text-orange-700 dark:text-orange-400' },
+  moderate:  { bg: 'bg-yellow-50 border-yellow-400 dark:bg-yellow-950/40', icon: 'text-yellow-600', title: 'text-yellow-700 dark:text-yellow-400' },
+};
+
+function CrisisBanner({ severity, onDismiss, onBookTherapist }) {
+  const c = CRISIS_COLORS[severity] || CRISIS_COLORS.moderate;
+  const isUrgent = severity === 'emergency' || severity === 'high';
+  return (
+    <div className={`border-l-4 rounded-lg p-4 flex gap-3 ${c.bg}`}>
+      <AlertTriangle className={`h-5 w-5 mt-0.5 shrink-0 ${c.icon}`} />
+      <div className="flex-1 space-y-2">
+        <p className={`font-semibold ${c.title}`}>
+          {severity === 'emergency' ? 'We noticed something concerning in your entry' :
+           severity === 'high' ? 'Your entry suggests you may be struggling' :
+           'Your entry reflects some distress'}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          You are not alone. Reaching out is a sign of strength.
+          {isUrgent && ' If you are in immediate danger, please contact emergency services.'}
+        </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <span className="inline-flex items-center gap-1.5 text-xs bg-background border rounded-full px-3 py-1 font-medium">
+            <Phone className="h-3 w-3" /> Pakistan: Umang 0317-4288665
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-xs bg-background border rounded-full px-3 py-1 font-medium">
+            <Phone className="h-3 w-3" /> Rozan Counseling: 051-2890505
+          </span>
+          {isUrgent && (
+            <Button size="sm" className="h-7 text-xs bg-primary hover:bg-primary/90" onClick={onBookTherapist}>
+              Book a Therapist
+            </Button>
+          )}
+        </div>
+      </div>
+      <button onClick={onDismiss} className="shrink-0 text-muted-foreground hover:text-foreground">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function Journal() {
   const { user } = useAuth();
@@ -20,6 +63,7 @@ export default function Journal() {
   const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [moodFilter, setMoodFilter] = useState('all');
+  const [crisisAlert, setCrisisAlert] = useState(null); // { severity, show_book_therapist }
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -38,9 +82,14 @@ export default function Journal() {
 
   const handleCreate = async (entry) => {
     try {
-      await apiClient.post('/journals', entry);
+      const res = await apiClient.post('/journals', entry);
       await fetchJournals();
-      showSuccess('Diary entry created successfully!');
+      if (res.data?.crisis_detected) {
+        setCrisisAlert({
+          severity: res.data.crisis_severity,
+          show_book_therapist: res.data.crisis_severity === 'high' || res.data.crisis_severity === 'emergency',
+        });
+      }
     } catch (error) {
       showError(error.response?.data?.detail || 'Failed to create diary entry.');
     }
@@ -81,6 +130,15 @@ export default function Journal() {
                 <Plus className="h-4 w-4" /> New Entry
               </Button>
             </div>
+
+            {/* Crisis banner */}
+            {crisisAlert && (
+              <CrisisBanner
+                severity={crisisAlert.severity}
+                onDismiss={() => setCrisisAlert(null)}
+                onBookTherapist={() => { setCrisisAlert(null); navigate('/appointments'); }}
+              />
+            )}
 
             {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4">

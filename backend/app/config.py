@@ -39,18 +39,23 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=7, alias="REFRESH_TOKEN_EXPIRE_DAYS")
     
     # CORS Settings
+    # In production set CORS_ORIGINS=["https://your-app.vercel.app"] and CORS_ALLOW_CREDENTIALS=false
     cors_origins: List[str] = Field(
         default=[
-            "http://localhost:3000", 
+            "http://localhost:3000",
             "http://127.0.0.1:3000",
             "http://localhost:5173",
             "http://127.0.0.1:5173"
-        ], 
+        ],
         alias="CORS_ORIGINS"
     )
     cors_allow_credentials: bool = Field(default=True, alias="CORS_ALLOW_CREDENTIALS")
     
-    # AI/ML Configuration
+    # AI/ML Configuration — Groq Cloud LLM
+    groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
+    groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")
+    ai_models_disabled: bool = Field(default=False, alias="AI_MODELS_DISABLED")
+
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-3.5-turbo", alias="OPENAI_MODEL")
     openai_max_tokens: int = Field(default=1000, alias="OPENAI_MAX_TOKENS")

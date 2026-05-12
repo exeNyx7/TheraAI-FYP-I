@@ -3,6 +3,7 @@ Journal Service Layer for TheraAI Mood Tracking System
 Handles all journal-related business logic and database operations
 """
 
+import asyncio
 from typing import Optional, List
 from datetime import datetime, timezone
 import pytz
@@ -20,6 +21,7 @@ from ..models.journal import (
     SentimentLabel
 )
 from .ai_service import get_ai_service
+from .crisis_service import CrisisService
 
 
 class JournalService:
@@ -47,7 +49,12 @@ class JournalService:
             # Get AI analysis
             ai_service = get_ai_service()
             analysis = ai_service.analyze_text(journal_data.content)
-            
+
+            # Crisis detection — uses same emotion output from RoBERTa
+            crisis_info = CrisisService.detect_crisis(
+                journal_data.content, analysis.top_emotions or []
+            )
+
             # Get current time in Pakistan timezone
             pakistan_tz = pytz.timezone('Asia/Karachi')
             current_time_pakistan = datetime.now(pakistan_tz)
@@ -68,6 +75,9 @@ class JournalService:
                 # RoBERTa emotion fields
                 emotion_themes=analysis.emotion_themes,
                 top_emotions=analysis.top_emotions,
+                # Crisis fields
+                crisis_detected=crisis_info["is_crisis"],
+                crisis_severity=crisis_info["severity"],
                 created_at=datetime.now(timezone.utc),
                 updated_at=None
             )
@@ -87,8 +97,19 @@ class JournalService:
             
             journal_out = JournalOut.from_doc(created_journal)
 
+            # Fire-and-forget crisis recording (non-blocking)
+            if crisis_info["is_crisis"]:
+                asyncio.create_task(
+                    CrisisService.record_crisis_event(
+                        user_id=user_id,
+                        message=journal_data.content[:500],
+                        severity=crisis_info["severity"],
+                        keywords_matched=crisis_info["keywords_matched"],
+                        emotions_detected=crisis_info["emotions_detected"],
+                    )
+                )
+
             # Fire-and-forget gamification (non-blocking)
-            import asyncio
             async def _award():
                 try:
                     from .gamification_service import award_xp, check_achievements
@@ -249,7 +270,7 @@ class JournalService:
             # Prepare update data
             update_dict = update_data.dict(exclude_unset=True)
             
-            # If content is updated, re-run AI analysis
+            # If content is updated, re-run AI analysis + crisis detection
             if "content" in update_dict and update_dict["content"]:
                 ai_service = get_ai_service()
                 analysis = ai_service.analyze_text(update_dict["content"])
@@ -260,6 +281,22 @@ class JournalService:
                 # Update emotion fields
                 update_dict["emotion_themes"] = analysis.emotion_themes
                 update_dict["top_emotions"] = analysis.top_emotions
+                # Re-run crisis detection on updated content
+                crisis_info = CrisisService.detect_crisis(
+                    update_dict["content"], analysis.top_emotions or []
+                )
+                update_dict["crisis_detected"] = crisis_info["is_crisis"]
+                update_dict["crisis_severity"] = crisis_info["severity"]
+                if crisis_info["is_crisis"]:
+                    asyncio.create_task(
+                        CrisisService.record_crisis_event(
+                            user_id=user_id,
+                            message=update_dict["content"][:500],
+                            severity=crisis_info["severity"],
+                            keywords_matched=crisis_info["keywords_matched"],
+                            emotions_detected=crisis_info["emotions_detected"],
+                        )
+                    )
             
             # Add updated timestamp
             update_dict["updated_at"] = datetime.now(timezone.utc)

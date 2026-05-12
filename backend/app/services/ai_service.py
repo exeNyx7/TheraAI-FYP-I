@@ -17,16 +17,20 @@ import logging
 import os
 from typing import Optional, List, Dict, Any
 
-# Increase Hugging Face Hub timeouts for large model downloads (e.g., BlenderBot 1.6GB)
-os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = "300"
-os.environ["HF_HUB_ETAG_TIMEOUT"] = "30"
-
-from transformers import pipeline, Pipeline
-# DEPRECATED: AutoTokenizer, AutoModelForSeq2SeqLM were used for BlenderBot
-# from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-import torch
-
 from ..models.journal import AIAnalysisResult, SentimentLabel
+
+# PyTorch and HuggingFace are optional — only available in local/dev installs.
+# In production (Render), AI_MODELS_DISABLED=true skips loading entirely and
+# uses rule-based fallback responses instead.
+try:
+    os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = "300"
+    os.environ["HF_HUB_ETAG_TIMEOUT"] = "30"
+    from transformers import pipeline, Pipeline
+    import torch
+    _TORCH_AVAILABLE = True
+except ImportError:
+    _TORCH_AVAILABLE = False
+    Pipeline = None  # type: ignore
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -60,21 +64,19 @@ class AIService:
 
     def _ensure_loaded(self) -> None:
         """Load DistilBERT + RoBERTa on first use (lazy). Thread-safe via GIL."""
+        if not _TORCH_AVAILABLE:
+            return
+        from ..config import get_settings
+        if get_settings().ai_models_disabled:
+            return
         if not AIService._models_loaded:
             self._initialize_model()
-            AIService._models_loaded = True
+            AIService._models_loaded = self._sentiment_model is not None
     
     def _detect_gpu_config(self) -> Dict[str, Any]:
         """
-        Detect GPU model and return optimal configuration
-
-        Returns:
-            dict with GPU-specific settings (precision, max_history, max_length, etc.)
-
-        Set env var AI_MODELS_FORCE_CPU=true to keep DistilBERT/RoBERTa on CPU
-        even when CUDA is available — recommended on 8 GB VRAM laptops where
-        Ollama (Llama 3.1 8B, ~4.7 GB) and these models would otherwise exceed
-        the VRAM ceiling and cause slow / garbled inference.
+        Detect GPU model and return optimal configuration.
+        Only called when _TORCH_AVAILABLE is True.
         """
         from ..config import get_settings
         if get_settings().ai_models_force_cpu:
@@ -247,7 +249,11 @@ class AIService:
     
     def is_available(self) -> bool:
         """Check if sentiment/emotion models are loaded and ready."""
-        # DEPRECATED check removed: chatbot_model (BlenderBot) no longer needed
+        if not _TORCH_AVAILABLE:
+            return False
+        from ..config import get_settings
+        if get_settings().ai_models_disabled:
+            return False
         return self._sentiment_model is not None
     
     def get_device_info(self) -> dict:
@@ -516,6 +522,7 @@ class AIService:
             RuntimeError: If AI service is not available
             ValueError: If text is empty
         """
+        self._ensure_loaded()
         if not self.is_available():
             # Return a fallback response if AI is not available
             logger.warning("AI model not available, returning fallback response")

@@ -175,7 +175,11 @@ class JournalOut(JournalBase):
         default=None,
         description="Top emotions with confidence scores"
     )
-    
+
+    # Crisis detection fields
+    crisis_detected: bool = Field(default=False, description="Whether crisis signals were found")
+    crisis_severity: str = Field(default="none", description="none | moderate | high | emergency")
+
     created_at: datetime = Field(description="Timestamp when entry was created")
     updated_at: Optional[datetime] = Field(
         default=None,
@@ -284,7 +288,11 @@ class JournalInDB(JournalBase):
     # RoBERTa emotion fields
     emotion_themes: Optional[List[str]] = None
     top_emotions: Optional[List[Dict[str, Any]]] = None
-    
+
+    # Crisis detection fields
+    crisis_detected: bool = False
+    crisis_severity: str = "none"
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
     

@@ -1,56 +1,14 @@
 """
-ModelService — Ollama + Llama 3.1 8B Local LLM Integration
+ModelService — Groq Cloud LLM (replaces local Ollama)
 Single entry point for ALL LLM chat calls in TheraAI.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AUDIT — WHY BLENDERBOT WAS REPLACED
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Files that referenced BlenderBot:
-  • backend/app/services/ai_service.py
-      - Lines 1-8   : docstring mentions BlenderBot
-      - Lines 14-15 : HF_HUB timeouts set for large model download
-      - Line  18    : AutoTokenizer, AutoModelForSeq2SeqLM imports
-      - Lines 40-41 : _chatbot_tokenizer, _chatbot_model class fields
-      - Lines 169-234: _initialize_model() — loads facebook/blenderbot-400M-distill
-      - Lines 311-340: _format_conversation_history() — BlenderBot-specific </s><s> format
-      - Lines 342-493: generate_response_llm() — the broken inference method
-  • backend/app/api/chat.py
-      - Lines 1-3   : docstring "AI-powered ... with BlenderBot"
-      - Lines 89-101: calls ai_service.generate_response_llm()
-
-Root causes of incoherent responses:
-  1. HARDWARE: RTX 5060 uses CUDA compute capability sm_120, which PyTorch
-     (as of 2025) does not support. BlenderBot ran entirely on CPU,
-     making inference take 10-30 seconds per message.
-  2. MODEL MISMATCH: BlenderBot-400M-distill is a social chitchat model
-     trained on Reddit/Pushshift data. It was never designed for mental
-     health support. It regularly "hallucinated" personal experiences
-     ("my dog", "I went to the gym", "my family") which are nonsensical
-     for an AI wellness companion.
-  3. BROKEN FILTER: To patch problem #2, ai_service.py had a 40-line
-     personal-claim filter (lines 434-477). This filter triggered so often
-     that nearly every response was replaced with a hardcoded string —
-     making the 1.6 GB BlenderBot model completely useless.
-
-REPLACEMENT: Ollama + Llama 3.1 8B
-  - Runs locally via the Ollama daemon (default: http://localhost:11434)
-  - Llama 3.1 8B correctly follows system prompts and role-play personas
-  - Native async via httpx — no GPU memory competition with DistilBERT/RoBERTa
-  - Proper chat format: system / user / assistant message roles
-  - No "personal claim" issues — Llama respects the system prompt identity
-
-Setup instructions:
-  1. Install Ollama: https://ollama.ai/download
-  2. Start the daemon: ollama serve
-  3. Pull the model:  ollama pull llama3.1:8b
-  4. Verify:          curl http://localhost:11434/api/tags
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Backend: Groq API using llama-3.1-8b-instant by default.
+Set GROQ_MODEL env var to switch models (e.g. llama-3.3-70b-versatile).
+Same THERAPIST_SYSTEM_PROMPT and fallback logic as the Ollama version.
 """
 
 import logging
 from typing import Optional, List, Dict, Any
-
-import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +16,10 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.1:8b"
-MAX_HISTORY_MESSAGES = 10   # How many prior conversation turns to include
-RESPONSE_TIMEOUT_SECONDS = 60.0
-MAX_TOKENS = 300             # Keep responses concise for therapy context
+GROQ_MODEL = "llama-3.1-8b-instant"  # default; overridden by settings.groq_model
+MAX_HISTORY_MESSAGES = 10
+RESPONSE_TIMEOUT_SECONDS = 30.0
+MAX_TOKENS = 300
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -144,10 +101,9 @@ class ModelService:
     """
     Single entry point for all LLM chat generation in TheraAI.
 
-    Replaces: AIService.generate_response_llm() — BlenderBot (DEPRECATED)
-    Backend:  Ollama local inference with Llama 3.1 8B
-
+    Backend: Groq cloud API (llama-3.1-8b-instant by default).
     Stateless class — all methods are static, no instantiation needed.
+
     Usage:
         from .services.model_service import ModelService
         response = await ModelService.generate_response(message, history)
@@ -161,7 +117,7 @@ class ModelService:
         max_tokens: Optional[int] = None,
     ) -> str:
         """
-        Generate a therapeutic response using Llama 3.1 8B via Ollama.
+        Generate a therapeutic response using Groq's LLM API.
 
         Args:
             user_message: The user's current message text.
@@ -169,20 +125,25 @@ class ModelService:
                 Accepts two formats:
                   - New format:    [{"role": "user"|"assistant", "content": "..."}]
                   - Legacy format: [{"role": "user"|"bot",       "message": "..."}]
-                  The legacy format comes from the existing chat_history MongoDB records.
-            user_context: Optional string with memory facts + demographics injected
-                          into the system prompt to personalize responses.
-            max_tokens: Override default MAX_TOKENS (used by memory extraction).
+            user_context: Optional string injected into system prompt for personalization.
+            max_tokens: Override default MAX_TOKENS.
 
         Returns:
-            str: AI-generated response. Falls back to generate_fallback_response()
-                 if Ollama is unavailable — ensuring the endpoint never returns a 500.
+            str: AI-generated response, or fallback if Groq is unavailable.
         """
         if not user_message or not user_message.strip():
             raise ValueError("User message cannot be empty")
 
+        from ..config import get_settings
+        settings = get_settings()
+        groq_api_key = settings.groq_api_key
+        if not groq_api_key:
+            logger.error("GROQ_API_KEY not configured — using fallback response")
+            return ModelService.generate_fallback_response(user_message)
+
         try:
-            # Build system prompt — inject user context if provided
+            from groq import AsyncGroq
+
             system_content = THERAPIST_SYSTEM_PROMPT
             if user_context and user_context.strip():
                 system_content = (
@@ -191,156 +152,95 @@ class ModelService:
                     + user_context.strip()
                 )
 
-            # Build the messages array: system + history + current user message
             messages: List[Dict[str, str]] = [
                 {"role": "system", "content": system_content}
             ]
 
-            # Normalize and append conversation history
             if conversation_history:
                 recent = conversation_history[-MAX_HISTORY_MESSAGES:]
                 for msg in recent:
                     role = msg.get("role", "user")
-                    # Normalize legacy BlenderBot format ("bot" → "assistant")
                     if role == "bot":
                         role = "assistant"
-                    # Normalize field name ("message" → "content")
                     content = msg.get("content") or msg.get("message", "")
-                    
+
                     if content and role in ("user", "assistant"):
                         clean_content = content.strip()
-                        
-                        # SAFETY FALLBACK: Prevent VRAM spikes from corrupted/garbage chats
-                        # If a string is massive and lacks spaces, it's likely broken GPU tensors
-                        if len(clean_content) > 800 and " " not in clean_content[:200]:
-                            logger.warning("Dropped corrupted history message to protect VRAM.")
-                            continue
-                            
-                        # Truncate excessively long valid messages to protect context window limits
                         if len(clean_content) > 1500:
                             clean_content = clean_content[:1500] + "..."
-                            
                         messages.append({"role": role, "content": clean_content})
 
-            # Append current message
             messages.append({"role": "user", "content": user_message.strip()})
 
-            # POST to Ollama /api/chat
-            async with httpx.AsyncClient(timeout=RESPONSE_TIMEOUT_SECONDS) as client:
-                response = await client.post(
-                    f"{OLLAMA_BASE_URL}/api/chat",
-                    json={
-                        "model": OLLAMA_MODEL,
-                        "messages": messages,
-                        "stream": False,
-                        "options": {
-                            "num_ctx": 2048,          # Limit context window to prevent VRAM overflow on RTX 3070
-                            "temperature": 0.7,       # Balanced: warm but grounded
-                            "top_p": 0.9,
-                            "top_k": 40,
-                            "num_predict": max_tokens if max_tokens else MAX_TOKENS,
-                            "repeat_penalty": 1.1,    # Avoid repetitive phrasing
-                            "stop": ["<|eot_id|>", "<|end_of_text|>"]
-                        }
-                    }
-                )
-                response.raise_for_status()
+            model = settings.groq_model
+            client = AsyncGroq(api_key=groq_api_key)
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens if max_tokens else MAX_TOKENS,
+                temperature=0.7,
+                top_p=0.9,
+            )
 
-            data = response.json()
-            ai_text = data.get("message", {}).get("content", "").strip()
+            ai_text = response.choices[0].message.content.strip()
 
             if not ai_text:
-                logger.warning("ModelService: Empty response from Ollama, using fallback")
+                logger.warning("ModelService: Empty response from Groq, using fallback")
                 return ModelService.generate_fallback_response(user_message)
 
-            logger.info(f"ModelService: Response generated ({len(ai_text)} chars) via Ollama")
+            logger.info("ModelService: Response generated (%d chars) via Groq/%s", len(ai_text), model)
             return ai_text
 
-        except httpx.ConnectError:
-            logger.error(
-                "ModelService: Cannot connect to Ollama at %s. "
-                "Is Ollama running? Run: ollama serve", OLLAMA_BASE_URL
-            )
-            return ModelService.generate_fallback_response(user_message)
-
-        except httpx.TimeoutException:
-            logger.error(
-                "ModelService: Request to Ollama timed out after %ss. "
-                "Model may still be loading.", RESPONSE_TIMEOUT_SECONDS
-            )
-            return ModelService.generate_fallback_response(user_message)
-
         except Exception as e:
-            logger.error("ModelService: Unexpected error: %s", str(e), exc_info=True)
+            logger.error("ModelService: Groq error: %s", str(e), exc_info=True)
             return ModelService.generate_fallback_response(user_message)
 
     @staticmethod
     async def check_health() -> Dict[str, Any]:
-        """
-        Check whether Ollama is running and the configured model is available.
+        """Check whether Groq API key is configured and API is reachable."""
+        from ..config import get_settings
+        settings = get_settings()
+        groq_api_key = settings.groq_api_key
+        model = settings.groq_model
 
-        Returns:
-            dict with keys: status, ollama_running, model, model_available, message
-            status values: "healthy" | "degraded" | "unavailable" | "error"
-        """
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-                response.raise_for_status()
-                data = response.json()
-
-            available_models = [m["name"] for m in data.get("models", [])]
-            # Partial match: "llama3.1:8b" matches "llama3.1:8b", "llama3.1:8b-instruct-q4", etc.
-            model_available = any(OLLAMA_MODEL in m for m in available_models)
-
-            return {
-                "status": "healthy" if model_available else "degraded",
-                "ollama_running": True,
-                "model": OLLAMA_MODEL,
-                "model_available": model_available,
-                "available_models": available_models,
-                "message": (
-                    f"Ready — {OLLAMA_MODEL} loaded"
-                    if model_available
-                    else f"Ollama running but '{OLLAMA_MODEL}' not found. "
-                         f"Run: ollama pull {OLLAMA_MODEL}"
-                )
-            }
-
-        except httpx.ConnectError:
+        if not groq_api_key:
             return {
                 "status": "unavailable",
-                "ollama_running": False,
-                "model": OLLAMA_MODEL,
-                "model_available": False,
-                "message": (
-                    "Ollama is not running. "
-                    "Install from https://ollama.ai then run: ollama serve"
-                )
+                "model": model,
+                "message": "GROQ_API_KEY environment variable not set",
             }
 
+        # Quick connectivity check using a minimal completion
+        try:
+            from groq import AsyncGroq
+            client = AsyncGroq(api_key=groq_api_key)
+            await client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+            )
+            return {
+                "status": "healthy",
+                "model": model,
+                "message": f"Groq API reachable — {model}",
+            }
         except Exception as e:
             return {
-                "status": "error",
-                "ollama_running": False,
-                "model": OLLAMA_MODEL,
-                "model_available": False,
-                "message": str(e)
+                "status": "degraded",
+                "model": model,
+                "message": f"Groq API error: {str(e)}",
             }
 
     @staticmethod
     def generate_fallback_response(user_message: str) -> str:
         """
-        Rule-based fallback when Ollama is unavailable.
+        Rule-based fallback when Groq is unavailable.
         Uses keyword matching for the most common mental health topics.
         Always returns a meaningful, supportive response — never an error string.
-
-        This preserves the spirit of api/chat.py's generate_wellness_response()
-        but adds crisis detection and improved language.
         """
         lower = user_message.lower()
 
-        # ── Crisis detection — ALWAYS checked first ────────────────────────
+        # Crisis detection — ALWAYS checked first
         crisis_keywords = [
             "kill myself", "end my life", "want to die", "don't want to live",
             "suicide", "suicidal", "self harm", "self-harm", "hurt myself",
@@ -359,7 +259,6 @@ class ModelService:
                 "Are you somewhere safe right now? Is there someone you trust you could call?"
             )
 
-        # ── Topic-based responses ──────────────────────────────────────────
         if any(w in lower for w in ["anxious", "anxiety", "panic", "nervous", "worried", "fear"]):
             return (
                 "Anxiety can feel really overwhelming. A grounding technique that often helps in the moment is 5-4-3-2-1: "
@@ -436,17 +335,12 @@ class ModelService:
                 "Would it help to talk about them, or about how you're feeling right now?"
             )
 
-        # ── Default warm response ──────────────────────────────────────────
         return (
             "Thank you for reaching out — that takes courage, and I'm here with you. "
             "I'd love to understand more about what's on your mind. "
             "What would feel most helpful to talk about right now?"
         )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CONVENIENCE FUNCTION (for dependency injection consistency)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def get_model_service() -> type[ModelService]:
     """Return the ModelService class. Stateless — no instantiation required."""

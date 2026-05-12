@@ -19,7 +19,13 @@
       "Bash(sed -i 's/create a journal entry/create a diary entry/g' /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/web/src/pages/MoodTracker/MoodTrackerV0.jsx)",
       "Bash(sed -i 's/Write your first journal entry/Write your first diary entry/g' /c/Users/dawoo/Projects/GitHub/TheraAI-FYP-I/web/src/pages/MoodTracker/MoodTracker_NEW.jsx)",
       "Bash(python -c \"import scripts.seed_all; print\\('✅ Syntax OK'\\)\")",
-      "Bash(python -m py_compile scripts/seed_all.py)"
+      "Bash(python -m py_compile scripts/seed_all.py)",
+      "Bash(py *)",
+      "Bash(PYTHONIOENCODING=utf-8 py *)",
+      "Bash(xargs wc *)",
+      "Bash(awk '$1 == 0 {print $2}')",
+      "Bash(awk '$1 == 1 {print $2}')",
+      "Bash(awk '$1 <= 1 && $2 != \"total\" {print $2}')"
     ]
   }
 }
