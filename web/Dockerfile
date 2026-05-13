@@ -1,13 +1,25 @@
-FROM node:20-alpine
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-
+COPY package.json package-lock.json ./
 RUN npm ci --silent
 
 COPY . .
 
-EXPOSE 3000
+# VITE_API_URL must be set at build time (baked into the JS bundle)
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 
-CMD ["npm", "run", "dev", "--", "--host"]
+RUN npm run build
+
+# ── Stage 2: Serve ────────────────────────────────────────────────────────────
+FROM nginx:alpine
+
+COPY --from=builder /app/build /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

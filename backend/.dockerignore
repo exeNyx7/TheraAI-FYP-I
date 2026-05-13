@@ -1,37 +1,46 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
-*$py.class
 *.so
+*.egg
+*.egg-info/
 
-# Environments
-.env
-.env.*
-.venv
-env/
+# Virtual environments
+.venv/
 venv/
+env/
 ENV/
-env.bak/
-venv.bak/
 
-# Testing/Coverage
+# Testing & Coverage
 .pytest_cache/
 htmlcov/
 .coverage
 .coverage.*
-.cache
-nosetests.xml
 coverage.xml
-*.cover
+
+# Secrets & Config (injected via env vars at runtime)
+.env
+.env.*
+
+# Development files
+Dockerfile.dev
+requirements.dev.txt
+
+# HuggingFace model cache (large — not needed in image, mounted as volume)
+.cache/
+
+# Logs
+logs/
 *.log
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
 
 # Type checkers
 .mypy_cache/
 .pyre/
-
-# Editor/OS
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store

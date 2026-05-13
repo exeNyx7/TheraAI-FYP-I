@@ -181,8 +181,11 @@ python -m venv venv
 venv\Scripts\activate         # Windows
 # source venv/bin/activate    # macOS / Linux
 
-# Install all dependencies (includes PyTorch for local AI models)
-pip install -r requirements.txt
+# Install PyTorch (CPU-only; skip for CUDA GPU — see requirements.dev.txt header)
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install all dev dependencies (includes HuggingFace for local AI models)
+pip install -r requirements.dev.txt
 
 # Configure environment
 copy .env.example .env        # Windows
@@ -287,8 +290,11 @@ TheraAI-FYP-I/
 │   │
 │   ├── scripts/
 │   │   └── seed_all.py           # Full database seeder (accounts, assessments, activity)
-│   ├── requirements.txt          # Full deps (PyTorch + HuggingFace for local GPU)
-│   └── requirements.prod.txt     # Slim deps for cloud deployment (no PyTorch)
+│   ├── requirements.txt          # Production deps (slim, no PyTorch) — used by Render + Docker
+│   ├── requirements.dev.txt      # Local dev deps (full, with PyTorch + HuggingFace)
+│   ├── Dockerfile                # Production image (uses requirements.txt)
+│   ├── Dockerfile.dev            # Local dev image (uses requirements.dev.txt)
+│   └── runtime.txt               # Python 3.11.9 pin for Render
 │
 ├── web/
 │   ├── src/

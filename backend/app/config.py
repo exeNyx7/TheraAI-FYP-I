@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     
     # AI/ML Configuration — Groq Cloud LLM
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
-    groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")
+    groq_model: str = Field(default="llama3-8b-8192", alias="GROQ_MODEL")
     ai_models_disabled: bool = Field(default=False, alias="AI_MODELS_DISABLED")
 
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")

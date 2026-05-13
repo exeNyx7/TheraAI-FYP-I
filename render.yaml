@@ -3,7 +3,7 @@ services:
     name: theraai-backend
     runtime: python
     rootDir: backend
-    buildCommand: pip install -r requirements.prod.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     envVars:
       - key: ENVIRONMENT
@@ -19,11 +19,16 @@ services:
       - key: MONGODB_DATABASE
         value: theraai_dev
       - key: GROQ_MODEL
-        value: llama-3.1-8b-instant
+        value: llama3-8b-8192
       - key: JITSI_DOMAIN
         value: meet.jit.si
       - key: CORS_ALLOW_CREDENTIALS
         value: "false"
+      # ── Set these in Render Dashboard → Environment ────────────────────────
+      # SECRET_KEY   → auto-generated below
+      # MONGODB_URL  → your Atlas connection string
+      # GROQ_API_KEY → your Groq API key
+      # CORS_ORIGINS → ["https://your-app.vercel.app"]  (set after Vercel deploy)
       - key: SECRET_KEY
         generateValue: true
       - key: MONGODB_URL

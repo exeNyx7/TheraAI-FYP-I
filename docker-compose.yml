@@ -1,12 +1,11 @@
 services:
+
+  # ── MongoDB (local dev only) ─────────────────────────────────────────────────
+  # Skip this if you're using MongoDB Atlas — set MONGODB_URL in backend/.env instead.
   mongodb:
     image: mongo:7.0
     container_name: theraai-mongodb
     restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
-      MONGO_INITDB_DATABASE: theraai
     ports:
       - "27017:27017"
     volumes:
@@ -20,47 +19,11 @@ services:
       retries: 5
       start_period: 20s
 
-  redis:
-    image: redis:7-alpine
-    container_name: theraai-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - theraai-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Ollama — local LLM server for llama3.1:8b chat
-  # GPU (NVIDIA): requires NVIDIA Container Toolkit installed on the host.
-  # CPU-only: remove the entire 'deploy' block below (slower inference).
-  ollama:
-    image: ollama/ollama:latest
-    container_name: theraai-ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_models:/root/.ollama
-    networks:
-      - theraai-network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
+  # ── Backend ──────────────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev     # Full deps with PyTorch for local AI models
     container_name: theraai-backend
     restart: unless-stopped
     ports:
@@ -68,56 +31,40 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      ollama:
-        condition: service_started
     volumes:
-      - ./backend:/app
+      - ./backend:/app               # Hot reload — source changes apply instantly
       - hf_models_cache:/root/.cache/huggingface
     networks:
       - theraai-network
     env_file:
       - ./backend/.env
     environment:
-      # Docker-internal URLs (override .env values)
-      - MONGODB_URL=mongodb://admin:password123@mongodb:27017/theraai?authSource=admin
-      - MONGODB_DATABASE=theraai
-      - REDIS_URL=redis://redis:6379/0
-      - OLLAMA_BASE_URL=http://ollama:11434
+      # Override .env values for Docker networking
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DATABASE=theraai_dev
       - DEBUG=True
       - AI_MODELS_FORCE_CPU=true
       - CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+      # GROQ_API_KEY is read from backend/.env via env_file above
 
+  # ── Frontend ─────────────────────────────────────────────────────────────────
   frontend:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:8000
     container_name: theraai-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:80"                    # nginx serves on 80 inside, mapped to 3000 outside
     depends_on:
       - backend
-    volumes:
-      - ./web:/app
-      - /app/node_modules  # keeps container node_modules separate from host
     networks:
       - theraai-network
-    env_file:
-      - ./web/.env
-    environment:
-      # Browser makes requests to localhost:8000, not backend:8000
-      - VITE_API_URL=http://localhost:8000
-      - VITE_ENVIRONMENT=docker
-    stdin_open: true
-    tty: true
-    command: npm run dev -- --host 0.0.0.0 --port 3000
 
 volumes:
   mongodb_data:
-  redis_data:
-  ollama_models:
   hf_models_cache:
 
 networks:

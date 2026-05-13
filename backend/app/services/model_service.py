@@ -7,6 +7,7 @@ Set GROQ_MODEL env var to switch models (e.g. llama-3.3-70b-versatile).
 Same THERAPIST_SYSTEM_PROMPT and fallback logic as the Ollama version.
 """
 
+import asyncio
 import logging
 from typing import Optional, List, Dict, Any
 
@@ -16,10 +17,12 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-GROQ_MODEL = "llama-3.1-8b-instant"  # default; overridden by settings.groq_model
-MAX_HISTORY_MESSAGES = 10
+# llama3-8b-8192 has 30,000 TPM on Groq free tier vs 6,000 for llama-3.1-8b-instant
+GROQ_MODEL = "llama3-8b-8192"
+MAX_HISTORY_MESSAGES = 6   # reduced from 10 to keep token usage low
 RESPONSE_TIMEOUT_SECONDS = 30.0
-MAX_TOKENS = 300
+MAX_TOKENS = 250            # reduced from 300 to stay well under rate limits
+MAX_RETRIES = 3             # retry on 429 rate-limit errors
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -142,7 +145,7 @@ class ModelService:
             return ModelService.generate_fallback_response(user_message)
 
         try:
-            from groq import AsyncGroq
+            from groq import AsyncGroq, RateLimitError as GroqRateLimitError
 
             system_content = THERAPIST_SYSTEM_PROMPT
             if user_context and user_context.strip():
@@ -166,21 +169,33 @@ class ModelService:
 
                     if content and role in ("user", "assistant"):
                         clean_content = content.strip()
-                        if len(clean_content) > 1500:
-                            clean_content = clean_content[:1500] + "..."
+                        if len(clean_content) > 1000:
+                            clean_content = clean_content[:1000] + "..."
                         messages.append({"role": role, "content": clean_content})
 
             messages.append({"role": "user", "content": user_message.strip()})
 
             model = settings.groq_model
             client = AsyncGroq(api_key=groq_api_key)
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=max_tokens if max_tokens else MAX_TOKENS,
-                temperature=0.7,
-                top_p=0.9,
-            )
+
+            # Retry up to MAX_RETRIES times on rate-limit errors (429)
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=max_tokens if max_tokens else MAX_TOKENS,
+                        temperature=0.7,
+                        top_p=0.9,
+                    )
+                    break  # success — exit retry loop
+                except GroqRateLimitError:
+                    if attempt == MAX_RETRIES - 1:
+                        logger.warning("ModelService: Groq rate limit — using fallback after %d retries", MAX_RETRIES)
+                        return ModelService.generate_fallback_response(user_message)
+                    wait = 2.0 ** attempt  # 1s, 2s, 4s
+                    logger.warning("ModelService: Groq rate limit, retrying in %.0fs (attempt %d/%d)", wait, attempt + 1, MAX_RETRIES)
+                    await asyncio.sleep(wait)
 
             ai_text = response.choices[0].message.content.strip()
 
