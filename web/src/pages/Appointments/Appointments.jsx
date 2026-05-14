@@ -121,7 +121,6 @@ export default function Appointments() {
   const [selectedTherapist, setSelectedTherapist] = useState(null);
   const [selectedDateSlot, setSelectedDateSlot] = useState(null); // { date, slot }
   const [selectedDuration, setSelectedDuration] = useState(25);
-  const [myPlan, setMyPlan] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState(null);
@@ -129,9 +128,6 @@ export default function Appointments() {
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     fetchAppointments();
-    if (user.role === 'patient') {
-      apiClient.get('/payments/my-plan').then(r => setMyPlan(r.data)).catch(() => {});
-    }
   }, [user, navigate]);
 
   // Poll every 30s
@@ -430,7 +426,6 @@ export default function Appointments() {
                       {DURATIONS.map((d) => {
                         const baseRate = selectedTherapist?.hourly_rate || selectedTherapist?.session_fee_pkr || 2500;
                         const fee = calcFee(baseRate, d.minutes);
-                        const isFreeIntro = myPlan && !myPlan.free_intro_used && d.minutes === 15;
                         return (
                           <button
                             key={d.minutes}
@@ -440,8 +435,8 @@ export default function Appointments() {
                             }`}
                           >
                             <span className="font-semibold block">{d.label}</span>
-                            <span className={`text-xs font-medium mt-0.5 block ${isFreeIntro ? 'text-green-600' : 'text-primary'}`}>
-                              {isFreeIntro ? 'FREE' : fmtPKR(fee)}
+                            <span className="text-xs font-medium mt-0.5 block text-primary">
+                              {fmtPKR(fee)}
                             </span>
                           </button>
                         );
@@ -453,29 +448,23 @@ export default function Appointments() {
                   {(() => {
                     const baseRate = selectedTherapist?.hourly_rate || selectedTherapist?.session_fee_pkr || 2500;
                     const fee = calcFee(baseRate, selectedDuration);
-                    const freeIntro = myPlan && !myPlan.free_intro_used && selectedDuration === 15;
-                    const useSub = myPlan && myPlan.sessions_remaining > 0 && !freeIntro;
                     return (
                       <>
                         <div className="rounded-lg bg-muted/50 p-3 space-y-0.5">
                           <p className="text-sm font-medium">
-                            {freeIntro ? <span className="text-green-600">FREE — intro session</span>
-                              : useSub ? <span className="text-blue-600">Subscription session ({myPlan.sessions_remaining} remaining)</span>
-                              : <span className="text-primary font-bold">{fmtPKR(fee)}</span>}
+                            <span className="text-primary font-bold">{fmtPKR(fee)}</span>
                           </p>
                           <p className="text-xs text-muted-foreground">{selectedDuration} min · video session</p>
                         </div>
-                        {!freeIntro && !useSub && (
-                          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-start gap-2 text-sm">
-                            <ExternalLink className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                            <div>
-                              <span className="font-medium">You'll be redirected to Stripe</span>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Test card: <code className="font-mono">4242 4242 4242 4242</code> · any future expiry · any CVV
-                              </p>
-                            </div>
+                        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-start gap-2 text-sm">
+                          <ExternalLink className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                          <div>
+                            <span className="font-medium">You'll be redirected to Stripe</span>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Test card: <code className="font-mono">4242 4242 4242 4242</code> · any future expiry · any CVV
+                            </p>
                           </div>
-                        )}
+                        </div>
                       </>
                     );
                   })()}

@@ -6,6 +6,9 @@
 # PROJECT-SPECIFIC FILES
 # =============================================================================
 
+# Deprecated / archived files (moved here, not deleted)
+_deprecated/
+
 # Backup directories and design prototypes
 backups/
 thera-ai-landing-page-design/

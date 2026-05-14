@@ -180,6 +180,10 @@ class JournalOut(JournalBase):
     crisis_detected: bool = Field(default=False, description="Whether crisis signals were found")
     crisis_severity: str = Field(default="none", description="none | moderate | high | emergency")
 
+    # Groq-generated journal insight (on-demand via POST /journals/{id}/analyze)
+    ai_insight: Optional[str] = Field(default=None, description="Empathetic AI reflection on the journal entry")
+    ai_suggestion: Optional[str] = Field(default=None, description="Gentle coping suggestion from the AI")
+
     created_at: datetime = Field(description="Timestamp when entry was created")
     updated_at: Optional[datetime] = Field(
         default=None,
@@ -292,6 +296,10 @@ class JournalInDB(JournalBase):
     # Crisis detection fields
     crisis_detected: bool = False
     crisis_severity: str = "none"
+
+    # Groq-generated journal insight
+    ai_insight: Optional[str] = None
+    ai_suggestion: Optional[str] = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None

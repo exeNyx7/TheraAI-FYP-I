@@ -405,6 +405,7 @@ class WeeklyMoodSummary(BaseModel):
     total_entries: int
     trend: str  # "improving" | "declining" | "stable"
     ai_summary: str
+    ai_suggestion: Optional[str] = None
 
 
 @router.get("/me/weekly-summary", response_model=WeeklyMoodSummary)
@@ -494,16 +495,38 @@ async def get_weekly_mood_summary(current_user: UserOut = Depends(get_current_us
         else:
             trend = "stable"
 
-        # AI summary
+        # AI summary — try Groq first, fall back to template
         total_entries = sum(p.entry_count for p in days_out)
+
+        ai_summary = ""
+        ai_suggestion = None
+
         if total_entries == 0:
             ai_summary = "No entries this week. Start journaling to see your mood trends!"
-        elif trend == "improving":
-            ai_summary = f"Great week! Your mood improved over the past 7 days with an average score of {week_avg}/10. Keep up the positive habits."
-        elif trend == "declining":
-            ai_summary = f"Your mood dipped this week (avg {week_avg}/10). Consider talking to your AI companion or booking a session with a therapist."
         else:
-            ai_summary = f"Your mood stayed steady this week with an average of {week_avg}/10. Consistency is a great foundation for mental wellness."
+            # Build a text description of the week for the AI
+            dominant_moods = [p.dominant_mood for p in days_out if p.dominant_mood]
+            mood_desc = ", ".join(dominant_moods[:5]) if dominant_moods else "various moods"
+            week_text = (
+                f"Mood entries (scale 0-10): average {week_avg}/10, trend: {trend}.\n"
+                f"Journal entries this week: {total_entries}.\n"
+                f"Dominant moods recorded: {mood_desc}."
+            )
+            try:
+                from ..services.model_service import ModelService
+                result = await ModelService.analyze_text(week_text, task="weekly_report")
+                ai_summary = result.get("summary", "")
+                ai_suggestion = result.get("suggestion")
+            except Exception:
+                pass
+
+            if not ai_summary:
+                if trend == "improving":
+                    ai_summary = f"Great week! Your mood improved over the past 7 days with an average score of {week_avg}/10. Keep up the positive habits."
+                elif trend == "declining":
+                    ai_summary = f"Your mood dipped this week (avg {week_avg}/10). Consider talking to your AI companion or booking a session with a therapist."
+                else:
+                    ai_summary = f"Your mood stayed steady this week with an average of {week_avg}/10. Consistency is a great foundation for mental wellness."
 
         return WeeklyMoodSummary(
             days=days_out,
@@ -513,6 +536,7 @@ async def get_weekly_mood_summary(current_user: UserOut = Depends(get_current_us
             total_entries=total_entries,
             trend=trend,
             ai_summary=ai_summary,
+            ai_suggestion=ai_suggestion,
         )
 
     except HTTPException:

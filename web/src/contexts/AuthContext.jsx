@@ -151,6 +151,12 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Log in with a pre-obtained token + user (Google OAuth flow)
+  const loginWithGoogle = useCallback((token, user) => {
+    authService.setToken(token);
+    dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: user });
+  }, []);
+
   // Logout function
   const logout = async () => {
     try {
@@ -196,6 +202,7 @@ export function AuthProvider({ children }) {
     clearError,
     loadUser,
     updateUser,
+    loginWithGoogle,
     
     // Role helpers
     hasRole,

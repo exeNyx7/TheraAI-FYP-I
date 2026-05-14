@@ -64,6 +64,8 @@ class UserBase(BaseModel):
         description="Privacy settings"
     )
     onboarding_completed: bool = Field(default=False, description="Whether the user has completed onboarding")
+    onboarding_reasons: Optional[List[str]] = Field(default_factory=list, description="Why the user joined (from onboarding step 2)")
+    onboarding_goals: Optional[List[str]] = Field(default_factory=list, description="What the user wants to do (from onboarding step 3)")
 
     # Freemium / subscription
     subscription_tier: str = Field(default="free", description="free|starter|professional|intensive")
@@ -158,6 +160,8 @@ class UserInDB(UserBase):
     last_login: Optional[datetime] = None
     login_attempts: int = Field(default=0, description="Failed login attempts counter")
     locked_until: Optional[datetime] = None
+    # Google OAuth identity (login with Google)
+    google_id: Optional[str] = Field(default=None, description="Google account sub identifier")
     # Google Calendar integration
     google_refresh_token: Optional[str] = Field(default=None, description="Google OAuth2 refresh token")
     google_calendar_connected: bool = Field(default=False, description="Whether Google Calendar is connected")
@@ -196,6 +200,8 @@ class UserUpdate(BaseModel):
     notification_preferences: Optional[dict] = None
     privacy_settings: Optional[dict] = None
     onboarding_completed: Optional[bool] = None
+    onboarding_reasons: Optional[List[str]] = None
+    onboarding_goals: Optional[List[str]] = None
     # Gamification (internal updates only)
     xp: Optional[int] = None
     level: Optional[int] = None
@@ -234,6 +240,9 @@ class UserProfileUpdate(BaseModel):
     notification_preferences: Optional[dict] = None
     privacy_settings: Optional[dict] = None
     onboarding_completed: Optional[bool] = None
+    onboarding_reasons: Optional[List[str]] = None
+    onboarding_goals: Optional[List[str]] = None
+    avatar_url: Optional[str] = None
 
 
 class Token(BaseModel):

@@ -6,6 +6,8 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { ArrowLeft, Lock, Mail, CheckCircle2, User, Briefcase, Heart } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
+import apiClient from '../../apiClient';
 
 export default function SignupV0() {
   const [email, setEmail] = useState('');
@@ -15,7 +17,7 @@ export default function SignupV0() {
   const [selectedRole, setSelectedRole] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const { signup } = useAuth();
+  const { signup, loginWithGoogle } = useAuth();
   const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
 
@@ -256,7 +258,28 @@ export default function SignupV0() {
               </div>
             </div>
 
-            <div className="mt-6 text-center text-sm">
+            {/* Google sign-up (always creates a patient account) */}
+            <div className="mt-4">
+              {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+                <GoogleLogin
+                  onSuccess={async ({ credential }) => {
+                    try {
+                      const res = await apiClient.post('/auth/google', { id_token: credential });
+                      loginWithGoogle(res.data.access_token, res.data.user);
+                      const user = res.data.user;
+                      navigate(user.onboarding_completed ? '/dashboard' : '/onboarding');
+                    } catch (err) {
+                      showError(err.response?.data?.detail || 'Google sign-in failed. Please try again.');
+                    }
+                  }}
+                  onError={() => showError('Google sign-in failed.')}
+                  width="100%"
+                  text="signup_with"
+                />
+              ) : null}
+            </div>
+
+            <div className="mt-4 text-center text-sm">
               <p className="text-muted-foreground">
                 Already have an account?{' '}
                 <Link to="/login" className="text-primary hover:underline font-semibold transition-colors">

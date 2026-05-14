@@ -187,6 +187,60 @@ class ModelService:
         return ModelService.generate_fallback_response(user_message)
 
     @staticmethod
+    async def analyze_text(text: str, task: str = "journal_insight") -> Dict[str, Any]:
+        """
+        Analyze text for a specific task using the same Groq → Ollama → fallback chain.
+
+        task="journal_insight" → returns {"insight": str, "suggestion": str}
+        task="weekly_report"   → returns {"summary": str, "suggestion": str}
+        """
+        if task == "journal_insight":
+            prompt = (
+                f"You are a compassionate mental health AI. Read this journal entry and provide:\n"
+                f"1. A 1-2 sentence empathetic reflection\n"
+                f"2. One gentle, actionable suggestion or coping strategy\n\n"
+                f"Journal entry: {text[:1500]}\n\n"
+                f'Respond as JSON only — no markdown, no extra text: {{"insight": "...", "suggestion": "..."}}'
+            )
+            fallback = {
+                "insight": "Thank you for sharing your thoughts. Writing about your feelings is a meaningful step toward self-awareness.",
+                "suggestion": "Consider taking a few slow, deep breaths and reflecting on one small thing you are grateful for today.",
+            }
+        else:  # weekly_report
+            prompt = (
+                f"You are a compassionate mental health assistant. Here is a patient's week summary:\n\n"
+                f"{text[:1500]}\n\n"
+                f"Write a warm 2-3 sentence summary of their week and one actionable suggestion.\n"
+                f'Respond as JSON only — no markdown: {{"summary": "...", "suggestion": "..."}}'
+            )
+            fallback = {
+                "summary": "You engaged with your mental wellness this week. Keep building on the habits that help you feel grounded.",
+                "suggestion": "Try setting aside 5 minutes each morning this week for a brief check-in with yourself.",
+            }
+
+        messages = [{"role": "user", "content": prompt}]
+
+        from ..config import get_settings
+        settings = get_settings()
+
+        raw: Optional[str] = None
+        if settings.groq_api_key:
+            raw = await ModelService._try_groq(settings, messages, max_tokens=200)
+        if raw is None:
+            raw = await ModelService._try_ollama(settings, messages, max_tokens=200)
+
+        if raw:
+            import json, re
+            try:
+                # Strip markdown code fences if present
+                cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
+                return json.loads(cleaned)
+            except Exception:
+                pass
+
+        return fallback
+
+    @staticmethod
     async def check_health() -> Dict[str, Any]:
         """Report which AI backend is active."""
         from ..config import get_settings

@@ -5,6 +5,7 @@ Handles journal entry creation, retrieval, updates, and statistics
 
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 
 from ..models.journal import JournalCreate, JournalOut, JournalUpdate, MoodStatistics
 from ..models.user import UserOut
@@ -219,6 +220,67 @@ async def update_journal_entry(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update journal entry: {str(e)}"
         )
+
+
+class JournalInsightResponse(BaseModel):
+    ai_insight: str
+    ai_suggestion: str
+
+
+@router.post(
+    "/{entry_id}/analyze",
+    response_model=JournalInsightResponse,
+    summary="Generate AI insight for a journal entry",
+    description="Call Groq/Llama to generate an empathetic reflection and suggestion for the entry. Result is stored in the journal document.",
+)
+async def analyze_journal_entry(
+    entry_id: str,
+    current_user: UserOut = Depends(get_current_user),
+) -> JournalInsightResponse:
+    """
+    Generate and store an AI-powered insight for the given journal entry.
+    Safe to call multiple times — overwrites the previous insight.
+    """
+    from bson import ObjectId
+    from datetime import datetime, timezone
+    from ..database import get_database
+    from ..services.model_service import ModelService
+
+    if not ObjectId.is_valid(entry_id):
+        raise HTTPException(status_code=400, detail="Invalid journal entry ID format")
+
+    try:
+        db = await get_database()
+        entry_doc = await db.journals.find_one({
+            "_id": ObjectId(entry_id),
+            "user_id": str(current_user.id),
+        })
+        if not entry_doc:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+
+        content = entry_doc.get("content", "")
+        result = await ModelService.analyze_text(content, task="journal_insight")
+
+        ai_insight = result.get("insight", "")
+        ai_suggestion = result.get("suggestion", "")
+
+        await db.journals.update_one(
+            {"_id": ObjectId(entry_id)},
+            {"$set": {
+                "ai_insight": ai_insight,
+                "ai_suggestion": ai_suggestion,
+                "updated_at": datetime.now(timezone.utc),
+            }},
+        )
+
+        return JournalInsightResponse(ai_insight=ai_insight, ai_suggestion=ai_suggestion)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.exception("Failed to analyze journal entry")
+        raise HTTPException(status_code=500, detail="Failed to generate AI insight. Please try again.")
 
 
 @router.delete(

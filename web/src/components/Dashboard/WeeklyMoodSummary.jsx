@@ -112,7 +112,12 @@ export function WeeklyMoodSummary() {
         {/* AI insight */}
         <div className="flex items-start gap-2 bg-primary/5 rounded-lg p-3 border border-primary/10">
           <Sparkles className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-foreground leading-relaxed">{summary.ai_summary}</p>
+          <div className="space-y-1.5">
+            <p className="text-xs text-foreground leading-relaxed">{summary.ai_summary}</p>
+            {summary.ai_suggestion && (
+              <p className="text-xs text-muted-foreground italic">{summary.ai_suggestion}</p>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

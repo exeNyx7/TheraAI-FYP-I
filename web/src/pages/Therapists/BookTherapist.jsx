@@ -5,7 +5,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import {
-  Calendar, Clock, CheckCircle, ArrowLeft, CreditCard, Shield, Zap, ExternalLink,
+  Calendar, Clock, CheckCircle, ArrowLeft, CreditCard, Shield, ExternalLink,
 } from 'lucide-react';
 import apiClient from '../../apiClient';
 import { useAuth } from '../../contexts/AuthContext';
@@ -43,7 +43,6 @@ export default function BookTherapist() {
   const { showSuccess, showError } = useToast();
 
   const [therapist, setTherapist] = useState(null);
-  const [myPlan, setMyPlan] = useState(null);
   const [date, setDate] = useState(tomorrowISO());
   const [slots, setSlots] = useState([]);
   const [selectedTime, setSelectedTime] = useState(null);
@@ -55,7 +54,7 @@ export default function BookTherapist() {
   const [error, setError] = useState('');
   const [createdAppt, setCreatedAppt] = useState(null);
 
-  // Handle Stripe redirect-back
+  // Handle Stripe redirect-back (cancelled payment)
   useEffect(() => {
     if (searchParams.get('payment') === 'cancelled') {
       showError('Payment was cancelled. Your booking was not confirmed.');
@@ -66,13 +65,9 @@ export default function BookTherapist() {
     if (!user) { navigate('/login'); return; }
     let cancelled = false;
 
-    Promise.all([
-      apiClient.get(`/therapists/${therapistId}`),
-      apiClient.get('/payments/my-plan').catch(() => null),
-    ]).then(([therapistRes, planRes]) => {
+    apiClient.get(`/therapists/${therapistId}`).then((therapistRes) => {
       if (cancelled) return;
       setTherapist(therapistRes.data);
-      if (planRes) setMyPlan(planRes.data);
     }).catch(() => {
       if (!cancelled) setError('Failed to load therapist details.');
     }).finally(() => {
@@ -104,12 +99,11 @@ export default function BookTherapist() {
     return () => { cancelled = true; };
   }, [therapistId, date]);
 
-  // Decide what the payment step will show
   const baseRate = therapist?.hourly_rate || therapist?.session_fee_pkr || 2500;
   const sessionFee = calcFee(baseRate, duration);
-  const freeIntroAvailable = myPlan && !myPlan.free_intro_used && duration === 15;
-  const useSubscription = myPlan && myPlan.sessions_remaining > 0 && !freeIntroAvailable;
-  const needsPayment = !freeIntroAvailable && !useSubscription && !fromEscalation;
+  const freeIntroAvailable = false;
+  const useSubscription = false;
+  const needsPayment = !fromEscalation;
 
   const handleConfirm = async () => {
     if (!selectedTime) return;
@@ -239,7 +233,6 @@ export default function BookTherapist() {
                     <div className="grid grid-cols-3 gap-3">
                       {DURATIONS.map((d) => {
                         const fee = calcFee(baseRate, d.minutes);
-                        const isFreeIntro = myPlan && !myPlan.free_intro_used && d.minutes === 15;
                         return (
                           <button
                             key={d.minutes}
@@ -252,30 +245,14 @@ export default function BookTherapist() {
                           >
                             <span className="font-semibold block">{d.label}</span>
                             <span className="text-xs text-muted-foreground">{d.note}</span>
-                            <span className={`text-xs font-medium block mt-1 ${isFreeIntro ? 'text-green-600' : 'text-primary'}`}>
-                              {isFreeIntro ? 'FREE' : formatPKR(fee)}
+                            <span className="text-xs font-medium block mt-1 text-primary">
+                              {formatPKR(fee)}
                             </span>
                           </button>
                         );
                       })}
                     </div>
                   </div>
-
-                  {/* Plan status hint */}
-                  {myPlan && (
-                    <div className="text-xs text-muted-foreground space-y-0.5">
-                      {myPlan.free_intro_used === false && duration === 15 && (
-                        <p className="text-green-600 font-medium">
-                          Your one-time free 15-min intro session will be used.
-                        </p>
-                      )}
-                      {myPlan.sessions_remaining > 0 && !(myPlan.free_intro_used === false && duration === 15) && (
-                        <p className="text-blue-600 font-medium">
-                          {myPlan.sessions_remaining} subscription session(s) remaining — this will use one.
-                        </p>
-                      )}
-                    </div>
-                  )}
 
                   <Button
                     disabled={!selectedTime}
@@ -323,26 +300,6 @@ export default function BookTherapist() {
                         <Shield className="h-4 w-4 text-green-600" />
                         <span className="font-medium text-green-700">Free session granted via escalation</span>
                       </div>
-                    </div>
-                  )}
-                  {!fromEscalation && freeIntroAvailable && (
-                    <div className="rounded-lg border-2 border-green-500/40 p-4 bg-green-500/5">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Shield className="h-4 w-4 text-green-600" />
-                        <span className="font-medium text-green-700">Using your free 15-min intro session</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">No charge — one-time only.</p>
-                    </div>
-                  )}
-                  {!fromEscalation && !freeIntroAvailable && useSubscription && (
-                    <div className="rounded-lg border-2 border-blue-400/40 p-4 bg-blue-50 dark:bg-blue-900/10">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Zap className="h-4 w-4 text-blue-600" />
-                        <span className="font-medium text-blue-700">
-                          Using subscription credit ({myPlan.sessions_remaining} remaining)
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">No charge — deducted from your plan.</p>
                     </div>
                   )}
                   {needsPayment && (

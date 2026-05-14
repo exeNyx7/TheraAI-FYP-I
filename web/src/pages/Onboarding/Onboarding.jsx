@@ -115,6 +115,8 @@ export default function Onboarding() {
     try {
       const res = await apiClient.put('/auth/me', {
         onboarding_completed: true,
+        onboarding_reasons: reasons,
+        onboarding_goals: goals,
         notification_preferences: {
           email: notifyReminders,
           push: notifyReminders,

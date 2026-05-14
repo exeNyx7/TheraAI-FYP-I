@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
 from fastapi import Request
+from pydantic import BaseModel
 from ..models.user import UserIn, UserLogin, UserOut, Token, PasswordChange, UserProfileUpdate
 from ..services.user_service import UserService
 from ..utils.auth import create_access_token, create_token_payload, get_token_expiry_time, verify_password, hash_password
@@ -223,6 +224,121 @@ async def change_password(
     )
     
     return {"message": "Password changed successfully"}
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
+@router.post(
+    "/google",
+    response_model=Token,
+    summary="Sign in with Google",
+    description="Verify a Google ID token and return a TheraAI JWT. Creates an account on first use.",
+)
+@limiter.limit("10/minute")
+async def google_auth(request: Request, body: GoogleAuthRequest) -> Token:
+    """
+    Exchange a Google ID token (from @react-oauth/google) for a TheraAI JWT.
+    Creates a patient account automatically if the email is not registered.
+    """
+    from datetime import datetime, timezone
+    from bson import ObjectId
+    from ..database import get_users_collection
+
+    id_token_str = body.id_token
+    if not id_token_str:
+        raise HTTPException(status_code=400, detail="id_token is required")
+
+    if not settings.google_client_id:
+        raise HTTPException(
+            status_code=501,
+            detail="Google OAuth is not configured on this server. Set GOOGLE_CLIENT_ID in the backend .env file.",
+        )
+
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+        idinfo = google_id_token.verify_oauth2_token(
+            id_token_str,
+            google_requests.Request(),
+            settings.google_client_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {e}")
+
+    email = idinfo.get("email", "").lower().strip()
+    full_name = idinfo.get("name", email.split("@")[0])
+    google_sub = idinfo.get("sub", "")
+    avatar_url = idinfo.get("picture")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email address")
+
+    users_collection = await get_users_collection()
+
+    # Find existing user
+    user_doc = await users_collection.find_one({"email": email})
+
+    if user_doc:
+        # Update google_id + avatar if not already set
+        patch: dict = {"updated_at": datetime.now(timezone.utc)}
+        if not user_doc.get("google_id"):
+            patch["google_id"] = google_sub
+        if not user_doc.get("avatar_url") and avatar_url:
+            patch["avatar_url"] = avatar_url
+        await users_collection.update_one({"_id": user_doc["_id"]}, {"$set": patch})
+        user_doc.update(patch)
+    else:
+        # Create a new patient account (sentinel password — not usable for login)
+        from ..utils.auth import hash_password as _hash
+        new_doc = {
+            "email": email,
+            "full_name": full_name,
+            "role": "patient",
+            "hashed_password": _hash("__google__" + google_sub),
+            "google_id": google_sub,
+            "avatar_url": avatar_url,
+            "is_active": True,
+            "onboarding_completed": False,
+            "onboarding_reasons": [],
+            "onboarding_goals": [],
+            "notification_preferences": {"email": True, "push": True, "appointments": True, "insights": True},
+            "privacy_settings": {"share_mood_with_therapist": True},
+            "theme": "system",
+            "subscription_tier": "free",
+            "subscription_status": "inactive",
+            "sessions_remaining": 0,
+            "sessions_used_total": 0,
+            "free_intro_used": False,
+            "xp": 0,
+            "level": 1,
+            "streak_days": 0,
+            "unlocked_achievements": [],
+            "login_attempts": 0,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        result = await users_collection.insert_one(new_doc)
+        user_doc = await users_collection.find_one({"_id": result.inserted_id})
+
+    from ..models.user import UserOut
+    user_out = UserOut.from_doc(dict(user_doc))
+
+    token_payload = create_token_payload(
+        user_id=str(user_doc["_id"]),
+        email=email,
+        role=user_doc.get("role", "patient"),
+    )
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(data=token_payload, expires_delta=access_token_expires)
+
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=get_token_expiry_time(),
+        user=user_out,
+    )
 
 
 @router.post(

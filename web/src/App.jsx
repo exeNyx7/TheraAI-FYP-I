@@ -37,9 +37,7 @@ import AchievementUnlockPopup from './components/Achievements/AchievementUnlockP
 import TherapistProgress from './pages/Therapist/TherapistProgress';
 import SessionsPage from './pages/Sessions/SessionsPage';
 import ResourcesPage from './pages/Resources/ResourcesPage';
-import SubscriptionPage from './pages/Subscription/SubscriptionPage';
 import AdminUsersPage from './pages/Dashboard/AdminUsersPage';
-import AdminSubscriptionsPage from './pages/Dashboard/AdminSubscriptionsPage';
 import AdminAppointmentsPage from './pages/Dashboard/AdminAppointmentsPage';
 import './App.css';
 
@@ -227,15 +225,6 @@ function App() {
             />
 
             <Route
-              path="/admin/subscriptions"
-              element={
-                <ProtectedRoute roles="admin">
-                  <AdminSubscriptionsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
               path="/admin/appointments"
               element={
                 <ProtectedRoute roles="admin">
@@ -377,15 +366,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Settings />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/subscription"
-              element={
-                <ProtectedRoute roles="patient">
-                  <SubscriptionPage />
                 </ProtectedRoute>
               }
             />

@@ -81,18 +81,15 @@ export default function Journal() {
   };
 
   const handleCreate = async (entry) => {
-    try {
-      const res = await apiClient.post('/journals', entry);
-      await fetchJournals();
-      if (res.data?.crisis_detected) {
-        setCrisisAlert({
-          severity: res.data.crisis_severity,
-          show_book_therapist: res.data.crisis_severity === 'high' || res.data.crisis_severity === 'emergency',
-        });
-      }
-    } catch (error) {
-      showError(error.response?.data?.detail || 'Failed to create diary entry.');
+    const res = await apiClient.post('/journals', entry);
+    fetchJournals();
+    if (res.data?.crisis_detected) {
+      setCrisisAlert({
+        severity: res.data.crisis_severity,
+        show_book_therapist: res.data.crisis_severity === 'high' || res.data.crisis_severity === 'emergency',
+      });
     }
+    return res.data;
   };
 
   const handleDelete = async (id) => {

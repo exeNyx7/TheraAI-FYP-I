@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { Trash2, Share2 } from 'lucide-react';
+import { Trash2, Share2, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { Smile, Frown, Heart, Wind, Circle } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -19,6 +19,7 @@ const moodLabels = { happy: 'Happy', sad: 'Sad', anxious: 'Anxious', calm: 'Calm
 export function JournalCard({ journal, onDelete }) {
   const { showSuccess } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [insightOpen, setInsightOpen] = useState(false);
   const MoodIcon  = moodIcons[journal.mood]  || Circle;
   const moodColor = moodColors[journal.mood] || moodColors.neutral;
 
@@ -69,15 +70,36 @@ export function JournalCard({ journal, onDelete }) {
 
             <p className="text-sm text-foreground/80 line-clamp-2">{journal.content}</p>
 
-            {journal.ai_analysis?.sentiment_label && (
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {journal.ai_analysis?.sentiment_label && (
                 <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary">
-                  AI: {journal.ai_analysis.sentiment_label}
+                  {journal.ai_analysis.sentiment_label}
                 </span>
-                {journal.ai_analysis.top_emotions?.[0] && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                    {journal.ai_analysis.top_emotions[0]}
-                  </span>
+              )}
+              {journal.ai_insight && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setInsightOpen(v => !v); }}
+                  className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition-colors"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  AI Insight
+                  {insightOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+              )}
+            </div>
+
+            {/* Expanded AI insight */}
+            {insightOpen && journal.ai_insight && (
+              <div
+                className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3 space-y-2"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              >
+                <p className="text-xs text-foreground leading-relaxed">{journal.ai_insight}</p>
+                {journal.ai_suggestion && (
+                  <p className="text-xs text-muted-foreground italic border-t border-purple-200 dark:border-purple-800 pt-2">
+                    {journal.ai_suggestion}
+                  </p>
                 )}
               </div>
             )}
