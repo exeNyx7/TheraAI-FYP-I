@@ -56,6 +56,10 @@ class AppointmentOut(BaseModel):
     reminder_sent: bool = False
     patient_name: Optional[str] = None
     therapist_name: Optional[str] = None
+    # Payment fields
+    session_fee_pkr: Optional[int] = None
+    payment_status: str = "free"  # free | subscription_deducted | pending | paid
+    stripe_session_id: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -89,6 +93,10 @@ class AppointmentInDB(BaseModel):
     patient_calendar_event_id: Optional[str] = None
     therapist_calendar_event_id: Optional[str] = None
     reminder_sent: bool = False
+    # Payment fields
+    session_fee_pkr: Optional[int] = None
+    payment_status: str = "free"
+    stripe_session_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
 

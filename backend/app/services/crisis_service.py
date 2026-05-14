@@ -154,29 +154,13 @@ class CrisisService:
             )
             await db.crisis_events.insert_one(event.model_dump())
 
-            # ── 2. Resolve patient + therapist ────────────────────────────────
+            # ── 2. Resolve patient info ───────────────────────────────────────
             patient_doc = None
             try:
                 patient_doc = await db.users.find_one({"_id": ObjectId(user_id)})
             except Exception:
                 pass
             patient_name = (patient_doc or {}).get("full_name", "Unknown Patient")
-
-            therapist_doc = None
-            therapist_id: Optional[str] = None
-            therapist_email: Optional[str] = None
-            try:
-                appt = await db.appointments.find_one(
-                    {"patient_id": user_id, "status": {"$in": ["confirmed", "pending"]}},
-                    sort=[("created_at", -1)],
-                )
-                if appt:
-                    therapist_id = str(appt.get("therapist_id", ""))
-                    therapist_doc = await db.users.find_one({"_id": ObjectId(therapist_id)})
-                    therapist_email = (therapist_doc or {}).get("email")
-            except Exception:
-                pass
-            therapist_name = (therapist_doc or {}).get("full_name", "Care Team")
 
             # ── 3. escalations collection ─────────────────────────────────────
             trigger_desc = ", ".join(
@@ -193,46 +177,43 @@ class CrisisService:
                 "acknowledged": False,
                 "created_at": now,
             })
+            esc_id = str(esc_result.inserted_id)
 
-            # ── 4. in-app notification for therapist (or admin fallback) ──────
-            notification_recipient = therapist_id
-            if not notification_recipient:
-                try:
-                    admin = await db.users.find_one({"role": "admin"})
-                    if admin:
-                        notification_recipient = str(admin["_id"])
-                except Exception:
-                    pass
+            # ── 4. Notify ALL active therapists + admins ──────────────────────
+            severity_emoji = {"emergency": "🚨", "high": "⚠️", "moderate": "⚡"}.get(severity, "ℹ️")
+            notif_doc_base = {
+                "type": "crisis_alert",
+                "title": f"{severity_emoji} Crisis Alert — {severity.upper()}",
+                "body": f"Patient {patient_name} needs attention. Trigger: {trigger_desc[:100]}",
+                "patient_id": user_id,
+                "escalation_id": esc_id,
+                "severity": severity,
+                "read": False,
+                "created_at": now,
+            }
 
-            if notification_recipient:
-                severity_emoji = {"emergency": "🚨", "high": "⚠️", "moderate": "⚡"}.get(severity, "ℹ️")
-                await db.notifications.insert_one({
-                    "user_id": notification_recipient,
-                    "type": "crisis_alert",
-                    "title": f"{severity_emoji} Crisis Alert — {severity.upper()}",
-                    "body": (
-                        f"Patient {patient_name} needs attention. "
-                        f"Trigger: {trigger_desc[:100]}"
-                    ),
-                    "patient_id": user_id,
-                    "escalation_id": str(esc_result.inserted_id),
-                    "severity": severity,
-                    "read": False,
-                    "created_at": now,
-                })
+            staff_emails: list[str] = []
+            try:
+                staff_cursor = db.users.find(
+                    {"role": {"$in": ["psychiatrist", "therapist", "admin"]}, "is_active": True},
+                    {"_id": 1, "email": 1, "full_name": 1, "role": 1},
+                )
+                async for staff in staff_cursor:
+                    staff_id = str(staff["_id"])
+                    # In-app bell notification
+                    await db.notifications.insert_one({**notif_doc_base, "user_id": staff_id})
+                    # Collect therapist emails for email delivery
+                    if staff.get("role") in ("psychiatrist", "therapist") and staff.get("email"):
+                        staff_emails.append(staff["email"])
+            except Exception as e:
+                logger.error(f"Failed to notify staff: {e}")
 
             # ── 5. WARNING log (always) ───────────────────────────────────────
             logger.warning(
                 "CRISIS ALERT: %s — severity=%s — email_enabled=%s, "
-                "escalation + in-app notification created",
-                user_id, severity, settings.mail_enabled,
+                "escalation + in-app notifications created (staff count=%d)",
+                user_id, severity, settings.mail_enabled, len(staff_emails),
             )
-            if not settings.mail_enabled:
-                logger.warning(
-                    "CRISIS ALERT: %s — email disabled (MAIL_ENABLED=False), "
-                    "in-app notification sent to therapist/admin",
-                    user_id,
-                )
 
             # ── 6. DEMO_MODE: bright red console output ───────────────────────
             if settings.demo_mode:
@@ -248,21 +229,20 @@ class CrisisService:
                     f"║  ID      : {user_id[:8]+'...':<38}║\n"
                     f"║  Trigger : {trigger_desc[:38]:<38}║\n"
                     f"║  Message : {message[:38]+'...':<38}║\n"
-                    f"║  Notif   : {'SENT':<38}║\n"
-                    f"║  Email   : {'SENT' if settings.mail_enabled else 'DISABLED (MAIL_ENABLED=False)':<38}║\n"
+                    f"║  Notif   : {'SENT TO ALL STAFF':<38}║\n"
+                    f"║  Email   : {'QUEUED' if (settings.mail_enabled and staff_emails) else 'DISABLED':<38}║\n"
                     f"╚══════════════════════════════════════════════════╝"
                     f"{_RST}\n"
                 )
 
-            # ── 7. Email — only if MAIL_ENABLED and high/emergency ────────────
-            if severity in ("high", "emergency") and settings.mail_enabled:
+            # ── 7. Email — therapists only, high/emergency, MAIL_ENABLED ──────
+            if severity in ("high", "emergency") and settings.mail_enabled and staff_emails:
                 from .email_service import EmailService
                 import asyncio
-                to_email = therapist_email or settings.admin_email or ""
-                if to_email:
+                for to_email in staff_emails:
                     asyncio.create_task(EmailService.send_crisis_alert(
                         to_email=to_email,
-                        therapist_name=therapist_name,
+                        therapist_name="Care Team",
                         patient_name=patient_name,
                         severity=severity,
                         trigger=trigger_desc,

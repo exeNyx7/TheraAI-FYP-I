@@ -4,12 +4,25 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { TherapistSelector } from '../../components/Appointments/TherapistSelector';
-import { PaymentCheckout } from '../../components/Appointments/PaymentCheckout';
 import { VideoCallModal } from '../../components/Teletherapy/VideoCallModal';
-import { Calendar, Clock, User, Video, Plus, CheckCircle, X, Loader2, ChevronLeft } from 'lucide-react';
+import { Calendar, Clock, User, Video, Plus, CheckCircle, X, Loader2, ChevronLeft, CreditCard, Shield, Zap, ExternalLink, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../apiClient';
+import { useToast } from '../../contexts/ToastContext';
+
+const DURATIONS = [
+  { minutes: 15, label: '15 min' },
+  { minutes: 25, label: '25 min' },
+  { minutes: 30, label: '30 min' },
+];
+const MULTIPLIERS = { 15: 1.0, 25: 1.6, 30: 2.0 };
+function calcFee(baseRate, minutes) {
+  return Math.round((baseRate || 2500) * (MULTIPLIERS[minutes] || 1.6));
+}
+function fmtPKR(n) {
+  return `PKR ${n.toLocaleString('en-PK')}`;
+}
 
 const statusColors = {
   scheduled: 'bg-blue-100 text-blue-700',
@@ -98,6 +111,8 @@ function SlotPicker({ therapistId, onSlotSelected, onBack }) {
 export default function Appointments() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { showSuccess, showError } = useToast();
 
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -105,13 +120,52 @@ export default function Appointments() {
   const [step, setStep] = useState('list'); // list | select-therapist | select-slot | checkout | success
   const [selectedTherapist, setSelectedTherapist] = useState(null);
   const [selectedDateSlot, setSelectedDateSlot] = useState(null); // { date, slot }
+  const [selectedDuration, setSelectedDuration] = useState(25);
+  const [myPlan, setMyPlan] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState(null);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     fetchAppointments();
+    if (user.role === 'patient') {
+      apiClient.get('/payments/my-plan').then(r => setMyPlan(r.data)).catch(() => {});
+    }
   }, [user, navigate]);
+
+  // Poll every 30s
+  useEffect(() => {
+    const interval = setInterval(fetchAppointments, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refetch when tab becomes visible (e.g. returning from Stripe)
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchAppointments(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get('payment') === 'success') {
+      const sessionId = searchParams.get('session_id');
+      if (sessionId) {
+        apiClient.get('/payments/verify-session', { params: { session_id: sessionId } })
+          .catch(() => {})
+          .finally(() => {
+            showSuccess('Payment confirmed! Your session has been booked.');
+            fetchAppointments();
+          });
+      } else {
+        showSuccess('Payment confirmed! Your session has been booked.');
+        fetchAppointments();
+      }
+    }
+    if (searchParams.get('payment') === 'cancelled') {
+      showError('Payment was cancelled. Your booking was not confirmed.');
+    }
+  }, [searchParams]);
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -137,7 +191,7 @@ export default function Appointments() {
     setStep('checkout');
   };
 
-  const handleBookingSuccess = async () => {
+  const handleBooking = async () => {
     const therapistId = selectedTherapist?.user_id || selectedTherapist?.id;
     const selectedDate = selectedDateSlot?.date;
     const selectedTime = selectedDateSlot?.slot?.start_time || selectedDateSlot?.slot?.time;
@@ -147,19 +201,34 @@ export default function Appointments() {
       return;
     }
 
-    const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00Z`).toISOString();
+    // Past-slot guard — must be at least 1 hour from now
+    const slotDateTime = new Date(`${selectedDate}T${selectedTime}:00Z`);
+    if (slotDateTime < new Date(Date.now() + 60 * 60 * 1000)) {
+      setError('This slot is too soon. Please book at least 1 hour in advance.');
+      return;
+    }
 
+    setSubmitting(true);
+    setError(null);
     try {
-      await apiClient.post('/appointments', {
+      const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00Z`).toISOString();
+      const res = await apiClient.post('/payments/book-session', {
         therapist_id: therapistId,
         scheduled_at: scheduledAt,
-        duration_minutes: 50,
-        type: 'video',
+        duration_minutes: selectedDuration,
       });
+
+      if (res.data?.checkout_url) {
+        window.location.href = res.data.checkout_url;
+        return;
+      }
+
       await fetchAppointments();
       setStep('success');
     } catch (err) {
       setError(err?.response?.data?.detail || 'Failed to book appointment. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -179,6 +248,8 @@ export default function Appointments() {
     setStep('list');
     setSelectedTherapist(null);
     setSelectedDateSlot(null);
+    setSelectedDuration(25);
+    setError(null);
   };
 
   const formatDate = (isoString) => {
@@ -208,10 +279,17 @@ export default function Appointments() {
                 <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>My Appointments</h1>
                 <p className="text-muted-foreground mt-2">Manage your therapy sessions</p>
               </div>
-              {step === 'list' && user?.role === 'patient' && (
-                <Button onClick={() => setStep('select-therapist')} className="gap-2 bg-primary hover:bg-primary/90">
-                  <Plus className="h-4 w-4" /> Book Session
-                </Button>
+              {step === 'list' && (
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" onClick={fetchAppointments} title="Refresh">
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  {user?.role === 'patient' && (
+                    <Button onClick={() => setStep('select-therapist')} className="gap-2 bg-primary hover:bg-primary/90">
+                      <Plus className="h-4 w-4" /> Book Session
+                    </Button>
+                  )}
+                </div>
               )}
               {step !== 'list' && (
                 <Button variant="ghost" size="icon" onClick={resetBooking}><X className="h-5 w-5" /></Button>
@@ -264,10 +342,17 @@ export default function Appointments() {
                                   <Clock className="h-4 w-4" />
                                   {formatTime(apt.scheduled_at || apt.time)}
                                 </span>
+                                {apt.duration_minutes && (
+                                  <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                                    {apt.duration_minutes} min
+                                  </span>
+                                )}
                               </div>
-                              <Badge className={`mt-2 ${statusColors[apt.status] || statusColors.scheduled}`}>
-                                {apt.status}
-                              </Badge>
+                              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <Badge className={`${statusColors[apt.status] || statusColors.scheduled}`}>
+                                  {apt.status}
+                                </Badge>
+                              </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -328,23 +413,83 @@ export default function Appointments() {
             {step === 'checkout' && (
               <Card className="max-w-lg mx-auto">
                 <CardHeader>
-                  <CardTitle className="text-lg">Confirm & Pay</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" /> Confirm & Pay
+                  </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Session with <strong>{selectedTherapist?.full_name || selectedTherapist?.name}</strong> on{' '}
-                    <strong>{selectedDateSlot?.date}</strong> at{' '}
+                    Session with <strong>{selectedTherapist?.full_name || selectedTherapist?.name}</strong>{' '}
+                    on <strong>{selectedDateSlot?.date}</strong> at{' '}
                     <strong>{selectedDateSlot?.slot?.start_time || selectedDateSlot?.slot?.time}</strong>
                   </p>
                 </CardHeader>
-                <CardContent>
-                  <PaymentCheckout
-                    appointment={selectedTherapist ? {
-                      therapistName: selectedTherapist.full_name || selectedTherapist.name,
-                      date: selectedDateSlot?.date,
-                      time: selectedDateSlot?.slot?.start_time || selectedDateSlot?.slot?.time,
-                    } : null}
-                    onSuccess={handleBookingSuccess}
-                    onClose={() => setStep('select-therapist')}
-                  />
+                <CardContent className="space-y-4">
+                  {/* Duration picker */}
+                  <div>
+                    <p className="text-sm font-medium mb-2">Session duration</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {DURATIONS.map((d) => {
+                        const baseRate = selectedTherapist?.hourly_rate || selectedTherapist?.session_fee_pkr || 2500;
+                        const fee = calcFee(baseRate, d.minutes);
+                        const isFreeIntro = myPlan && !myPlan.free_intro_used && d.minutes === 15;
+                        return (
+                          <button
+                            key={d.minutes}
+                            onClick={() => setSelectedDuration(d.minutes)}
+                            className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                              selectedDuration === d.minutes ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'
+                            }`}
+                          >
+                            <span className="font-semibold block">{d.label}</span>
+                            <span className={`text-xs font-medium mt-0.5 block ${isFreeIntro ? 'text-green-600' : 'text-primary'}`}>
+                              {isFreeIntro ? 'FREE' : fmtPKR(fee)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Payment method indicator */}
+                  {(() => {
+                    const baseRate = selectedTherapist?.hourly_rate || selectedTherapist?.session_fee_pkr || 2500;
+                    const fee = calcFee(baseRate, selectedDuration);
+                    const freeIntro = myPlan && !myPlan.free_intro_used && selectedDuration === 15;
+                    const useSub = myPlan && myPlan.sessions_remaining > 0 && !freeIntro;
+                    return (
+                      <>
+                        <div className="rounded-lg bg-muted/50 p-3 space-y-0.5">
+                          <p className="text-sm font-medium">
+                            {freeIntro ? <span className="text-green-600">FREE — intro session</span>
+                              : useSub ? <span className="text-blue-600">Subscription session ({myPlan.sessions_remaining} remaining)</span>
+                              : <span className="text-primary font-bold">{fmtPKR(fee)}</span>}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{selectedDuration} min · video session</p>
+                        </div>
+                        {!freeIntro && !useSub && (
+                          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-start gap-2 text-sm">
+                            <ExternalLink className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                            <div>
+                              <span className="font-medium">You'll be redirected to Stripe</span>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Test card: <code className="font-mono">4242 4242 4242 4242</code> · any future expiry · any CVV
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+
+                  {error && <p className="text-sm text-destructive">{error}</p>}
+
+                  <div className="flex gap-3 pt-1">
+                    <Button variant="outline" className="flex-1" onClick={() => setStep('select-slot')} disabled={submitting}>
+                      Back
+                    </Button>
+                    <Button className="flex-1 bg-primary hover:bg-primary/90" onClick={handleBooking} disabled={submitting}>
+                      {submitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Processing…</> : 'Confirm'}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}

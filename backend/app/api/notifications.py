@@ -107,6 +107,24 @@ async def get_unread_notifications(
 
 
 @router.post(
+    "/read-all",
+    status_code=status.HTTP_200_OK,
+    summary="Mark all notifications as read",
+)
+async def mark_all_notifications_read(
+    current_user: UserOut = Depends(get_current_user),
+):
+    """Mark all unread notifications as read for the authenticated user."""
+    db = await get_database()
+    now = datetime.now(timezone.utc)
+    await db.notifications.update_many(
+        {"user_id": str(current_user.id), "read": {"$ne": True}},
+        {"$set": {"read": True, "read_at": now, "updated_at": now}},
+    )
+    return {"message": "All notifications marked as read"}
+
+
+@router.post(
     "/{notification_id}/read",
     status_code=status.HTTP_200_OK,
     summary="Mark notification as read",

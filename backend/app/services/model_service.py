@@ -1,15 +1,18 @@
 """
-ModelService — Groq Cloud LLM (replaces local Ollama)
-Single entry point for ALL LLM chat calls in TheraAI.
+ModelService — AI Chat Backend for TheraAI
+Priority: Groq (cloud) → Ollama (local) → rule-based fallback
 
-Backend: Groq API using llama-3.1-8b-instant by default.
-Set GROQ_MODEL env var to switch models (e.g. llama-3.3-70b-versatile).
-Same THERAPIST_SYSTEM_PROMPT and fallback logic as the Ollama version.
+- If GROQ_API_KEY is set: uses Groq cloud API (llama-3.1-8b-instant by default)
+- If Groq fails or key absent: falls back to local Ollama (llama3.1:8b)
+- If Ollama also unreachable: rule-based keyword responses
+- health check reports which backend is active
 """
 
 import asyncio
 import logging
 from typing import Optional, List, Dict, Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +20,11 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-# llama3-8b-8192 has 30,000 TPM on Groq free tier vs 6,000 for llama-3.1-8b-instant
-GROQ_MODEL = "llama3-8b-8192"
-MAX_HISTORY_MESSAGES = 6   # reduced from 10 to keep token usage low
-RESPONSE_TIMEOUT_SECONDS = 30.0
-MAX_TOKENS = 250            # reduced from 300 to stay well under rate limits
-MAX_RETRIES = 3             # retry on 429 rate-limit errors
+MAX_HISTORY_MESSAGES = 10
+MAX_TOKENS = 400
+GROQ_MAX_TOKENS = 300           # lower to stay under Groq free-tier TPM limits
+GROQ_MAX_RETRIES = 3
+OLLAMA_TIMEOUT = 120.0          # local inference can be slow on CPU
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -97,20 +99,57 @@ Most users are Pakistani. Be genuinely sensitive to:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_messages(
+    user_message: str,
+    conversation_history: Optional[List[Dict[str, str]]],
+    user_context: Optional[str],
+) -> List[Dict[str, str]]:
+    """Build the messages list for any LLM backend."""
+    system_content = THERAPIST_SYSTEM_PROMPT
+    if user_context and user_context.strip():
+        system_content = (
+            THERAPIST_SYSTEM_PROMPT
+            + "\n\n## What you know about this user:\n"
+            + user_context.strip()
+        )
+
+    messages: List[Dict[str, str]] = [{"role": "system", "content": system_content}]
+
+    if conversation_history:
+        for msg in conversation_history[-MAX_HISTORY_MESSAGES:]:
+            role = msg.get("role", "user")
+            if role == "bot":
+                role = "assistant"
+            content = msg.get("content") or msg.get("message", "")
+            if content and role in ("user", "assistant"):
+                clean = content.strip()
+                if len(clean) > 1000:
+                    clean = clean[:1000] + "..."
+                messages.append({"role": role, "content": clean})
+
+    messages.append({"role": "user", "content": user_message.strip()})
+    return messages
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # MODEL SERVICE
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ModelService:
     """
     Single entry point for all LLM chat generation in TheraAI.
+    Stateless — all methods are static.
 
-    Backend: Groq cloud API (llama-3.1-8b-instant by default).
-    Stateless class — all methods are static, no instantiation needed.
-
-    Usage:
-        from .services.model_service import ModelService
-        response = await ModelService.generate_response(message, history)
+    Priority chain:
+        1. Groq cloud API  (if GROQ_API_KEY is set)
+        2. Ollama local    (if Ollama is reachable)
+        3. Rule-based      (always available)
     """
+
+    # ── Public API ────────────────────────────────────────────────────────────
 
     @staticmethod
     async def generate_response(
@@ -119,148 +158,209 @@ class ModelService:
         user_context: Optional[str] = None,
         max_tokens: Optional[int] = None,
     ) -> str:
-        """
-        Generate a therapeutic response using Groq's LLM API.
-
-        Args:
-            user_message: The user's current message text.
-            conversation_history: Optional list of prior messages.
-                Accepts two formats:
-                  - New format:    [{"role": "user"|"assistant", "content": "..."}]
-                  - Legacy format: [{"role": "user"|"bot",       "message": "..."}]
-            user_context: Optional string injected into system prompt for personalization.
-            max_tokens: Override default MAX_TOKENS.
-
-        Returns:
-            str: AI-generated response, or fallback if Groq is unavailable.
-        """
         if not user_message or not user_message.strip():
             raise ValueError("User message cannot be empty")
 
+        messages = _build_messages(user_message, conversation_history, user_context)
+
         from ..config import get_settings
         settings = get_settings()
-        groq_api_key = settings.groq_api_key
-        if not groq_api_key:
-            logger.error("GROQ_API_KEY not configured — using fallback response")
-            return ModelService.generate_fallback_response(user_message)
 
-        try:
-            from groq import AsyncGroq, RateLimitError as GroqRateLimitError
+        # 1. Try Groq
+        if settings.groq_api_key:
+            result = await ModelService._try_groq(
+                settings, messages, max_tokens or GROQ_MAX_TOKENS
+            )
+            if result is not None:
+                return result
+            logger.warning("ModelService: Groq failed — falling back to Ollama")
 
-            system_content = THERAPIST_SYSTEM_PROMPT
-            if user_context and user_context.strip():
-                system_content = (
-                    THERAPIST_SYSTEM_PROMPT
-                    + "\n\n## What you know about this user:\n"
-                    + user_context.strip()
-                )
+        # 2. Try Ollama
+        result = await ModelService._try_ollama(
+            settings, messages, max_tokens or MAX_TOKENS
+        )
+        if result is not None:
+            return result
+        logger.warning("ModelService: Ollama failed — using rule-based fallback")
 
-            messages: List[Dict[str, str]] = [
-                {"role": "system", "content": system_content}
-            ]
-
-            if conversation_history:
-                recent = conversation_history[-MAX_HISTORY_MESSAGES:]
-                for msg in recent:
-                    role = msg.get("role", "user")
-                    if role == "bot":
-                        role = "assistant"
-                    content = msg.get("content") or msg.get("message", "")
-
-                    if content and role in ("user", "assistant"):
-                        clean_content = content.strip()
-                        if len(clean_content) > 1000:
-                            clean_content = clean_content[:1000] + "..."
-                        messages.append({"role": role, "content": clean_content})
-
-            messages.append({"role": "user", "content": user_message.strip()})
-
-            model = settings.groq_model
-            client = AsyncGroq(api_key=groq_api_key)
-
-            # Retry up to MAX_RETRIES times on rate-limit errors (429)
-            for attempt in range(MAX_RETRIES):
-                try:
-                    response = await client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        max_tokens=max_tokens if max_tokens else MAX_TOKENS,
-                        temperature=0.7,
-                        top_p=0.9,
-                    )
-                    break  # success — exit retry loop
-                except GroqRateLimitError:
-                    if attempt == MAX_RETRIES - 1:
-                        logger.warning("ModelService: Groq rate limit — using fallback after %d retries", MAX_RETRIES)
-                        return ModelService.generate_fallback_response(user_message)
-                    wait = 2.0 ** attempt  # 1s, 2s, 4s
-                    logger.warning("ModelService: Groq rate limit, retrying in %.0fs (attempt %d/%d)", wait, attempt + 1, MAX_RETRIES)
-                    await asyncio.sleep(wait)
-
-            ai_text = response.choices[0].message.content.strip()
-
-            if not ai_text:
-                logger.warning("ModelService: Empty response from Groq, using fallback")
-                return ModelService.generate_fallback_response(user_message)
-
-            logger.info("ModelService: Response generated (%d chars) via Groq/%s", len(ai_text), model)
-            return ai_text
-
-        except Exception as e:
-            logger.error("ModelService: Groq error: %s", str(e), exc_info=True)
-            return ModelService.generate_fallback_response(user_message)
+        # 3. Rule-based
+        return ModelService.generate_fallback_response(user_message)
 
     @staticmethod
     async def check_health() -> Dict[str, Any]:
-        """Check whether Groq API key is configured and API is reachable."""
+        """Report which AI backend is active."""
         from ..config import get_settings
         settings = get_settings()
-        groq_api_key = settings.groq_api_key
-        model = settings.groq_model
 
-        if not groq_api_key:
+        # Check Groq
+        if settings.groq_api_key:
+            groq_status = await ModelService._groq_health(settings)
+            if groq_status["ok"]:
+                return {
+                    "status": "healthy",
+                    "backend": "groq",
+                    "model": settings.groq_model,
+                    "message": f"Groq API reachable — {settings.groq_model}",
+                }
+
+        # Check Ollama
+        ollama_status = await ModelService._ollama_health(settings)
+        if ollama_status["ok"]:
             return {
-                "status": "unavailable",
-                "model": model,
-                "message": "GROQ_API_KEY environment variable not set",
+                "status": "healthy",
+                "backend": "ollama",
+                "model": settings.ollama_model,
+                "message": f"Ollama running — {settings.ollama_model}",
             }
 
-        # Quick connectivity check using a minimal completion
+        # Both down — rule-based only
+        return {
+            "status": "degraded",
+            "backend": "fallback",
+            "model": "rule-based",
+            "message": (
+                "Both Groq and Ollama unavailable. "
+                "Set GROQ_API_KEY or start Ollama for full AI responses."
+            ),
+        }
+
+    # ── Groq ──────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    async def _try_groq(settings, messages: list, max_tokens: int) -> Optional[str]:
+        try:
+            from groq import AsyncGroq, RateLimitError as GroqRateLimitError
+
+            client = AsyncGroq(api_key=settings.groq_api_key)
+
+            for attempt in range(GROQ_MAX_RETRIES):
+                try:
+                    response = await client.chat.completions.create(
+                        model=settings.groq_model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=0.7,
+                        top_p=0.9,
+                    )
+                    text = response.choices[0].message.content.strip()
+                    if text:
+                        logger.info(
+                            "ModelService: %d chars via Groq/%s",
+                            len(text), settings.groq_model,
+                        )
+                        return text
+                    return None
+
+                except GroqRateLimitError:
+                    if attempt == GROQ_MAX_RETRIES - 1:
+                        logger.warning("ModelService: Groq rate-limited after %d retries", GROQ_MAX_RETRIES)
+                        return None
+                    wait = 2.0 ** attempt
+                    logger.warning("ModelService: Groq rate limit, retry in %.0fs", wait)
+                    await asyncio.sleep(wait)
+
+        except Exception as e:
+            logger.error("ModelService: Groq error: %s", e)
+        return None
+
+    @staticmethod
+    async def _groq_health(settings) -> Dict[str, Any]:
         try:
             from groq import AsyncGroq
-            client = AsyncGroq(api_key=groq_api_key)
+            client = AsyncGroq(api_key=settings.groq_api_key)
             await client.chat.completions.create(
-                model=model,
+                model=settings.groq_model,
                 messages=[{"role": "user", "content": "ping"}],
                 max_tokens=1,
             )
-            return {
-                "status": "healthy",
-                "model": model,
-                "message": f"Groq API reachable — {model}",
-            }
+            return {"ok": True}
         except Exception as e:
-            return {
-                "status": "degraded",
-                "model": model,
-                "message": f"Groq API error: {str(e)}",
-            }
+            msg = str(e)
+            if "decommissioned" in msg or "model_decommissioned" in msg:
+                logger.error(
+                    "ModelService: Groq model '%s' is decommissioned. "
+                    "Update GROQ_MODEL in .env — recommended: llama-3.1-8b-instant",
+                    settings.groq_model,
+                )
+            return {"ok": False}
+
+    # ── Ollama ────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    async def _try_ollama(settings, messages: list, max_tokens: int) -> Optional[str]:
+        url = settings.ollama_base_url.rstrip("/") + "/api/chat"
+        payload = {
+            "model": settings.ollama_model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "num_ctx": settings.ollama_num_ctx,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "num_predict": max_tokens,
+            },
+        }
+        try:
+            async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+                text = resp.json().get("message", {}).get("content", "").strip()
+                if text:
+                    logger.info(
+                        "ModelService: %d chars via Ollama/%s",
+                        len(text), settings.ollama_model,
+                    )
+                    return text
+        except httpx.ConnectError:
+            logger.warning(
+                "ModelService: Ollama not running at %s — skipping (Groq handles this)",
+                settings.ollama_base_url,
+            )
+        except httpx.TimeoutException:
+            logger.warning("ModelService: Ollama timed out after %.0fs", OLLAMA_TIMEOUT)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 500:
+                # Model not pulled is the most common cause of a 500 from Ollama
+                logger.warning(
+                    "ModelService: Ollama 500 — '%s' probably not downloaded. "
+                    "Fix: open a terminal and run  ollama pull %s",
+                    settings.ollama_model, settings.ollama_model,
+                )
+            else:
+                logger.warning("ModelService: Ollama HTTP %d", e.response.status_code)
+        except Exception as e:
+            logger.warning("ModelService: Ollama unexpected error: %s", e)
+        return None
+
+    @staticmethod
+    async def _ollama_health(settings) -> Dict[str, Any]:
+        url = settings.ollama_base_url.rstrip("/") + "/api/tags"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                names = [m.get("name", "") for m in resp.json().get("models", [])]
+                if any(settings.ollama_model in n for n in names):
+                    return {"ok": True}
+                logger.warning(
+                    "ModelService: Ollama running but '%s' not found. Pull: ollama pull %s",
+                    settings.ollama_model, settings.ollama_model,
+                )
+                return {"ok": False}
+        except Exception:
+            return {"ok": False}
+
+    # ── Rule-based fallback ───────────────────────────────────────────────────
 
     @staticmethod
     def generate_fallback_response(user_message: str) -> str:
-        """
-        Rule-based fallback when Groq is unavailable.
-        Uses keyword matching for the most common mental health topics.
-        Always returns a meaningful, supportive response — never an error string.
-        """
         lower = user_message.lower()
 
-        # Crisis detection — ALWAYS checked first
         crisis_keywords = [
             "kill myself", "end my life", "want to die", "don't want to live",
             "suicide", "suicidal", "self harm", "self-harm", "hurt myself",
             "cut myself", "cutting myself", "took pills", "not worth living",
-            "better off without me", "said my goodbyes", "no reason to live"
+            "better off without me", "said my goodbyes", "no reason to live",
         ]
         if any(kw in lower for kw in crisis_keywords):
             return (
@@ -276,7 +376,7 @@ class ModelService:
 
         if any(w in lower for w in ["anxious", "anxiety", "panic", "nervous", "worried", "fear"]):
             return (
-                "Anxiety can feel really overwhelming. A grounding technique that often helps in the moment is 5-4-3-2-1: "
+                "Anxiety can feel really overwhelming. A grounding technique that often helps is 5-4-3-2-1: "
                 "name 5 things you can see, 4 you can physically feel, 3 you can hear, 2 you can smell, and 1 you can taste. "
                 "It gently pulls your attention back to the present.\n\n"
                 "Would you like to share what's been triggering your anxiety?"
@@ -301,7 +401,7 @@ class ModelService:
             return (
                 "Sleep difficulties can affect everything — mood, focus, energy. "
                 "A consistent bedtime and wake time (even on weekends) is one of the most evidence-backed strategies. "
-                "Avoiding screens for an hour before bed and doing something calming can also help signal to your body that it's time to rest.\n\n"
+                "Avoiding screens for an hour before bed can also help signal to your body that it's time to rest.\n\n"
                 "How long has sleep been a challenge for you?"
             )
 
@@ -315,14 +415,13 @@ class ModelService:
         if any(w in lower for w in ["angry", "anger", "furious", "frustrated", "rage", "mad", "irritated"]):
             return (
                 "Anger often signals that something important to you has been crossed or dismissed — it's a valid feeling. "
-                "If the intensity feels big right now, even a few slow, deep breaths can take the edge off before exploring what's underneath.\n\n"
+                "Even a few slow, deep breaths can take the edge off before exploring what's underneath.\n\n"
                 "What happened that brought up these feelings?"
             )
 
         if any(w in lower for w in ["mindful", "meditation", "breathe", "breathing", "calm", "relax", "ground"]):
             return (
-                "Here's a simple breathing exercise you can try right now: "
-                "inhale for 4 counts, hold for 4, exhale slowly for 6. "
+                "Here's a simple breathing exercise: inhale for 4 counts, hold for 4, exhale slowly for 6. "
                 "The extended exhale activates your body's natural calming response. "
                 "Even two or three cycles can make a difference.\n\n"
                 "How are you feeling in this moment?"
@@ -331,7 +430,7 @@ class ModelService:
         if any(w in lower for w in ["motivation", "procrastinat", "lazy", "stuck", "unmotivated", "can't start"]):
             return (
                 "Feeling stuck is genuinely difficult, and it rarely means you're lazy. "
-                "Often it's a sign of being overwhelmed, burnt out, or afraid of something about the task. "
+                "Often it's a sign of being overwhelmed or burnt out. "
                 "The smallest possible step — even just opening the document — can help break the inertia.\n\n"
                 "What's the thing you're finding hardest to start?"
             )
@@ -346,7 +445,7 @@ class ModelService:
         if any(w in lower for w in ["grief", "loss", "died", "death", "passed away", "miss them"]):
             return (
                 "I'm so sorry for your loss. Grief doesn't follow a schedule, and there's no right way to experience it. "
-                "What you're feeling — whatever that is — is a natural response to losing someone or something that mattered.\n\n"
+                "What you're feeling is a natural response to losing someone or something that mattered.\n\n"
                 "Would it help to talk about them, or about how you're feeling right now?"
             )
 

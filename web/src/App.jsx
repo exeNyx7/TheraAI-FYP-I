@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocat
 import { MessageCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import LandingPage from './pages/Landing/LandingPageV0';
 import Login from './pages/Auth/LoginV0';
@@ -36,6 +37,10 @@ import AchievementUnlockPopup from './components/Achievements/AchievementUnlockP
 import TherapistProgress from './pages/Therapist/TherapistProgress';
 import SessionsPage from './pages/Sessions/SessionsPage';
 import ResourcesPage from './pages/Resources/ResourcesPage';
+import SubscriptionPage from './pages/Subscription/SubscriptionPage';
+import AdminUsersPage from './pages/Dashboard/AdminUsersPage';
+import AdminSubscriptionsPage from './pages/Dashboard/AdminSubscriptionsPage';
+import AdminAppointmentsPage from './pages/Dashboard/AdminAppointmentsPage';
 import './App.css';
 
 function AuthAwareRedirect() {
@@ -77,6 +82,7 @@ function App() {
     <ToastProvider>
       <AuthProvider>
         <Router>
+        <NotificationProvider>
           <div className="app">
             <NotificationPopup />
             <AchievementUnlockPopup />
@@ -215,10 +221,25 @@ function App() {
               path="/users"
               element={
                 <ProtectedRoute roles="admin">
-                  <div className="page-placeholder">
-                    <h2>User Management</h2>
-                    <p>Admin-only user management interface.</p>
-                  </div>
+                  <AdminUsersPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/subscriptions"
+              element={
+                <ProtectedRoute roles="admin">
+                  <AdminSubscriptionsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/appointments"
+              element={
+                <ProtectedRoute roles="admin">
+                  <AdminAppointmentsPage />
                 </ProtectedRoute>
               }
             />
@@ -361,6 +382,15 @@ function App() {
             />
 
             <Route
+              path="/subscription"
+              element={
+                <ProtectedRoute roles="patient">
+                  <SubscriptionPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/waiting-room/:appointmentId"
               element={
                 <ProtectedRoute>
@@ -401,6 +431,7 @@ function App() {
             <Route path="*" element={<AuthAwareRedirect />} />
             </Routes>
           </div>
+        </NotificationProvider>
         </Router>
       </AuthProvider>
     </ToastProvider>

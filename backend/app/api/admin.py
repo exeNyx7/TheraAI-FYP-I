@@ -79,6 +79,47 @@ class StatusUpdate(BaseModel):
     is_active: bool
 
 
+class AdminSubscriptionOut(BaseModel):
+    id: str
+    full_name: str
+    email: str
+    subscription_tier: str
+    subscription_status: str
+    sessions_remaining: int
+    sessions_used_total: int
+    renews_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class AdminSubscriptionList(BaseModel):
+    subscriptions: List[AdminSubscriptionOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class SessionsUpdate(BaseModel):
+    sessions_remaining: int
+
+
+class AdminAppointmentOut(BaseModel):
+    id: str
+    patient_name: str
+    therapist_name: str
+    scheduled_at: Optional[str] = None
+    duration_minutes: int = 25
+    status: str
+    payment_status: str
+    session_fee_pkr: int = 0
+
+
+class AdminAppointmentList(BaseModel):
+    appointments: List[AdminAppointmentOut]
+    total: int
+    page: int
+    page_size: int
+
+
 # ── Helper ────────────────────────────────────────────────────────────────────
 
 def _str_id(doc: dict) -> str:
@@ -292,6 +333,139 @@ async def delete_user(
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/subscriptions", response_model=AdminSubscriptionList)
+async def list_subscriptions(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    tier: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    search: Optional[str] = Query(default=None),
+    _: UserOut = Depends(require_admin),
+):
+    """Paginated patient subscription list."""
+    try:
+        db = db_manager.get_database()
+        query: dict = {"role": "patient"}
+        if tier:
+            query["subscription_tier"] = tier
+        if status:
+            query["subscription_status"] = status
+        if search:
+            import re
+            safe = re.escape(search)
+            query["$or"] = [
+                {"full_name": {"$regex": safe, "$options": "i"}},
+                {"email": {"$regex": safe, "$options": "i"}},
+            ]
+        total = await db.users.count_documents(query)
+        skip = (page - 1) * page_size
+        docs = await db.users.find(query).sort("created_at", -1).skip(skip).limit(page_size).to_list(length=page_size)
+        return AdminSubscriptionList(
+            subscriptions=[
+                AdminSubscriptionOut(
+                    id=str(d["_id"]),
+                    full_name=d.get("full_name", ""),
+                    email=d.get("email", ""),
+                    subscription_tier=d.get("subscription_tier", "free"),
+                    subscription_status=d.get("subscription_status", "inactive"),
+                    sessions_remaining=d.get("sessions_remaining", 0),
+                    sessions_used_total=d.get("sessions_used_total", 0),
+                    renews_at=_fmt_dt(d.get("subscription_renews_at")),
+                    created_at=_fmt_dt(d.get("created_at")),
+                )
+                for d in docs
+            ],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to list subscriptions")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/subscriptions/{user_id}")
+async def update_subscription_sessions(
+    user_id: str,
+    body: SessionsUpdate,
+    _: UserOut = Depends(require_admin),
+):
+    """Admin override: manually set sessions_remaining for a patient."""
+    try:
+        db = db_manager.get_database()
+        result = await db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"sessions_remaining": body.sessions_remaining, "updated_at": datetime.now(timezone.utc)}},
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"updated": True, "sessions_remaining": body.sessions_remaining}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/appointments", response_model=AdminAppointmentList)
+async def list_all_appointments(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status: Optional[str] = Query(default=None),
+    payment_status: Optional[str] = Query(default=None),
+    range: Optional[str] = Query(default=None, description="today|week|month"),
+    _: UserOut = Depends(require_admin),
+):
+    """All platform appointments with filters."""
+    try:
+        db = db_manager.get_database()
+        query: dict = {}
+        if status:
+            query["status"] = status
+        if payment_status:
+            query["payment_status"] = payment_status
+        if range:
+            now = datetime.now(timezone.utc)
+            if range == "today":
+                date_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            elif range == "week":
+                date_start = now - timedelta(days=7)
+            elif range == "month":
+                date_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            else:
+                date_start = None
+            if date_start:
+                query["scheduled_at"] = {"$gte": date_start}
+
+        total = await db.appointments.count_documents(query)
+        skip = (page - 1) * page_size
+        docs = await db.appointments.find(query).sort("scheduled_at", -1).skip(skip).limit(page_size).to_list(length=page_size)
+        return AdminAppointmentList(
+            appointments=[
+                AdminAppointmentOut(
+                    id=str(d["_id"]),
+                    patient_name=d.get("patient_name") or "",
+                    therapist_name=d.get("therapist_name") or "",
+                    scheduled_at=_fmt_dt(d.get("scheduled_at")),
+                    duration_minutes=d.get("duration_minutes", 25),
+                    status=d.get("status", "scheduled"),
+                    payment_status=d.get("payment_status", "pending"),
+                    session_fee_pkr=d.get("session_fee_pkr", 0),
+                )
+                for d in docs
+            ],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to list appointments")
         raise HTTPException(status_code=500, detail=str(e))
 
 

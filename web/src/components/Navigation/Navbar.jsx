@@ -3,25 +3,6 @@ import { Link, useLocation } from "react-router-dom"
 import { Button } from "../ui/button"
 import { Menu, X } from "lucide-react"
 
-function LogoMark() {
-  const [imgError, setImgError] = useState(false)
-  if (imgError) {
-    return (
-      <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center shadow-md flex-shrink-0">
-        <span className="text-sm font-bold text-primary-foreground">T</span>
-      </div>
-    )
-  }
-  return (
-    <img
-      src="/logo.png"
-      alt="TheraAI logo"
-      className="h-9 w-9 rounded-xl object-contain flex-shrink-0"
-      onError={() => setImgError(true)}
-    />
-  )
-}
-
 export default function Navbar() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -40,11 +21,8 @@ export default function Navbar() {
         <div className="flex h-16 items-center justify-between">
 
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <LogoMark />
-            <span className="text-xl font-bold tracking-tight" style={{ fontFamily: "Montserrat" }}>
-              TheraAI
-            </span>
+          <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
+            <img src="/logo.svg" alt="TheraAI" className="h-11 w-auto object-contain" />
           </Link>
 
           {/* Desktop nav links */}

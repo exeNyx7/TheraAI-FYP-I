@@ -4,8 +4,10 @@ Main application entry point with authentication system
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .database import db_manager, init_database, check_database_health
@@ -28,6 +30,7 @@ from .api.therapists_public import router as therapists_public_router
 from .api.sharing_preferences import router as sharing_preferences_router
 from .api.gamification import router as gamification_router
 from .api.sessions import router as sessions_router
+from .api.payments import router as payments_router
 
 # Load settings
 settings = get_settings()
@@ -154,6 +157,12 @@ app.include_router(therapists_public_router, prefix="/api/v1")
 app.include_router(sharing_preferences_router, prefix="/api/v1")
 app.include_router(gamification_router, prefix="/api/v1")
 app.include_router(sessions_router, prefix="/api/v1")
+app.include_router(payments_router, prefix="/api/v1")
+
+# Serve static assets (logo for email templates, etc.)
+_static_dir = Path(__file__).parent / "static"
+_static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
 @app.get(
@@ -185,7 +194,7 @@ async def health_check():
         # Check database health
         db_health = await check_database_health()
 
-        # Check Groq / ModelService health
+        # Check Ollama / ModelService health
         from .services.model_service import ModelService
         model_health = await ModelService.check_health()
 
@@ -208,7 +217,7 @@ async def health_check():
                 "jwt_auth": "enabled",
                 "sentiment_analysis": "distilbert-base-uncased-finetuned-sst-2-english",
                 "emotion_detection": "SamLowe/roberta-base-go_emotions",
-                "chat_llm": model_health.get("model", "groq/llama-3.1-8b-instant"),
+                "chat_llm": model_health.get("model", "ollama/llama3.1:8b"),
             }
         }
     except Exception as e:

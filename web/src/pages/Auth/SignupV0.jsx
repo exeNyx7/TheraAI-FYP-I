@@ -53,7 +53,7 @@ export default function SignupV0() {
       const result = await signup(userData);
       
       if (result.success) {
-        showSuccess('Account created successfully! Welcome to Thera-AI!');
+        showSuccess('Account created successfully! Welcome to TheraAI!');
         // Auto-logged in — go straight to role-specific onboarding
         if (selectedRole === 'psychiatrist') {
           navigate('/therapist-onboarding');
@@ -91,13 +91,8 @@ export default function SignupV0() {
         </Link>
 
         <div className="mb-8 text-center">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6 hover:opacity-80 transition-opacity">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg">
-              <span className="text-base font-bold text-primary-foreground">T</span>
-            </div>
-            <span className="text-2xl font-semibold" style={{ fontFamily: 'Montserrat' }}>
-              Thera-AI
-            </span>
+          <Link to="/" className="inline-block mb-6 hover:opacity-80 transition-opacity">
+            <img src="/logo.svg" alt="TheraAI" className="h-20 w-auto object-contain mx-auto" />
           </Link>
         </div>
 
@@ -107,7 +102,7 @@ export default function SignupV0() {
               Create Your Account
             </CardTitle>
             <CardDescription className="text-base">
-              Join Thera-AI and start your mental health journey today.
+              Join TheraAI and start your mental health journey today.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -230,7 +225,7 @@ export default function SignupV0() {
                     className="mt-1 h-4 w-4 rounded border-border bg-background"
                   />
                   <span className="text-xs text-muted-foreground leading-relaxed">
-                    I agree to Thera-AI's{' '}
+                    I agree to TheraAI's{' '}
                     <Link to="#" className="text-primary hover:underline">
                       Terms of Service
                     </Link>{' '}

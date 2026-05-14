@@ -2,13 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { NotificationBell } from '../Notifications/NotificationBell';
+import apiClient from '../../apiClient';
 import {
   LayoutDashboard,
   BookOpen,
   MessageCircle,
   TrendingUp,
   Calendar,
-  History,
   User,
   Settings,
   LogOut,
@@ -20,7 +20,8 @@ import {
   Users,
   ClipboardList,
   ShieldCheck,
-  Library,
+  CreditCard,
+  Crown,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -45,15 +46,15 @@ const NAV_BY_ROLE = {
     { icon: ClipboardList,   label: 'Assessments',   href: '/assessments' },
     { icon: Zap,             label: 'Achievements',  href: '/achievements' },
     { icon: Calendar,        label: 'Appointments',  href: '/appointments' },
-    { icon: History,         label: 'My Sessions',   href: '/sessions' },
-    { icon: Library,         label: 'Resources',     href: '/resources' },
   ],
   psychiatrist: THERAPIST_NAV,
   therapist:    THERAPIST_NAV,
   admin: [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-    { icon: Users,           label: 'Users',     href: '/users' },
-    { icon: ShieldCheck,     label: 'Reports',   href: '/resources' },
+    { icon: LayoutDashboard, label: 'Dashboard',     href: '/dashboard' },
+    { icon: Users,           label: 'Users',         href: '/users' },
+    { icon: CreditCard,      label: 'Subscriptions', href: '/admin/subscriptions' },
+    { icon: Calendar,        label: 'Appointments',  href: '/admin/appointments' },
+    { icon: ShieldCheck,     label: 'Reports',       href: '/resources' },
   ],
 };
 
@@ -130,6 +131,16 @@ function UserMenu({ user, isCollapsed, onLogout }) {
               <Settings className="h-4 w-4 text-muted-foreground" />
               Settings
             </Link>
+            {user?.role === 'patient' && (
+              <Link
+                to="/subscription"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-primary/10 transition-colors text-sm text-primary font-medium"
+              >
+                <CreditCard className="h-4 w-4" />
+                Upgrade Plan
+              </Link>
+            )}
             <div className="border-t border-border my-1" />
             <button
               onClick={() => { setOpen(false); onLogout(); }}
@@ -154,6 +165,23 @@ export function SidebarNav() {
     const saved = localStorage.getItem('sidebar-collapsed');
     return saved === 'true';
   });
+  const [planTier, setPlanTier] = useState(null);
+  const role = user?.role || 'patient';
+
+  const refreshPlan = () => {
+    if (role === 'patient') {
+      apiClient.get('/payments/my-plan').then(r => setPlanTier(r.data.tier)).catch(() => {});
+    }
+  };
+
+  // Fetch on mount / role change
+  useEffect(() => { refreshPlan(); }, [role]);
+
+  // Re-fetch when subscription page dispatches 'plan-updated' after verify
+  useEffect(() => {
+    window.addEventListener('plan-updated', refreshPlan);
+    return () => window.removeEventListener('plan-updated', refreshPlan);
+  }, [role]);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -174,7 +202,6 @@ export function SidebarNav() {
     navigate('/');
   };
 
-  const role = user?.role || 'patient';
   const navItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.patient;
 
   return (
@@ -210,18 +237,21 @@ export function SidebarNav() {
           className={`flex items-center gap-2.5 mb-7 group ${isCollapsed ? 'justify-center' : ''}`}
           onClick={() => setIsOpen(false)}
         >
-          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300 flex-shrink-0">
-            <span className="text-sm font-bold text-primary-foreground" style={{ fontFamily: 'Montserrat' }}>
-              T
-            </span>
-          </div>
-          {!isCollapsed && (
-            <div>
-              <span className="text-xl font-semibold" style={{ fontFamily: 'Montserrat' }}>
-                Thera-AI
-              </span>
+          {isCollapsed ? (
+            <img
+              src="/logo.svg"
+              alt="TheraAI"
+              className="h-11 w-11 object-contain flex-shrink-0 group-hover:scale-110 transition-transform duration-300"
+            />
+          ) : (
+            <div className="flex flex-col">
+              <img
+                src="/logo.svg"
+                alt="TheraAI"
+                className="h-14 w-auto max-w-[160px] object-contain group-hover:scale-105 transition-transform duration-300"
+              />
               {role !== 'patient' && (
-                <p className="text-xs text-muted-foreground">{ROLE_LABELS[role] || role}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 pl-0.5">{ROLE_LABELS[role] || role}</p>
               )}
             </div>
           )}
@@ -270,6 +300,20 @@ export function SidebarNav() {
 
         {/* Bottom section */}
         <div className="pt-3 border-t border-sidebar-border/50 space-y-0.5 mt-3">
+          {role === 'patient' && (
+            <Link
+              to="/subscription"
+              title={planTier && planTier !== 'free' ? `${planTier} plan — manage` : 'Upgrade your plan'}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                planTier && planTier !== 'free'
+                  ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                  : 'text-muted-foreground hover:bg-sidebar-accent/60'
+              } ${isCollapsed ? 'justify-center px-0' : ''}`}
+            >
+              <Crown className="h-3.5 w-3.5 flex-shrink-0" />
+              {!isCollapsed && (planTier && planTier !== 'free' ? planTier.toUpperCase() : 'Free Plan')}
+            </Link>
+          )}
           <NotificationBell isCollapsed={isCollapsed} />
           <UserMenu user={user} isCollapsed={isCollapsed} onLogout={handleLogout} />
         </div>

@@ -25,7 +25,17 @@
       "Bash(xargs wc *)",
       "Bash(awk '$1 == 0 {print $2}')",
       "Bash(awk '$1 == 1 {print $2}')",
-      "Bash(awk '$1 <= 1 && $2 != \"total\" {print $2}')"
+      "Bash(awk '$1 <= 1 && $2 != \"total\" {print $2}')",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\dawoo\\\\Projects\\\\GitHub\\\\TheraAI-FYP-I\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(grep -v \":0$\")",
+      "Bash(Copy-Item \"C:\\\\Users\\\\dawoo\\\\Projects\\\\GitHub\\\\TheraAI-FYP-I\\\\web\\\\public\\\\logo.svg\" \"C:\\\\Users\\\\dawoo\\\\Projects\\\\GitHub\\\\TheraAI-FYP-I\\\\web\\\\src\\\\assets\\\\logo.svg\" -Force)",
+      "Bash(Copy-Item \"C:\\\\Users\\\\dawoo\\\\Projects\\\\GitHub\\\\TheraAI-FYP-I\\\\web\\\\public\\\\logo.png\" \"C:\\\\Users\\\\dawoo\\\\Projects\\\\GitHub\\\\TheraAI-FYP-I\\\\web\\\\src\\\\assets\\\\logo.png\" -Force)",
+      "Bash(Write-Output \"Done\")",
+      "Bash(python3 *)",
+      "Bash(python -c \"from app.api.payments import router; from app.services.payment_service import PaymentService; from app.models.payment import PLAN_DETAILS; print\\('OK — payments module loaded'\\); print\\('Plans:', list\\(PLAN_DETAILS.keys\\(\\)\\)\\)\")",
+      "PowerShell(Get-Command *)",
+      "PowerShell(& \"C:\\\\Users\\\\dawoo\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" -c \"from app.config import get_settings; s = get_settings\\(\\); print\\('stripe_secret_key set:', bool\\(s.stripe_secret_key\\)\\); print\\('starter:', s.stripe_price_starter\\); print\\('professional:', s.stripe_price_professional\\); print\\('intensive:', s.stripe_price_intensive\\); print\\('webhook set:', bool\\(s.stripe_webhook_secret\\)\\)\" 2>&1)"
     ]
   }
 }

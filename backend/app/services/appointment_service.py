@@ -139,6 +139,27 @@ class AppointmentService:
         except Exception:
             pass
 
+        # In-app notifications (non-blocking)
+        try:
+            from .notification_service import create_notification
+            formatted_time = data.scheduled_at.strftime("%b %d at %I:%M %p")
+            therapist_name = therapist.get("full_name", "Your therapist")
+            patient_name = patient.get("full_name", "A patient") if patient else "A patient"
+            asyncio.create_task(create_notification(
+                db, patient_id, "appointment_booked",
+                "Appointment Confirmed",
+                f"Your session with {therapist_name} on {formatted_time} is booked.",
+                {"appointment_id": str(result.inserted_id)},
+            ))
+            asyncio.create_task(create_notification(
+                db, data.therapist_id, "appointment_booked",
+                "New Appointment",
+                f"{patient_name} booked a session on {formatted_time}.",
+                {"appointment_id": str(result.inserted_id)},
+            ))
+        except Exception:
+            pass
+
         return AppointmentOut.from_doc(created)
 
     @staticmethod
@@ -274,6 +295,32 @@ class AppointmentService:
             asyncio.create_task(
                 CalendarService.sync_appointment_cancelled(appointment_id)
             )
+        except Exception:
+            pass
+
+        # In-app notification for the other party
+        try:
+            from .notification_service import create_notification
+            import asyncio
+            cancelled_at = updated.get("scheduled_at")
+            formatted_time = cancelled_at.strftime("%b %d at %I:%M %p") if isinstance(cancelled_at, datetime) else "your scheduled time"
+            # Notify the party who did NOT cancel
+            if user_id == doc["patient_id"]:
+                # Patient cancelled → notify therapist
+                asyncio.create_task(create_notification(
+                    db, doc["therapist_id"], "appointment_cancelled",
+                    "Appointment Cancelled",
+                    f"{patient.get('full_name', 'A patient') if patient else 'A patient'} cancelled the session on {formatted_time}.",
+                    {"appointment_id": appointment_id},
+                ))
+            else:
+                # Therapist cancelled → notify patient
+                asyncio.create_task(create_notification(
+                    db, doc["patient_id"], "appointment_cancelled",
+                    "Appointment Cancelled",
+                    f"Your session with {therapist.get('full_name', 'your therapist') if therapist else 'your therapist'} on {formatted_time} has been cancelled.",
+                    {"appointment_id": appointment_id},
+                ))
         except Exception:
             pass
 

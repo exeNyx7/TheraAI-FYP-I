@@ -65,6 +65,14 @@ class UserBase(BaseModel):
     )
     onboarding_completed: bool = Field(default=False, description="Whether the user has completed onboarding")
 
+    # Freemium / subscription
+    subscription_tier: str = Field(default="free", description="free|starter|professional|intensive")
+    subscription_status: str = Field(default="inactive", description="active|inactive|cancelled|past_due")
+    sessions_remaining: int = Field(default=0, ge=0, description="Subscription sessions left this period")
+    sessions_used_total: int = Field(default=0, ge=0, description="Lifetime sessions used")
+    free_intro_used: bool = Field(default=False, description="Whether the one-time free 15-min session has been used")
+    subscription_renews_at: Optional[datetime] = Field(default=None, description="Next subscription renewal date")
+
     # Gamification fields
     xp: int = Field(default=0, ge=0, description="Total experience points earned")
     level: int = Field(default=1, ge=1, description="User level (1 + xp // 500)")
@@ -153,6 +161,8 @@ class UserInDB(UserBase):
     # Google Calendar integration
     google_refresh_token: Optional[str] = Field(default=None, description="Google OAuth2 refresh token")
     google_calendar_connected: bool = Field(default=False, description="Whether Google Calendar is connected")
+    # Stripe customer reference (DB only — never expose in API responses)
+    stripe_customer_id: Optional[str] = Field(default=None, description="Stripe customer ID")
     
     @classmethod
     def from_doc(cls, doc: dict):
@@ -192,6 +202,14 @@ class UserUpdate(BaseModel):
     streak_days: Optional[int] = None
     last_active_date: Optional[date] = None
     unlocked_achievements: Optional[List[str]] = None
+    # Subscription (internal updates only)
+    subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    sessions_remaining: Optional[int] = None
+    sessions_used_total: Optional[int] = None
+    free_intro_used: Optional[bool] = None
+    subscription_renews_at: Optional[datetime] = None
+    stripe_customer_id: Optional[str] = None
 
     @field_validator("full_name")
     @classmethod

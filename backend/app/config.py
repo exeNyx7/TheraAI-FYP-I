@@ -51,16 +51,19 @@ class Settings(BaseSettings):
     )
     cors_allow_credentials: bool = Field(default=True, alias="CORS_ALLOW_CREDENTIALS")
     
-    # AI/ML Configuration — Groq Cloud LLM
-    groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
-    groq_model: str = Field(default="llama3-8b-8192", alias="GROQ_MODEL")
+    # AI/ML Configuration — Local Ollama LLM
+    ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
+    ollama_model: str = Field(default="llama3.2:3b", alias="OLLAMA_MODEL")
+    ollama_num_ctx: int = Field(default=4096, alias="OLLAMA_NUM_CTX")
     ai_models_disabled: bool = Field(default=False, alias="AI_MODELS_DISABLED")
 
+    # Legacy / unused — kept so existing .env files don't break
+    groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
+    groq_model: str = Field(default="llama-3.1-8b-instant", alias="GROQ_MODEL")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-3.5-turbo", alias="OPENAI_MODEL")
     openai_max_tokens: int = Field(default=1000, alias="OPENAI_MAX_TOKENS")
     openai_temperature: float = Field(default=0.7, alias="OPENAI_TEMPERATURE")
-    ollama_num_ctx: int = Field(default=2048, alias="OLLAMA_NUM_CTX")
     
     # Therapy AI Settings
     ai_therapy_model: str = Field(default="gpt-3.5-turbo", alias="AI_THERAPY_MODEL")
@@ -134,6 +137,19 @@ class Settings(BaseSettings):
     # Demo mode — prints crisis alerts in bright red to server console
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
+    # Public backend URL — used for hosted assets (logo in emails, etc.)
+    backend_url: str = Field(default="http://localhost:8000", alias="BACKEND_URL")
+
+    # Frontend URL — used for Stripe success/cancel redirects
+    frontend_url: str = Field(default="http://localhost:3000", alias="FRONTEND_URL")
+
+    # Stripe (sandbox / test mode only)
+    stripe_secret_key: Optional[str] = Field(default=None, alias="STRIPE_SECRET_KEY")
+    stripe_webhook_secret: Optional[str] = Field(default=None, alias="STRIPE_WEBHOOK_SECRET")
+    stripe_price_starter: Optional[str] = Field(default=None, alias="STRIPE_PRICE_STARTER")
+    stripe_price_professional: Optional[str] = Field(default=None, alias="STRIPE_PRICE_PROFESSIONAL")
+    stripe_price_intensive: Optional[str] = Field(default=None, alias="STRIPE_PRICE_INTENSIVE")
+
     # Health Check
     health_check_interval: int = Field(default=30, alias="HEALTH_CHECK_INTERVAL")  # seconds
 
@@ -159,10 +175,11 @@ class Settings(BaseSettings):
         return f"{self.mongodb_url}/{self.mongodb_database}"
 
 
-# Create a global settings instance
+# Singleton — re-created each time Python reloads this module (e.g. uvicorn --reload).
+# Import this directly when you just need a setting at module level.
 settings = Settings()
 
 
 def get_settings() -> Settings:
-    """Get application settings"""
+    """Return the module-level settings singleton."""
     return settings

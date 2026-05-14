@@ -65,6 +65,12 @@ export default function ResetPassword() {
           </Link>
         )}
 
+        <div className="mb-6 text-center">
+          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+            <img src="/logo.svg" alt="TheraAI" className="h-16 w-auto object-contain mx-auto" />
+          </Link>
+        </div>
+
         <Card className="shadow-xl border-border">
           <CardHeader className="space-y-1 pb-6">
             <div className="flex items-center gap-3 mb-2">

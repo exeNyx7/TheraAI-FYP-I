@@ -30,8 +30,20 @@
   }
 }
 
+@keyframes notifSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .toast-item {
+  .toast-item,
+  [style*="notifSlideIn"] {
     animation: none !important;
   }
 }

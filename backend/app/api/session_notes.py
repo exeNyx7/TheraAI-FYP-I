@@ -62,6 +62,22 @@ async def create_session_note(
         }
         res = await db.session_notes.insert_one(doc)
         doc["_id"] = res.inserted_id
+
+        # Notify patient that session notes are available
+        if payload.patient_id:
+            try:
+                import asyncio
+                from ..services.notification_service import create_notification
+                therapist_name = current_user.full_name or "Your therapist"
+                asyncio.create_task(create_notification(
+                    db, payload.patient_id, "session_notes_added",
+                    "Session Notes Available",
+                    f"{therapist_name} has added notes from your recent session.",
+                    {"appointment_id": payload.appointment_id},
+                ))
+            except Exception:
+                pass
+
         return _serialize(doc)
     except Exception:
         raise HTTPException(

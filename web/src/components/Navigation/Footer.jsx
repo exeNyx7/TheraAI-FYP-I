@@ -1,25 +1,5 @@
-import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Heart } from "lucide-react"
-
-function LogoMark() {
-  const [imgError, setImgError] = useState(false)
-  if (imgError) {
-    return (
-      <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-        <span className="text-sm font-bold text-primary-foreground">T</span>
-      </div>
-    )
-  }
-  return (
-    <img
-      src="/logo.png"
-      alt="TheraAI"
-      className="h-8 w-8 rounded-lg object-contain flex-shrink-0"
-      onError={() => setImgError(true)}
-    />
-  )
-}
 
 const footerLinks = [
   {
@@ -60,9 +40,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div className="space-y-4 sm:col-span-2 lg:col-span-1">
-            <Link to="/" className="inline-flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-              <LogoMark />
-              <span className="font-bold text-lg" style={{ fontFamily: "Montserrat" }}>TheraAI</span>
+            <Link to="/" className="inline-flex items-center hover:opacity-80 transition-opacity">
+              <img src="/logo.svg" alt="TheraAI" className="h-10 w-auto object-contain" />
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
               AI-powered mental health companion for everyone. Available 24/7, backed by evidence-based tools.

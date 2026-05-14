@@ -1,12 +1,36 @@
 """
 Notification Service for TheraAI
-Firebase Cloud Messaging (FCM) push notification sender
+Firebase Cloud Messaging (FCM) push notification sender + in-app DB notifications
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
+
+
+async def create_notification(
+    db,
+    user_id: str,
+    type: str,
+    title: str,
+    body: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Write an in-app notification to the notifications collection."""
+    try:
+        await db.notifications.insert_one({
+            "user_id": user_id,
+            "type": type,
+            "title": title,
+            "body": body,
+            "read": False,
+            "created_at": datetime.now(timezone.utc),
+            "metadata": metadata or {},
+        })
+    except Exception as e:
+        logger.error(f"Failed to create notification for user {user_id}: {e}")
 
 
 class NotificationService:

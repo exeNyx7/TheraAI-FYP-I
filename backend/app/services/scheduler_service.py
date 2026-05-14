@@ -59,7 +59,20 @@ async def _check_upcoming_appointments():
                     scheduled_at=appt["scheduled_at"],
                 )
 
-                # Send push notification if FCM is configured
+                # In-app notification
+                try:
+                    from ..services.notification_service import create_notification
+                    formatted = appt["scheduled_at"].strftime("%b %d at %I:%M %p")
+                    await create_notification(
+                        db, appt["patient_id"], "appointment_reminder",
+                        "Session Tomorrow",
+                        f"Your session with {therapist['full_name']} is tomorrow at {formatted}.",
+                        {"appointment_id": str(appt["_id"])},
+                    )
+                except Exception:
+                    pass
+
+                # FCM push notification if configured
                 try:
                     from ..services.notification_service import NotificationService
                     if NotificationService.is_initialized():

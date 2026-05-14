@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { SidebarNav } from '../../components/Dashboard/SidebarNav';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
-import { Calendar, Clock, CheckCircle, ArrowLeft, CreditCard, Shield } from 'lucide-react';
+import {
+  Calendar, Clock, CheckCircle, ArrowLeft, CreditCard, Shield, Zap, ExternalLink,
+} from 'lucide-react';
 import apiClient from '../../apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -15,38 +17,68 @@ function tomorrowISO() {
   return d.toISOString().slice(0, 10);
 }
 
+const DURATIONS = [
+  { minutes: 15, label: '15 min', note: 'Intro session' },
+  { minutes: 25, label: '25 min', note: 'Standard' },
+  { minutes: 30, label: '30 min', note: 'Extended' },
+];
+
+const MULTIPLIERS = { 15: 1.0, 25: 1.6, 30: 2.0 };
+
+function calcFee(baseRate, minutes) {
+  return Math.round((baseRate || 2500) * (MULTIPLIERS[minutes] || 1.6));
+}
+
+function formatPKR(n) {
+  return `PKR ${n.toLocaleString('en-PK')}`;
+}
+
 export default function BookTherapist() {
   const { therapistId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const fromEscalation = location.state?.fromEscalation === true;
-  const { showSuccess } = useToast();
+  const { showSuccess, showError } = useToast();
 
   const [therapist, setTherapist] = useState(null);
+  const [myPlan, setMyPlan] = useState(null);
   const [date, setDate] = useState(tomorrowISO());
   const [slots, setSlots] = useState([]);
   const [selectedTime, setSelectedTime] = useState(null);
-  const [step, setStep] = useState('select'); // select | payment | confirmed
+  const [duration, setDuration] = useState(25);
+  const [step, setStep] = useState('select'); // select | confirm | confirmed
   const [loading, setLoading] = useState(true);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [createdAppt, setCreatedAppt] = useState(null);
 
+  // Handle Stripe redirect-back
+  useEffect(() => {
+    if (searchParams.get('payment') === 'cancelled') {
+      showError('Payment was cancelled. Your booking was not confirmed.');
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiClient.get(`/therapists/${therapistId}`);
-        if (!cancelled) setTherapist(res.data);
-      } catch (e) {
-        if (!cancelled) setError('Failed to load therapist details.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+
+    Promise.all([
+      apiClient.get(`/therapists/${therapistId}`),
+      apiClient.get('/payments/my-plan').catch(() => null),
+    ]).then(([therapistRes, planRes]) => {
+      if (cancelled) return;
+      setTherapist(therapistRes.data);
+      if (planRes) setMyPlan(planRes.data);
+    }).catch(() => {
+      if (!cancelled) setError('Failed to load therapist details.');
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
     return () => { cancelled = true; };
   }, [therapistId, user, navigate]);
 
@@ -55,48 +87,60 @@ export default function BookTherapist() {
     let cancelled = false;
     setSlotsLoading(true);
     setSelectedTime(null);
-    (async () => {
-      try {
-        const res = await apiClient.get(`/therapists/${therapistId}/availability`, { params: { date } });
-        if (!cancelled) {
-          const normalized = Array.isArray(res.data)
-            ? res.data.map((s) => ({
-                ...s,
-                time: s.time || s.start_time,
-                available: s.available ?? s.is_available ?? false,
-              }))
-            : [];
-          setSlots(normalized);
-        }
-      } catch (e) {
-        if (!cancelled) setSlots([]);
-      } finally {
-        if (!cancelled) setSlotsLoading(false);
-      }
-    })();
+    apiClient.get(`/therapists/${therapistId}/availability`, { params: { date } })
+      .then((res) => {
+        if (cancelled) return;
+        const normalized = Array.isArray(res.data)
+          ? res.data.map((s) => ({
+              ...s,
+              time: s.time || s.start_time,
+              available: s.available ?? s.is_available ?? false,
+            }))
+          : [];
+        setSlots(normalized);
+      })
+      .catch(() => { if (!cancelled) setSlots([]); })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
     return () => { cancelled = true; };
   }, [therapistId, date]);
 
+  // Decide what the payment step will show
+  const baseRate = therapist?.hourly_rate || therapist?.session_fee_pkr || 2500;
+  const sessionFee = calcFee(baseRate, duration);
+  const freeIntroAvailable = myPlan && !myPlan.free_intro_used && duration === 15;
+  const useSubscription = myPlan && myPlan.sessions_remaining > 0 && !freeIntroAvailable;
+  const needsPayment = !freeIntroAvailable && !useSubscription && !fromEscalation;
+
   const handleConfirm = async () => {
     if (!selectedTime) return;
+    // Past-slot guard — must be at least 1 hour from now
+    const slotDateTime = new Date(`${date}T${selectedTime}:00Z`);
+    if (slotDateTime < new Date(Date.now() + 60 * 60 * 1000)) {
+      setError('This slot is too soon. Please book at least 1 hour in advance.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
       const isoDate = new Date(`${date}T${selectedTime}:00Z`).toISOString();
-      const res = await apiClient.post('/appointments', {
+      const res = await apiClient.post('/payments/book-session', {
         therapist_id: therapistId,
         scheduled_at: isoDate,
-        duration_minutes: 60,
-        type: 'video',
-        notes: '',
+        duration_minutes: duration,
       });
+
+      if (res.data?.checkout_url) {
+        // Redirect to Stripe Checkout
+        window.location.href = res.data.checkout_url;
+        return;
+      }
+
+      // Confirmed directly (free or subscription)
       setCreatedAppt(res.data);
       setStep('confirmed');
-      // eslint-disable-next-line no-console
-      console.log('[booking] confirmed', res.data);
-      try { showSuccess('Booking confirmed! Email sent.'); } catch (_) {}
+      try { showSuccess('Booking confirmed!'); } catch (_) {}
     } catch (e) {
-      setError(e.response?.data?.detail || 'Failed to create appointment.');
+      setError(e.response?.data?.detail || 'Failed to book session.');
     } finally {
       setSubmitting(false);
     }
@@ -117,24 +161,31 @@ export default function BookTherapist() {
             {loading && <p className="text-muted-foreground">Loading...</p>}
             {error && step !== 'confirmed' && <p className="text-red-500">{error}</p>}
 
+            {/* Therapist card */}
             {therapist && (
               <Card>
                 <CardContent className="p-6 flex items-center gap-4">
                   <div className="h-16 w-16 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold text-xl">
-                    {(therapist.full_name || therapist.name || '?').split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('')}
+                    {(therapist.full_name || therapist.name || '?')
+                      .split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('')}
                   </div>
                   <div>
                     <h2 className="text-xl font-bold">{therapist.full_name || therapist.name}</h2>
                     <p className="text-sm text-muted-foreground">{therapist.email}</p>
-                    <p className="text-sm text-primary mt-1">PKR {therapist.hourly_rate || 3000}/session</p>
+                    <p className="text-sm text-primary mt-1">
+                      Base rate: {formatPKR(baseRate)}/session
+                    </p>
                   </div>
                 </CardContent>
               </Card>
             )}
 
+            {/* Step: Select date/time + duration */}
             {step === 'select' && therapist && (
               <Card>
                 <CardContent className="p-6 space-y-5">
+
+                  {/* Date picker */}
                   <div>
                     <label className="text-sm font-medium flex items-center gap-2 mb-2">
                       <Calendar className="h-4 w-4" /> Choose a date
@@ -148,6 +199,7 @@ export default function BookTherapist() {
                     />
                   </div>
 
+                  {/* Time slots */}
                   <div>
                     <label className="text-sm font-medium flex items-center gap-2 mb-2">
                       <Clock className="h-4 w-4" /> Available time slots
@@ -179,51 +231,151 @@ export default function BookTherapist() {
                     )}
                   </div>
 
+                  {/* Duration picker */}
+                  <div>
+                    <label className="text-sm font-medium flex items-center gap-2 mb-2">
+                      <Clock className="h-4 w-4" /> Session duration
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {DURATIONS.map((d) => {
+                        const fee = calcFee(baseRate, d.minutes);
+                        const isFreeIntro = myPlan && !myPlan.free_intro_used && d.minutes === 15;
+                        return (
+                          <button
+                            key={d.minutes}
+                            onClick={() => setDuration(d.minutes)}
+                            className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                              duration === d.minutes
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border hover:border-primary/40'
+                            }`}
+                          >
+                            <span className="font-semibold block">{d.label}</span>
+                            <span className="text-xs text-muted-foreground">{d.note}</span>
+                            <span className={`text-xs font-medium block mt-1 ${isFreeIntro ? 'text-green-600' : 'text-primary'}`}>
+                              {isFreeIntro ? 'FREE' : formatPKR(fee)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Plan status hint */}
+                  {myPlan && (
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      {myPlan.free_intro_used === false && duration === 15 && (
+                        <p className="text-green-600 font-medium">
+                          Your one-time free 15-min intro session will be used.
+                        </p>
+                      )}
+                      {myPlan.sessions_remaining > 0 && !(myPlan.free_intro_used === false && duration === 15) && (
+                        <p className="text-blue-600 font-medium">
+                          {myPlan.sessions_remaining} subscription session(s) remaining — this will use one.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <Button
                     disabled={!selectedTime}
-                    onClick={() => setStep('payment')}
+                    onClick={() => setStep('confirm')}
                     className="w-full bg-primary hover:bg-primary/90"
                   >
-                    Continue to Payment
+                    Continue
                   </Button>
                 </CardContent>
               </Card>
             )}
 
-            {step === 'payment' && (
+            {/* Step: Confirm + pay */}
+            {step === 'confirm' && therapist && (
               <Card>
                 <CardContent className="p-6 space-y-5">
                   <h3 className="text-xl font-bold flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" /> Payment
+                    <CreditCard className="h-5 w-5" /> Confirm Booking
                   </h3>
+
+                  {/* Summary */}
                   <div className="rounded-lg bg-muted/50 p-4 space-y-1">
-                    <p className="text-sm">Session with <span className="font-semibold">{therapist?.full_name || therapist?.name}</span></p>
-                    <p className="text-xs text-muted-foreground">{date} at {selectedTime}</p>
-                    <p className="text-lg font-bold text-primary mt-2">PKR {therapist?.hourly_rate || 3000}</p>
+                    <p className="text-sm">
+                      Session with{' '}
+                      <span className="font-semibold">{therapist.full_name || therapist.name}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {date} at {selectedTime} · {duration} min
+                    </p>
+                    <p className="text-lg font-bold text-primary mt-2">
+                      {freeIntroAvailable || fromEscalation ? (
+                        <span className="text-green-600">FREE</span>
+                      ) : useSubscription ? (
+                        <span className="text-blue-600">Subscription Session</span>
+                      ) : (
+                        formatPKR(sessionFee)
+                      )}
+                    </p>
                   </div>
-                  {fromEscalation ? (
+
+                  {/* Payment method indicator */}
+                  {fromEscalation && (
                     <div className="rounded-lg border-2 border-green-500/40 p-4 bg-green-500/5">
                       <div className="flex items-center gap-2 text-sm">
                         <Shield className="h-4 w-4 text-green-600" />
-                        <span className="font-medium text-green-700">Free First Session — granted via escalation</span>
+                        <span className="font-medium text-green-700">Free session granted via escalation</span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">No payment required. Your first session is on us.</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border-2 border-dashed border-primary/30 p-4 bg-primary/5">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Shield className="h-4 w-4 text-primary" />
-                        <span className="font-medium">Demo mode</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">No actual payment will be charged. This is a demo booking flow.</p>
                     </div>
                   )}
+                  {!fromEscalation && freeIntroAvailable && (
+                    <div className="rounded-lg border-2 border-green-500/40 p-4 bg-green-500/5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Shield className="h-4 w-4 text-green-600" />
+                        <span className="font-medium text-green-700">Using your free 15-min intro session</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">No charge — one-time only.</p>
+                    </div>
+                  )}
+                  {!fromEscalation && !freeIntroAvailable && useSubscription && (
+                    <div className="rounded-lg border-2 border-blue-400/40 p-4 bg-blue-50 dark:bg-blue-900/10">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Zap className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium text-blue-700">
+                          Using subscription credit ({myPlan.sessions_remaining} remaining)
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">No charge — deducted from your plan.</p>
+                    </div>
+                  )}
+                  {needsPayment && (
+                    <div className="rounded-lg border-2 border-primary/30 p-4 bg-primary/5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <ExternalLink className="h-4 w-4 text-primary" />
+                        <span className="font-medium">You'll be redirected to Stripe to complete payment</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Test card: <code className="font-mono">4242 4242 4242 4242</code> · any future expiry · any CVV
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex gap-3">
-                    <Button variant="outline" className="flex-1" onClick={() => setStep('select')} disabled={submitting}>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setStep('select')}
+                      disabled={submitting}
+                    >
                       Back
                     </Button>
-                    <Button className="flex-1 bg-primary hover:bg-primary/90" onClick={handleConfirm} disabled={submitting}>
-                      {submitting ? 'Booking...' : 'Confirm Booking'}
+                    <Button
+                      className="flex-1 bg-primary hover:bg-primary/90"
+                      onClick={handleConfirm}
+                      disabled={submitting}
+                    >
+                      {submitting
+                        ? 'Processing...'
+                        : needsPayment
+                          ? `Pay ${formatPKR(sessionFee)}`
+                          : 'Confirm Booking'}
                     </Button>
                   </div>
                   {error && <p className="text-sm text-red-500">{error}</p>}
@@ -231,7 +383,8 @@ export default function BookTherapist() {
               </Card>
             )}
 
-            {step === 'confirmed' && createdAppt && (
+            {/* Step: Confirmed */}
+            {step === 'confirmed' && (
               <Card>
                 <CardContent className="p-8 text-center space-y-4">
                   <div className="h-20 w-20 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
@@ -239,13 +392,25 @@ export default function BookTherapist() {
                   </div>
                   <h2 className="text-2xl font-bold">Appointment Confirmed!</h2>
                   <div className="text-muted-foreground space-y-1">
-                    <p>Your session with <span className="font-semibold text-foreground">{createdAppt.therapist_name || therapist?.full_name || therapist?.name}</span></p>
-                    <p>{new Date(createdAppt.scheduled_at || createdAppt.date).toLocaleString()}</p>
-                    <Badge className="mt-2">{createdAppt.status}</Badge>
+                    <p>
+                      Your {duration}-min session with{' '}
+                      <span className="font-semibold text-foreground">
+                        {therapist?.full_name || therapist?.name}
+                      </span>
+                    </p>
+                    <p>{date} at {selectedTime}</p>
+                    <Badge className="mt-2">
+                      {createdAppt?.confirmed !== undefined ? 'scheduled' : 'scheduled'}
+                    </Badge>
                   </div>
                   <div className="flex gap-3 justify-center pt-4">
-                    <Button variant="outline" onClick={() => navigate('/therapists')}>Book Another</Button>
-                    <Button className="bg-primary hover:bg-primary/90" onClick={() => navigate('/appointments')}>
+                    <Button variant="outline" onClick={() => navigate('/therapists')}>
+                      Book Another
+                    </Button>
+                    <Button
+                      className="bg-primary hover:bg-primary/90"
+                      onClick={() => navigate('/appointments')}
+                    >
                       View My Appointments
                     </Button>
                   </div>

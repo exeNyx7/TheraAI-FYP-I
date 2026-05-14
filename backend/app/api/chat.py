@@ -78,6 +78,47 @@ class ChatHistoryResponse(BaseModel):
 
 
 # =============================================================================
+# HELPERS
+# =============================================================================
+
+async def _notify_crisis(db, patient_id: str, patient_doc: dict, severity: str, trigger: str) -> None:
+    """Fire in-app notifications + crisis alert emails to all therapists and admins."""
+    try:
+        from ..services.notification_service import create_notification
+        from ..services.email_service import EmailService
+        from ..config import get_settings
+
+        patient_name = (patient_doc or {}).get("full_name", "A patient") if patient_doc else "A patient"
+        severity_label = severity.upper()
+
+        # Collect therapist + admin user IDs and emails
+        staff_cursor = db.users.find(
+            {"role": {"$in": ["psychiatrist", "therapist", "admin"]}, "is_active": True},
+            {"_id": 1, "full_name": 1, "email": 1, "role": 1},
+        )
+        async for staff in staff_cursor:
+            staff_id = str(staff["_id"])
+            await create_notification(
+                db, staff_id, "crisis_detected",
+                f"Crisis Alert — {severity_label}",
+                f"{patient_name} may need immediate support. Severity: {severity_label}.",
+                {"patient_id": patient_id, "severity": severity},
+            )
+            # Email therapists only (not admins who may not have clinical context)
+            _settings = get_settings()
+            if _settings.mail_enabled and staff.get("role") in ("psychiatrist", "therapist"):
+                await EmailService.send_crisis_alert(
+                    to_email=staff["email"],
+                    therapist_name=staff.get("full_name", "Therapist"),
+                    patient_name=patient_name,
+                    severity=severity,
+                    trigger=trigger[:200],
+                )
+    except Exception as e:
+        logger.error(f"Crisis notification task failed: {e}")
+
+
+# =============================================================================
 # ENDPOINTS
 # =============================================================================
 
@@ -144,6 +185,9 @@ async def send_chat_message(
                     keywords_matched=crisis_info["keywords_matched"],
                     emotions_detected=crisis_info["emotions_detected"],
                 )
+            )
+            asyncio.create_task(
+                _notify_crisis(db, user_id, user_doc, crisis_info["severity"], user_message)
             )
 
         # Also force show_book_therapist when memory risk is high
