@@ -90,7 +90,7 @@ export default function Achievements() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-4xl mx-auto p-6 md:p-8 space-y-8">
 

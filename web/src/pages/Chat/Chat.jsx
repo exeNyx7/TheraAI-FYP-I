@@ -191,8 +191,8 @@ export default function Chat() {
   return (
     <div className="flex bg-background">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
-        <div className="bg-background h-[calc(100vh-0px)] md:h-screen flex flex-col">
+      <main className="flex-1 pt-16 lg:pt-0">
+        <div className="bg-background h-[calc(100dvh-4rem)] lg:h-screen flex flex-col">
 
           {/* ── Header ── */}
           <div className="border-b border-border px-5 py-3.5 flex items-center justify-between bg-card/60 backdrop-blur-sm flex-shrink-0">

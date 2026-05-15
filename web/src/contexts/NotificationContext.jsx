@@ -14,7 +14,8 @@ import React, {
 import apiClient from '../apiClient';
 import { useAuth } from './AuthContext';
 
-const POLL_MS = 30_000;
+const BASE_POLL_MS = 30_000;
+const MAX_POLL_MS  = 300_000; // back off to 5 min max on repeated errors
 
 // ── Reducer ──────────────────────────────────────────────────────────────────
 function reducer(state, action) {
@@ -36,14 +37,18 @@ const NotificationContext = createContext(null);
 export function NotificationProvider({ children }) {
   const { user } = useAuth();
   const [notifications, dispatch] = useReducer(reducer, []);
-  const seenIdsRef  = useRef(new Set());
-  const timerRef    = useRef(null);
-  const mountedRef  = useRef(true);
+  const seenIdsRef    = useRef(new Set());
+  const timerRef      = useRef(null);
+  const mountedRef    = useRef(true);
+  const errorCountRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  // Keep a stable ref so setTimeout can call the latest poll without stale closures
+  const pollRef = useRef(null);
 
   const poll = useCallback(async () => {
     try {
@@ -51,6 +56,7 @@ export function NotificationProvider({ children }) {
       const list = Array.isArray(res.data) ? res.data : [];
       if (!mountedRef.current) return;
 
+      errorCountRef.current = 0; // reset backoff on success
       dispatch({ type: 'SET', payload: list });
 
       // Fire CustomEvent only for genuinely new notifications
@@ -59,22 +65,32 @@ export function NotificationProvider({ children }) {
         seenIdsRef.current.add(n.id);
         window.dispatchEvent(new CustomEvent('notification:new', { detail: n }));
       });
+      if (mountedRef.current) {
+        timerRef.current = setTimeout(() => pollRef.current?.(), BASE_POLL_MS);
+      }
     } catch (_) {
-      // network errors are silent — poller is best-effort
+      // Exponential backoff: 30s → 60s → 120s → … → 300s max
+      errorCountRef.current += 1;
+      const backoff = Math.min(BASE_POLL_MS * (2 ** (errorCountRef.current - 1)), MAX_POLL_MS);
+      if (mountedRef.current) {
+        timerRef.current = setTimeout(() => pollRef.current?.(), backoff);
+      }
     }
   }, []);
 
+  useEffect(() => { pollRef.current = poll; }, [poll]);
+
   useEffect(() => {
     if (!user) {
-      clearInterval(timerRef.current);
+      clearTimeout(timerRef.current);
       timerRef.current = null;
       seenIdsRef.current = new Set();
+      errorCountRef.current = 0;
       dispatch({ type: 'CLEAR' });
       return;
     }
-    poll();
-    timerRef.current = setInterval(poll, POLL_MS);
-    return () => clearInterval(timerRef.current);
+    poll(); // initial fetch, then self-schedules
+    return () => clearTimeout(timerRef.current);
   }, [user, poll]);
 
   const markRead = useCallback(async (id) => {

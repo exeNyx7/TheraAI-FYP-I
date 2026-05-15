@@ -1,137 +1,245 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { TherapistSidebar } from '../../components/Dashboard/TherapistSidebar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Calendar, Clock, Plus, Video } from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { Calendar, RefreshCw, XCircle, Loader2, Link2, Link2Off } from 'lucide-react';
+import { AppointmentCalendar } from '../../components/Calendar/AppointmentCalendar';
 import apiClient from '../../apiClient';
-import { useNavigate } from 'react-router-dom';
+import { useToast } from '../../contexts/ToastContext';
 
-function toDateTimeParts(value) {
-  if (!value) return { date: '', time: '' };
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return { date: String(value), time: '' };
-  return {
-    date: parsed.toLocaleDateString(),
-    time: parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+function GoogleCalendarCard({ onStatusChange }) {
+  const { showSuccess, showError } = useToast();
+  const [status, setStatus] = useState(null); // null | { connected, configured }
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/calendar/status');
+      setStatus(res.data);
+    } catch {
+      setStatus({ connected: false, configured: false });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+
+  // Handle redirect back from Google OAuth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const calendarConnected = params.get('calendar_connected');
+    if (calendarConnected === 'true') {
+      showSuccess('Google Calendar connected successfully!');
+      fetchStatus();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (calendarConnected === 'false') {
+      showError('Google Calendar connection failed. Please try again.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [fetchStatus, showSuccess, showError]);
+
+  const handleConnect = async () => {
+    try {
+      const res = await apiClient.get('/calendar/auth-url', { params: { redirect_page: 'schedule' } });
+      if (res.data?.auth_url) window.location.href = res.data.auth_url;
+    } catch {
+      showError('Failed to start Google Calendar connection.');
+    }
   };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await apiClient.post('/calendar/disconnect');
+      showSuccess('Google Calendar disconnected.');
+      setStatus(s => ({ ...s, connected: false }));
+      onStatusChange?.();
+    } catch {
+      showError('Failed to disconnect Google Calendar.');
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await apiClient.post('/calendar/sync');
+      showSuccess(`Synced ${res.data?.synced ?? 0} appointment${(res.data?.synced ?? 0) !== 1 ? 's' : ''} to Google Calendar.`);
+    } catch (err) {
+      showError(err?.response?.data?.detail || 'Sync failed. Please try again.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="p-4 flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Checking calendar status…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!status?.configured) {
+    return (
+      <Card className="border-amber-500/20 bg-amber-500/5">
+        <CardContent className="p-4 flex items-start gap-3">
+          <XCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium">Google Calendar not configured</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Set <code className="font-mono bg-muted px-1 rounded">GOOGLE_CLIENT_ID</code> and{' '}
+              <code className="font-mono bg-muted px-1 rounded">GOOGLE_CLIENT_SECRET</code> in your backend environment.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={status.connected ? 'border-green-500/20 bg-green-500/5' : ''}>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+              status.connected ? 'bg-green-500/10' : 'bg-muted'
+            }`}>
+              <Calendar className={`h-5 w-5 ${status.connected ? 'text-green-600' : 'text-muted-foreground'}`} />
+            </div>
+            <div>
+              <div className="text-sm font-medium flex items-center gap-2">
+                Google Calendar
+                {status.connected
+                  ? <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200 border">Connected</Badge>
+                  : <Badge variant="secondary" className="text-[10px]">Not connected</Badge>
+                }
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {status.connected
+                  ? 'New appointments are synced automatically. Use Sync to push existing ones.'
+                  : 'Connect to automatically add sessions to your Google Calendar.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {status.connected ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-8 text-xs"
+                  onClick={handleSync}
+                  disabled={syncing}
+                >
+                  {syncing
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="h-3.5 w-3.5" />}
+                  {syncing ? 'Syncing…' : 'Sync Now'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                >
+                  {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />}
+                  Disconnect
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                className="gap-1.5 h-8 text-xs"
+                onClick={handleConnect}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Connect Calendar
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function Schedule() {
-  const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadSchedule = async () => {
-      try {
-        const [dashboardRes, appointmentsRes] = await Promise.all([
-          apiClient.get('/therapist/dashboard').catch(() => ({ data: null })),
-          apiClient.get('/appointments', { params: { status: 'scheduled' } }).catch(() => ({ data: [] })),
-        ]);
-        if (cancelled) return;
-
-        const fromDashboard = Array.isArray(dashboardRes.data?.upcoming_appointments)
-          ? dashboardRes.data.upcoming_appointments
-          : [];
-
-        if (fromDashboard.length > 0) {
-          setAppointments(fromDashboard);
-          return;
-        }
-
-        const fromAppointments = Array.isArray(appointmentsRes.data)
-          ? appointmentsRes.data.map((a) => {
-              const dt = toDateTimeParts(a.scheduled_at);
-              return {
-                ...a,
-                date: a.date || dt.date,
-                time: a.time || dt.time,
-              };
-            })
-          : [];
-
-        setAppointments(fromAppointments);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    loadSchedule();
-    return () => { cancelled = true; };
+  const fetchAppointments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/appointments');
+      setAppointments(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setAppointments([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Group appointments by date.
-  const grouped = appointments.reduce((acc, a) => {
-    const key = a.date || 'Unscheduled';
-    (acc[key] = acc[key] || []).push(a);
-    return acc;
-  }, {});
-  const groupKeys = Object.keys(grouped).sort();
+  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+
+  // Poll every 30s
+  useEffect(() => {
+    const id = setInterval(fetchAppointments, 30_000);
+    return () => clearInterval(id);
+  }, [fetchAppointments]);
+
+  // Refresh on tab focus
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchAppointments(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fetchAppointments]);
 
   return (
     <div className="flex min-h-screen bg-background">
       <TherapistSidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
-              <h1
-                className="text-3xl font-bold"
-                style={{ fontFamily: 'Montserrat' }}
-              >
-                Schedule
-              </h1>
-              <p className="text-muted-foreground mt-2 text-lg">Manage your availability and upcoming sessions</p>
-            </div>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" /> New Session
-            </Button>
+      <main className="flex-1 overflow-auto pt-16 lg:pt-0">
+        <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-6">
+
+          {/* Page header */}
+          <div>
+            <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>
+              My Schedule
+            </h1>
+            <p className="text-muted-foreground mt-1">View and manage your upcoming sessions</p>
           </div>
 
+          {/* Google Calendar integration card */}
+          <GoogleCalendarCard onStatusChange={fetchAppointments} />
+
+          {/* Calendar */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Montserrat' }}>
-                <Calendar className="h-5 w-5" /> Upcoming Sessions
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Calendar className="h-5 w-5" /> Appointment Calendar
               </CardTitle>
               <CardDescription>
-                Your upcoming appointments grouped by date.
+                Your sessions at a glance — click any day to see details
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {loading && <p className="text-sm text-muted-foreground">Loading schedule…</p>}
-              {!loading && groupKeys.length === 0 && (
-                <p className="text-sm text-muted-foreground">No upcoming sessions.</p>
-              )}
-              {!loading && groupKeys.map((date) => (
-                <div key={date} className="space-y-3">
-                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{date}</p>
-                  {grouped[date].map((s) => (
-                    <div key={s.id || s._id || `${s.patient_name || 'patient'}-${s.date || s.scheduled_at || ''}`} className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-sm transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                          <Clock className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-semibold">{s.patient_name || 'Patient'}</p>
-                          <p className="text-sm text-muted-foreground">{s.date || 'Scheduled'}{s.time ? ` · ${s.time}` : ''}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={s.status === 'confirmed' ? 'secondary' : 'outline'}>{s.status || 'scheduled'}</Badge>
-                        {s.id && (
-                          <Button size="sm" variant="secondary" className="gap-1" onClick={() => navigate(`/waiting-room/${s.id}`)}>
-                            <Video className="h-4 w-4" /> Join
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+            <CardContent>
+              <AppointmentCalendar
+                appointments={appointments}
+                loading={loading}
+                onRefetch={fetchAppointments}
+              />
             </CardContent>
           </Card>
+
         </div>
       </main>
     </div>

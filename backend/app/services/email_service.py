@@ -376,6 +376,34 @@ class EmailService:
         )
 
     @staticmethod
+    async def send_free_session_granted(
+        to_email: str,
+        patient_name: str,
+        sessions_count: int = 1,
+    ) -> bool:
+        subject = "TheraAI — You've received a free therapy session!"
+        sessions_text = f"{sessions_count} free session{'s' if sessions_count > 1 else ''}"
+        body = f"""
+<p style="margin:0 0 8px;color:#1a202c;">Hi <strong>{patient_name}</strong>,</p>
+<p style="margin:0 0 24px;color:#4a5568;">
+  Great news! The <strong>TheraAI</strong> team has granted you
+  <strong style="color:{_PURPLE};">{sessions_text}</strong> at no cost. &#127881;
+</p>
+{_highlight_box(f"{sessions_text} — On us!", "Book with any available therapist", "#22c55e")}
+<p style="margin:0 0 14px;color:#4a5568;">
+  Open the TheraAI app, head to <strong>Appointments</strong>, and book your session today.
+  Your free session credit has been added to your account.
+</p>
+{_divider()}
+<p style="margin:0;font-size:13px;color:#a0aec0;">
+  Your wellness is our priority. We&apos;re always here to support you. &#128149;
+</p>"""
+        return await EmailService.send_email(
+            to_email, subject,
+            _base_template("Free Session Granted &#127775;", body)
+        )
+
+    @staticmethod
     async def send_subscription_welcome(
         to_email: str,
         patient_name: str,

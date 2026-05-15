@@ -131,38 +131,29 @@ export default function AdminDashboardV0() {
     }
   };
 
-  const handleGrantFreeSession = async (escalationId) => {
-    setEscalationLoading(prev => ({ ...prev, [escalationId]: 'grant' }));
+  const handleGrantFreeSession = async (eventId, patientId) => {
+    if (!patientId) {
+      showError('No patient ID associated with this crisis event.');
+      return;
+    }
+    setEscalationLoading(prev => ({ ...prev, [eventId]: 'grant' }));
     try {
-      await apiClient.post(`/escalations/${escalationId}/grant-free-session`);
-      showSuccess('Free session granted to patient.');
+      await apiClient.post(`/admin/users/${patientId}/grant-free-session`, { sessions_to_grant: 1 });
+      showSuccess('Free session granted! Patient notified via app and email.');
       setCrisisEvents(prev => prev.map(ev =>
-        (ev.id === escalationId || ev._id === escalationId)
+        (ev.id === eventId || ev._id === eventId)
           ? { ...ev, free_session_granted: true }
           : ev
       ));
     } catch (err) {
       showError(err?.response?.data?.detail || 'Failed to grant free session.');
     } finally {
-      setEscalationLoading(prev => ({ ...prev, [escalationId]: null }));
+      setEscalationLoading(prev => ({ ...prev, [eventId]: null }));
     }
   };
 
-  const handleBookOnBehalf = async (escalationId, patientId) => {
-    const dateStr = window.prompt('Enter appointment date (YYYY-MM-DD):');
-    if (!dateStr) return;
-    setEscalationLoading(prev => ({ ...prev, [escalationId]: 'book' }));
-    try {
-      await apiClient.post(`/escalations/${escalationId}/book-on-behalf`, {
-        patient_id: patientId,
-        date: dateStr,
-      });
-      showSuccess('Appointment booked on behalf of patient.');
-    } catch (err) {
-      showError(err?.response?.data?.detail || 'Failed to book appointment.');
-    } finally {
-      setEscalationLoading(prev => ({ ...prev, [escalationId]: null }));
-    }
+  const handleBookOnBehalf = (eventId, patientId) => {
+    navigate(`/admin/appointments${patientId ? `?patient=${patientId}` : ''}`);
   };
 
   if (!user) return null;
@@ -176,17 +167,17 @@ export default function AdminDashboardV0() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
 
             {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold font-sans">Admin Dashboard</h1>
-                <p className="text-muted-foreground mt-1">Platform management &amp; oversight</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold font-sans">Admin Dashboard</h1>
+                <p className="text-muted-foreground mt-1 text-sm">Platform management &amp; oversight</p>
               </div>
-              <Button variant="outline" size="sm" onClick={fetchOverview} className="gap-2 bg-transparent">
+              <Button variant="outline" size="sm" onClick={fetchOverview} className="gap-2 bg-transparent self-start sm:self-auto flex-shrink-0">
                 <RefreshCw className="h-4 w-4" /> Refresh
               </Button>
             </div>
@@ -435,7 +426,7 @@ export default function AdminDashboardV0() {
                           size="sm"
                           variant="outline"
                           disabled={!!ev.free_session_granted || escalationLoading[ev.id || ev._id] === 'grant'}
-                          onClick={() => handleGrantFreeSession(ev.id || ev._id)}
+                          onClick={() => handleGrantFreeSession(ev.id || ev._id, ev.patient_id)}
                           className="text-xs gap-1"
                         >
                           {escalationLoading[ev.id || ev._id] === 'grant' ? (
@@ -448,15 +439,10 @@ export default function AdminDashboardV0() {
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={escalationLoading[ev.id || ev._id] === 'book'}
                           onClick={() => handleBookOnBehalf(ev.id || ev._id, ev.patient_id)}
                           className="text-xs gap-1"
                         >
-                          {escalationLoading[ev.id || ev._id] === 'book' ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Calendar className="h-3 w-3" />
-                          )}
+                          <Calendar className="h-3 w-3" />
                           Book on Behalf
                         </Button>
                       </div>

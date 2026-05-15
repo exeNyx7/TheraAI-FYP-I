@@ -117,50 +117,53 @@ export function ActivityHeatmap() {
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="px-3 sm:px-6">
         {loading ? (
           <div className="h-24 flex items-center justify-center text-sm text-muted-foreground">
             Loading activity…
           </div>
         ) : (
-          <div className="w-full">
-            {/* Month labels */}
-            <div className="flex mb-1 pl-7 gap-[3px]">
-              {weeks.map((_, idx) => (
-                <div key={idx} className="flex-1 text-[10px] text-muted-foreground leading-none truncate">
-                  {monthLabels[idx] || ''}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-[3px]">
-              {/* Day-of-week labels */}
-              <div className="flex flex-col gap-[3px] w-6 flex-shrink-0">
-                {DOW_LABELS.map((d, i) => (
-                  <div
-                    key={d}
-                    className={`h-[18px] flex items-center text-[10px] text-muted-foreground ${
-                      i % 2 !== 0 ? '' : 'opacity-0 pointer-events-none'
-                    }`}
-                  >
-                    {d}
+          /* Horizontally scrollable so the grid never wraps on small screens */
+          <div className="w-full overflow-x-auto pb-1">
+            <div className="min-w-[480px]">
+              {/* Month labels */}
+              <div className="flex mb-1 pl-7 gap-[3px]">
+                {weeks.map((_, idx) => (
+                  <div key={idx} className="flex-1 text-[10px] text-muted-foreground leading-none truncate">
+                    {monthLabels[idx] || ''}
                   </div>
                 ))}
               </div>
 
-              {/* Grid — cells use flex-1 so they fill available width evenly */}
-              <div className="flex gap-[3px] flex-1 min-w-0">
-                {weeks.map((week, wIdx) => (
-                  <div key={wIdx} className="flex flex-col gap-[3px] flex-1 min-w-0">
-                    {week.map((day, dIdx) => (
-                      <div
-                        key={dIdx}
-                        title={`${day.date.toLocaleDateString()} — ${day.count} ${day.count === 1 ? 'activity' : 'activities'}`}
-                        className={`h-[18px] w-full rounded-md ${LEVEL_COLORS[day.level]} transition-opacity hover:opacity-80 cursor-default`}
-                      />
-                    ))}
-                  </div>
-                ))}
+              <div className="flex gap-[3px]">
+                {/* Day-of-week labels */}
+                <div className="flex flex-col gap-[3px] w-6 flex-shrink-0">
+                  {DOW_LABELS.map((d, i) => (
+                    <div
+                      key={d}
+                      className={`h-[16px] flex items-center text-[10px] text-muted-foreground ${
+                        i % 2 !== 0 ? '' : 'opacity-0 pointer-events-none'
+                      }`}
+                    >
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Grid */}
+                <div className="flex gap-[3px] flex-1">
+                  {weeks.map((week, wIdx) => (
+                    <div key={wIdx} className="flex flex-col gap-[3px] flex-1">
+                      {week.map((day, dIdx) => (
+                        <div
+                          key={dIdx}
+                          title={`${day.date.toLocaleDateString()} — ${day.count} ${day.count === 1 ? 'activity' : 'activities'}`}
+                          className={`h-[16px] w-full rounded-sm ${LEVEL_COLORS[day.level]} transition-opacity hover:opacity-80 cursor-default`}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
-import { Calendar } from 'lucide-react';
+import { Calendar, X, Loader2, Gift } from 'lucide-react';
 import apiClient from '../../apiClient';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -23,8 +24,13 @@ const PAYMENT_COLORS = {
   pending: 'bg-yellow-100 text-yellow-700',
 };
 
+const EMPTY_BOOK = { patient_id: '', therapist_id: '', scheduled_at: '', duration_minutes: 50 };
+const EMPTY_GRANT = { patient_id: '', sessions_to_grant: 1 };
+
 export default function AdminAppointmentsPage() {
-  const { showError } = useToast();
+  const { showSuccess, showError } = useToast();
+  const [searchParams] = useSearchParams();
+
   const [appointments, setAppointments] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -33,7 +39,30 @@ export default function AdminAppointmentsPage() {
   const [paymentFilter, setPaymentFilter] = useState('');
   const [page, setPage] = useState(1);
 
+  // Modal state
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [patients, setPatients] = useState([]);
+  const [therapists, setTherapists] = useState([]);
+  const [bookForm, setBookForm] = useState(EMPTY_BOOK);
+  const [grantForm, setGrantForm] = useState(EMPTY_GRANT);
+  const [actionLoading, setActionLoading] = useState(false);
+
   useEffect(() => { fetchAppointments(); }, [page, rangeFilter, statusFilter, paymentFilter]);
+
+  // Auto-open booking modal if ?patient= is in the URL
+  useEffect(() => {
+    const patientId = searchParams.get('patient');
+    if (patientId) {
+      setBookForm(f => ({ ...f, patient_id: patientId }));
+      setShowBookModal(true);
+    }
+  }, [searchParams]);
+
+  // Load patients + therapists when a modal opens
+  useEffect(() => {
+    if (showBookModal || showGrantModal) loadPatientsAndTherapists();
+  }, [showBookModal, showGrantModal]);
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -52,8 +81,64 @@ export default function AdminAppointmentsPage() {
     }
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const loadPatientsAndTherapists = async () => {
+    try {
+      const [pRes, tRes] = await Promise.all([
+        apiClient.get('/admin/users', { params: { role: 'patient', page_size: 100 } }),
+        apiClient.get('/admin/users', { params: { role: 'psychiatrist', page_size: 100 } }),
+      ]);
+      setPatients(pRes.data.users || []);
+      setTherapists(tRes.data.users || []);
+    } catch {
+      showError('Failed to load users for dropdowns.');
+    }
+  };
 
+  const handleBookAppointment = async () => {
+    if (!bookForm.patient_id || !bookForm.therapist_id || !bookForm.scheduled_at) {
+      showError('Please fill in all required fields.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await apiClient.post('/admin/appointments', {
+        patient_id: bookForm.patient_id,
+        therapist_id: bookForm.therapist_id,
+        scheduled_at: new Date(bookForm.scheduled_at).toISOString(),
+        duration_minutes: Number(bookForm.duration_minutes),
+      });
+      showSuccess('Appointment booked! Patient has been notified.');
+      setShowBookModal(false);
+      setBookForm(EMPTY_BOOK);
+      fetchAppointments();
+    } catch (err) {
+      showError(err?.response?.data?.detail || 'Failed to book appointment.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleGrantSession = async () => {
+    if (!grantForm.patient_id) {
+      showError('Please select a patient.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await apiClient.post(`/admin/users/${grantForm.patient_id}/grant-free-session`, {
+        sessions_to_grant: Number(grantForm.sessions_to_grant),
+      });
+      showSuccess('Free session granted! Patient has been notified by notification and email.');
+      setShowGrantModal(false);
+      setGrantForm(EMPTY_GRANT);
+    } catch (err) {
+      showError(err?.response?.data?.detail || 'Failed to grant free session.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
   const upcoming = appointments.filter(a => a.status === 'scheduled').length;
   const completed = appointments.filter(a => a.status === 'completed').length;
   const cancelled = appointments.filter(a => a.status === 'cancelled').length;
@@ -62,13 +147,23 @@ export default function AdminAppointmentsPage() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-6xl mx-auto p-6 md:p-8 space-y-6">
 
-            <div>
-              <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>All Appointments</h1>
-              <p className="text-muted-foreground mt-1">Platform-wide appointment overview</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>All Appointments</h1>
+                <p className="text-muted-foreground mt-1">Platform-wide appointment overview</p>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowGrantModal(true)}>
+                  <Gift className="h-4 w-4" /> Grant Free Session
+                </Button>
+                <Button size="sm" className="gap-1.5" onClick={() => setShowBookModal(true)}>
+                  <Calendar className="h-4 w-4" /> Book Appointment
+                </Button>
+              </div>
             </div>
 
             {/* Stats */}
@@ -202,6 +297,148 @@ export default function AdminAppointmentsPage() {
           </div>
         </div>
       </main>
+
+      {/* ── Book Appointment Modal ── */}
+      {showBookModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold">Book Appointment for Patient</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Patient will be notified via app and email</p>
+              </div>
+              <button onClick={() => { setShowBookModal(false); setBookForm(EMPTY_BOOK); }} className="p-1 hover:bg-muted rounded-lg">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium block mb-1.5">Patient <span className="text-destructive">*</span></label>
+                <select
+                  value={bookForm.patient_id}
+                  onChange={e => setBookForm(f => ({ ...f, patient_id: e.target.value }))}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">Select patient…</option>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name} — {p.email}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1.5">Therapist <span className="text-destructive">*</span></label>
+                <select
+                  value={bookForm.therapist_id}
+                  onChange={e => setBookForm(f => ({ ...f, therapist_id: e.target.value }))}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">Select therapist…</option>
+                  {therapists.map(t => (
+                    <option key={t.id} value={t.id}>{t.full_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1.5">Date & Time (local) <span className="text-destructive">*</span></label>
+                <input
+                  type="datetime-local"
+                  value={bookForm.scheduled_at}
+                  onChange={e => setBookForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1.5">Session Duration</label>
+                <select
+                  value={bookForm.duration_minutes}
+                  onChange={e => setBookForm(f => ({ ...f, duration_minutes: e.target.value }))}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value={25}>25 minutes</option>
+                  <option value={50}>50 minutes</option>
+                  <option value={80}>80 minutes</option>
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+                This session will be marked as <strong>free</strong>. The patient will receive an in-app notification and a confirmation email.
+              </p>
+            </div>
+            <div className="flex gap-3 p-6 border-t border-border">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowBookModal(false); setBookForm(EMPTY_BOOK); }}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 gap-2"
+                onClick={handleBookAppointment}
+                disabled={actionLoading || !bookForm.patient_id || !bookForm.therapist_id || !bookForm.scheduled_at}
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                Book Appointment
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Grant Free Session Modal ── */}
+      {showGrantModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold">Grant Free Session</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Patient will be notified immediately</p>
+              </div>
+              <button onClick={() => { setShowGrantModal(false); setGrantForm(EMPTY_GRANT); }} className="p-1 hover:bg-muted rounded-lg">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium block mb-1.5">Patient <span className="text-destructive">*</span></label>
+                <select
+                  value={grantForm.patient_id}
+                  onChange={e => setGrantForm(f => ({ ...f, patient_id: e.target.value }))}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">Select patient…</option>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name} — {p.email}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1.5">Number of Free Sessions</label>
+                <select
+                  value={grantForm.sessions_to_grant}
+                  onChange={e => setGrantForm(f => ({ ...f, sessions_to_grant: e.target.value }))}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  {[1, 2, 3, 5].map(n => (
+                    <option key={n} value={n}>{n} session{n > 1 ? 's' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+                The patient will receive an <strong>in-app notification</strong> and <strong>email</strong> confirming their free session credit.
+              </p>
+            </div>
+            <div className="flex gap-3 p-6 border-t border-border">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowGrantModal(false); setGrantForm(EMPTY_GRANT); }}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white"
+                onClick={handleGrantSession}
+                disabled={actionLoading || !grantForm.patient_id}
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gift className="h-4 w-4" />}
+                Grant Session
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

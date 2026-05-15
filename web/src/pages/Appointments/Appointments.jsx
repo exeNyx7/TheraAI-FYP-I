@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../apiClient';
 import { useToast } from '../../contexts/ToastContext';
+import { useAppointments } from '../../hooks/useAppointments';
 
 const DURATIONS = [
   { minutes: 15, label: '15 min' },
@@ -113,9 +114,8 @@ export default function Appointments() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { showSuccess, showError } = useToast();
+  const { appointments, loading, refetch: fetchAppointments, cancelAppointment: hookCancel } = useAppointments();
 
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [step, setStep] = useState('list'); // list | select-therapist | select-slot | checkout | success
   const [selectedTherapist, setSelectedTherapist] = useState(null);
@@ -126,22 +126,21 @@ export default function Appointments() {
   const [activeAppointment, setActiveAppointment] = useState(null);
 
   useEffect(() => {
-    if (!user) { navigate('/login'); return; }
-    fetchAppointments();
+    if (!user) navigate('/login');
   }, [user, navigate]);
 
-  // Poll every 30s
+  // Poll every 30s to sync status changes
   useEffect(() => {
     const interval = setInterval(fetchAppointments, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchAppointments]);
 
   // Refetch when tab becomes visible (e.g. returning from Stripe)
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') fetchAppointments(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, []);
+  }, [fetchAppointments]);
 
   useEffect(() => {
     if (searchParams.get('payment') === 'success') {
@@ -162,20 +161,6 @@ export default function Appointments() {
       showError('Payment was cancelled. Your booking was not confirmed.');
     }
   }, [searchParams]);
-
-  const fetchAppointments = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiClient.get('/appointments');
-      setAppointments(res.data || []);
-    } catch (err) {
-      console.error('Failed to fetch appointments:', err);
-      setError('Failed to load appointments.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleTherapistSelected = (therapist) => {
     setSelectedTherapist(therapist);
@@ -231,12 +216,9 @@ export default function Appointments() {
   const handleCancelAppointment = async (appointmentId) => {
     if (!appointmentId) return;
     try {
-      await apiClient.put(`/appointments/${appointmentId}/cancel`);
-      setAppointments((prev) =>
-        prev.map((a) => (a.id || a._id) === appointmentId ? { ...a, status: 'cancelled' } : a)
-      );
-    } catch (err) {
-      console.error('Failed to cancel appointment:', err);
+      await hookCancel(appointmentId);
+    } catch {
+      showError('Failed to cancel appointment.');
     }
   };
 
@@ -265,31 +247,33 @@ export default function Appointments() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-5xl mx-auto p-6 md:p-8 space-y-8">
 
             {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>My Appointments</h1>
-                <p className="text-muted-foreground mt-2">Manage your therapy sessions</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold truncate" style={{ fontFamily: 'Montserrat' }}>My Appointments</h1>
+                <p className="text-muted-foreground mt-1 text-sm">Manage your therapy sessions</p>
               </div>
-              {step === 'list' && (
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" onClick={fetchAppointments} title="Refresh">
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                  {user?.role === 'patient' && (
-                    <Button onClick={() => setStep('select-therapist')} className="gap-2 bg-primary hover:bg-primary/90">
-                      <Plus className="h-4 w-4" /> Book Session
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {step === 'list' && (
+                  <>
+                    <Button variant="ghost" size="icon" onClick={fetchAppointments} title="Refresh">
+                      <RefreshCw className="h-4 w-4" />
                     </Button>
-                  )}
-                </div>
-              )}
-              {step !== 'list' && (
-                <Button variant="ghost" size="icon" onClick={resetBooking}><X className="h-5 w-5" /></Button>
-              )}
+                    {user?.role === 'patient' && (
+                      <Button onClick={() => setStep('select-therapist')} className="gap-2 bg-primary hover:bg-primary/90">
+                        <Plus className="h-4 w-4" /> Book Session
+                      </Button>
+                    )}
+                  </>
+                )}
+                {step !== 'list' && (
+                  <Button variant="ghost" size="icon" onClick={resetBooking}><X className="h-5 w-5" /></Button>
+                )}
+              </div>
             </div>
 
             {/* Error */}
@@ -318,24 +302,25 @@ export default function Appointments() {
                     const aptId = apt.id || apt._id;
                     return (
                     <Card key={aptId} className="hover:shadow-md transition-all">
-                      <CardContent className="p-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-4">
-                            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                              <Video className="h-6 w-6 text-primary" />
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                          {/* Left: info */}
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <Video className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                             </div>
-                            <div>
-                              <p className="font-semibold flex items-center gap-2">
-                                <User className="h-4 w-4" />
-                                {apt.therapist_name || apt.therapistName || 'Therapist'}
+                            <div className="min-w-0">
+                              <p className="font-semibold flex items-center gap-2 truncate">
+                                <User className="h-4 w-4 flex-shrink-0" />
+                                <span className="truncate">{apt.therapist_name || apt.therapistName || 'Therapist'}</span>
                               </p>
-                              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-sm text-muted-foreground">
                                 <span className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4" />
+                                  <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
                                   {formatDate(apt.scheduled_at || apt.date)}
                                 </span>
                                 <span className="flex items-center gap-1">
-                                  <Clock className="h-4 w-4" />
+                                  <Clock className="h-3.5 w-3.5 flex-shrink-0" />
                                   {formatTime(apt.scheduled_at || apt.time)}
                                 </span>
                                 {apt.duration_minutes && (
@@ -345,32 +330,34 @@ export default function Appointments() {
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                <Badge className={`${statusColors[apt.status] || statusColors.scheduled}`}>
+                                <Badge className={`${statusColors[apt.status] || statusColors.scheduled} capitalize`}>
                                   {apt.status}
                                 </Badge>
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {apt.status === 'scheduled' && (
-                              <>
-                                <Button
-                                  className="bg-primary hover:bg-primary/90"
-                                  onClick={() => { setActiveAppointment(apt); setShowVideoCall(true); }}
-                                >
-                                  Join Session
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-destructive border-destructive/30"
-                                  onClick={() => handleCancelAppointment(aptId)}
-                                >
-                                  Cancel
-                                </Button>
-                              </>
-                            )}
-                          </div>
+
+                          {/* Right: actions */}
+                          {apt.status === 'scheduled' && (
+                            <div className="flex items-center gap-2 sm:flex-shrink-0 sm:self-start">
+                              <Button
+                                size="sm"
+                                className="bg-primary hover:bg-primary/90 flex-1 sm:flex-none"
+                                onClick={() => { setActiveAppointment(apt); setShowVideoCall(true); }}
+                              >
+                                <Video className="h-4 w-4 mr-1.5" />
+                                Join
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive border-destructive/30 flex-1 sm:flex-none"
+                                onClick={() => handleCancelAppointment(aptId)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -407,7 +394,7 @@ export default function Appointments() {
 
             {/* Checkout */}
             {step === 'checkout' && (
-              <Card className="max-w-lg mx-auto">
+              <Card className="w-full sm:max-w-lg sm:mx-auto">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <CreditCard className="h-5 w-5" /> Confirm & Pay

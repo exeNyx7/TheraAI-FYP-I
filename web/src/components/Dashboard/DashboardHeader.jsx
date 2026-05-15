@@ -45,62 +45,61 @@ export function DashboardHeader({ stats }) {
     <div className="space-y-6 animate-fade-in">
       <div className="space-y-1.5">
         <h1
-          className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent"
+          className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent leading-tight"
           style={{ fontFamily: 'Montserrat' }}
         >
           Welcome back, {displayName} 👋
         </h1>
-        <p className="text-muted-foreground">Let's continue your mental wellness journey today</p>
+        <p className="text-muted-foreground text-sm sm:text-base">Let's continue your mental wellness journey today</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Today's Mood */}
-        <Card className={`p-5 bg-gradient-to-br ${mood.bg} to-transparent border-2 ${mood.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default`}>
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Today's Mood</p>
-              <p className={`text-2xl font-bold ${mood.color}`} style={{ fontFamily: 'Montserrat' }}>
+        <Card className={`p-4 sm:p-5 bg-gradient-to-br ${mood.bg} to-transparent border-2 ${mood.border} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default`}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">Today's Mood</p>
+              <p className={`text-xl sm:text-2xl font-bold ${mood.color} truncate`} style={{ fontFamily: 'Montserrat' }}>
                 {mood.label}
               </p>
-              <p className="text-xs text-muted-foreground">{mood.sub}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{mood.sub}</p>
             </div>
-            <span className="text-3xl select-none">{mood.emoji}</span>
+            <span className="text-2xl sm:text-3xl select-none flex-shrink-0">{mood.emoji}</span>
           </div>
         </Card>
 
         {/* Streak */}
-        <Card className="p-5 bg-gradient-to-br from-orange-500/15 via-orange-500/5 to-transparent border-2 border-orange-500/20 hover:border-orange-500/50 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Streak</p>
-              <p className="text-2xl font-bold text-orange-500" style={{ fontFamily: 'Montserrat' }}>
+        <Card className="p-4 sm:p-5 bg-gradient-to-br from-orange-500/15 via-orange-500/5 to-transparent border-2 border-orange-500/20 hover:border-orange-500/50 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default">
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">Streak</p>
+              <p className="text-xl sm:text-2xl font-bold text-orange-500 truncate" style={{ fontFamily: 'Montserrat' }}>
                 {streak} {streak === 1 ? 'day' : 'days'}
               </p>
-              <p className="text-xs text-muted-foreground">{streakSubtitle(streak)}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{streakSubtitle(streak)}</p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-              <Flame className="h-5 w-5 text-orange-500" />
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+              <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
             </div>
           </div>
         </Card>
 
         {/* Weekly Goal */}
-        <Card className="p-5 bg-gradient-to-br from-blue-500/15 via-blue-500/5 to-transparent border-2 border-blue-500/20 hover:border-blue-500/50 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Weekly Goal</p>
-              <p className="text-2xl font-bold text-blue-600" style={{ fontFamily: 'Montserrat' }}>
+        <Card className="p-4 sm:p-5 bg-gradient-to-br from-blue-500/15 via-blue-500/5 to-transparent border-2 border-blue-500/20 hover:border-blue-500/50 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default">
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">Weekly Goal</p>
+              <p className="text-xl sm:text-2xl font-bold text-blue-600 truncate" style={{ fontFamily: 'Montserrat' }}>
                 {goalsCompleted}/{totalGoals}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 {goalsLeft === 0 ? 'Goal met! 🎉' : `${goalsLeft} to go`}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-              <Target className="h-5 w-5 text-blue-600" />
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+              <Target className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
             </div>
           </div>
-          {/* Progress bar */}
           <div className="mt-3 h-1.5 bg-blue-500/15 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 rounded-full transition-all duration-700"
@@ -110,17 +109,17 @@ export function DashboardHeader({ stats }) {
         </Card>
 
         {/* Wellness Score */}
-        <Card className="p-5 bg-gradient-to-br from-purple-500/15 via-purple-500/5 to-transparent border-2 border-purple-500/20 hover:border-purple-500/50 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Wellness Score</p>
-              <p className="text-2xl font-bold text-purple-600" style={{ fontFamily: 'Montserrat' }}>
+        <Card className="p-4 sm:p-5 bg-gradient-to-br from-purple-500/15 via-purple-500/5 to-transparent border-2 border-purple-500/20 hover:border-purple-500/50 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-default">
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">Wellness</p>
+              <p className="text-xl sm:text-2xl font-bold text-purple-600 truncate" style={{ fontFamily: 'Montserrat' }}>
                 {wellnessScore > 0 ? `${wellnessScore}%` : '—'}
               </p>
-              <p className="text-xs text-muted-foreground">{wellnessLabel(wellnessScore)}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{wellnessLabel(wellnessScore)}</p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-              <Zap className="h-5 w-5 text-purple-600" />
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+              <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
             </div>
           </div>
           {wellnessScore > 0 && (

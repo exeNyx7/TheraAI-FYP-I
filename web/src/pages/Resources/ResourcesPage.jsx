@@ -216,7 +216,7 @@ export default function ResourcesPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <AppSidebar />
-      <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto pt-20 lg:pt-6">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>Mental Health Resources</h1>

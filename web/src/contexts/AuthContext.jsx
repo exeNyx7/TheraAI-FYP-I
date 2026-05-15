@@ -21,6 +21,7 @@ const AUTH_ACTIONS = {
   LOGIN_FAILURE: 'LOGIN_FAILURE',
   LOGOUT: 'LOGOUT',
   SET_USER: 'SET_USER',
+  UPDATE_USER: 'UPDATE_USER',
   CLEAR_ERROR: 'CLEAR_ERROR',
   SET_ERROR: 'SET_ERROR',
 };
@@ -64,6 +65,11 @@ function authReducer(state, action) {
         isAuthenticated: true,
         loading: false,
         error: null,
+      };
+    case AUTH_ACTIONS.UPDATE_USER:
+      return {
+        ...state,
+        user: state.user ? { ...state.user, ...action.payload } : action.payload,
       };
     case AUTH_ACTIONS.CLEAR_ERROR:
       return {
@@ -173,9 +179,20 @@ export function AuthProvider({ children }) {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
   }, []);
 
-  // Update user function (for profile updates)
-  const updateUser = useCallback((updatedUser) => {
-    dispatch({ type: AUTH_ACTIONS.SET_USER, payload: updatedUser });
+  // Merge a partial user patch into the current user object
+  const updateUser = useCallback((patch) => {
+    dispatch({ type: AUTH_ACTIONS.UPDATE_USER, payload: patch });
+  }, []);
+
+  // Re-fetch /auth/me from the server and update context
+  const refreshUser = useCallback(async () => {
+    try {
+      const user = await authService.getCurrentUser();
+      dispatch({ type: AUTH_ACTIONS.SET_USER, payload: user });
+      return user;
+    } catch (_) {
+      return null;
+    }
   }, []);
 
   // Helper functions for role checking
@@ -202,6 +219,7 @@ export function AuthProvider({ children }) {
     clearError,
     loadUser,
     updateUser,
+    refreshUser,
     loginWithGoogle,
     
     // Role helpers

@@ -10,7 +10,7 @@ import { Smile, Frown, Heart, Wind, Circle, Plus, Calendar, TrendingUp, Radar as
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
-import apiClient from '../../apiClient';
+import { useMoods } from '../../hooks/useMoods';
 
 const MOODS = [
   { value: 'happy', label: 'Happy', color: '#FBBF24', icon: Smile },
@@ -26,7 +26,7 @@ export default function MoodTracker() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
-  const [moodEntries, setMoodEntries] = useState([]);
+  const { moods: moodEntries, logMood } = useMoods();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMood, setSelectedMood] = useState('neutral');
   const [intensity, setIntensity] = useState(3);
@@ -39,19 +39,8 @@ export default function MoodTracker() {
   const CRISIS_MOODS = ['sad', 'anxious', 'stressed', 'angry'];
 
   useEffect(() => {
-    if (!user) { navigate('/login'); return; }
-    fetchMoods();
-  }, [user]);
-
-  const fetchMoods = async () => {
-    try {
-      const res = await apiClient.get('/moods');
-      const data = res.data;
-      const entries = Array.isArray(data) ? data : data.moods || [];
-      setMoodEntries(entries);
-      return entries;
-    } catch { return []; }
-  };
+    if (!user) navigate('/login');
+  }, [user, navigate]);
 
   const startVoiceNotes = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -78,14 +67,13 @@ export default function MoodTracker() {
   const handleAddMood = async () => {
     setIsSubmitting(true);
     try {
-      await apiClient.post('/moods', { mood: selectedMood, intensity, notes });
-      const updated = await fetchMoods();
+      await logMood({ mood: selectedMood, intensity, notes });
       showSuccess(`Mood logged: ${selectedMood}`);
       setModalOpen(false);
       setNotes('');
       setIntensity(3);
       // Check if last 3 entries are all crisis-level → show alert
-      const last3 = updated.slice(0, 3);
+      const last3 = moodEntries.slice(0, 3);
       if (last3.length >= 3 && last3.every(m => CRISIS_MOODS.includes(m.mood))) {
         setCrisisAlert(true);
       }
@@ -109,16 +97,16 @@ export default function MoodTracker() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-6xl mx-auto p-6 md:p-8 space-y-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>Mood Tracking</h1>
-                <p className="text-muted-foreground mt-2">Track and analyze your emotional patterns</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>Mood Tracking</h1>
+                <p className="text-muted-foreground mt-1 text-sm">Track and analyze your emotional patterns</p>
               </div>
-              <Button onClick={() => setModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90 rounded-xl">
+              <Button onClick={() => setModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90 rounded-xl self-start sm:self-auto flex-shrink-0">
                 <Plus className="h-4 w-4" /> Log Mood
               </Button>
             </div>
@@ -145,7 +133,7 @@ export default function MoodTracker() {
             )}
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <Card><CardHeader className="pb-3"><CardTitle className="text-sm">Total Tracked</CardTitle></CardHeader>
                 <CardContent><div className="text-3xl font-bold">{moodEntries.length}</div><p className="text-xs text-muted-foreground mt-1">entries</p></CardContent>
               </Card>
@@ -165,14 +153,14 @@ export default function MoodTracker() {
                     <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" />Mood Trend</CardTitle>
                     <CardDescription>Last 14 days intensity</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={trendData}>
+                  <CardContent className="px-2 sm:px-6">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={trendData} margin={{ left: -10, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                        <YAxis domain={[0, 5]} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} interval="preserveStartEnd" />
+                        <YAxis domain={[0, 5]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} width={24} />
                         <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--card-foreground))' }} />
-                        <Line type="monotone" dataKey="intensity" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: 'hsl(var(--primary))', r: 4 }} />
+                        <Line type="monotone" dataKey="intensity" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: 'hsl(var(--primary))', r: 3 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -182,11 +170,14 @@ export default function MoodTracker() {
                     <CardTitle className="flex items-center gap-2"><RadarIcon className="h-5 w-5" />Mood Distribution</CardTitle>
                     <CardDescription>Frequency across all mood types</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <RadarChart data={radarData} cx="50%" cy="50%" outerRadius={80}>
+                  <CardContent className="px-2 sm:px-6">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="60%">
                         <PolarGrid stroke="hsl(var(--border))" />
-                        <PolarAngleAxis dataKey="mood" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                        <PolarAngleAxis
+                          dataKey="mood"
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        />
                         <Radar
                           name="Moods"
                           dataKey="count"
@@ -253,28 +244,28 @@ export default function MoodTracker() {
         </div>
       </main>
 
-      {/* Log Mood Modal */}
+      {/* Log Mood Modal — bottom-sheet on mobile, centered card on sm+ */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
-          <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in space-y-6">
+          <div className="relative bg-card border-t sm:border border-border rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-md max-h-[92dvh] overflow-y-auto shadow-2xl animate-fade-in space-y-5">
             <h2 className="text-xl font-bold" style={{ fontFamily: 'Montserrat' }}>Log Your Mood</h2>
 
             <div className="space-y-3">
               <label className="text-sm font-medium">How are you feeling?</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-4 gap-1.5 sm:gap-2">
                 {MOODS.map(m => {
                   const Icon = m.icon;
                   return (
                     <button
                       key={m.value}
                       onClick={() => setSelectedMood(m.value)}
-                      className={`p-3 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${
+                      className={`p-2 sm:p-3 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${
                         selectedMood === m.value ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'
                       }`}
                     >
-                      <Icon className="h-5 w-5" style={{ color: m.color }} />
-                      <span className="text-xs">{m.label}</span>
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: m.color }} />
+                      <span className="text-[10px] sm:text-xs">{m.label}</span>
                     </button>
                   );
                 })}

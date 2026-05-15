@@ -4,12 +4,15 @@ Admin Dashboard API for TheraAI
 All endpoints require the `admin` role.
 
 Routes:
-  GET  /admin/dashboard          — platform-wide stats
-  GET  /admin/users              — paginated user list with filters
-  GET  /admin/users/{id}         — single user detail
-  PATCH /admin/users/{id}/status — activate / deactivate a user
-  DELETE /admin/users/{id}       — hard-delete a user
-  GET  /admin/crisis-events      — recent crisis events (all users)
+  GET  /admin/dashboard                        — platform-wide stats
+  GET  /admin/users                            — paginated user list with filters
+  GET  /admin/users/{id}                       — single user detail
+  PATCH /admin/users/{id}/status               — activate / deactivate a user
+  DELETE /admin/users/{id}                     — hard-delete a user
+  POST /admin/users/{id}/grant-free-session    — grant free session + notify patient
+  GET  /admin/appointments                     — all appointments (read-only overview)
+  POST /admin/appointments                     — admin books appointment on behalf of patient
+  GET  /admin/crisis-events                    — recent crisis events (all users)
 """
 
 import logging
@@ -18,7 +21,7 @@ from typing import List, Literal, Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..database import db_manager
 from ..dependencies.rbac import require_admin
@@ -66,6 +69,7 @@ class AdminUserList(BaseModel):
 
 class CrisisEventAdminOut(BaseModel):
     id: str
+    patient_id: Optional[str] = None
     patient_name: str
     patient_email: str
     severity: str
@@ -73,6 +77,20 @@ class CrisisEventAdminOut(BaseModel):
     keywords_matched: List[str]
     created_at: str
     therapist_notified: bool
+    free_session_granted: bool = False
+
+
+class GrantFreeSessionRequest(BaseModel):
+    sessions_to_grant: int = Field(default=1, ge=1, le=10)
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class AdminBookAppointmentIn(BaseModel):
+    patient_id: str
+    therapist_id: str
+    scheduled_at: datetime
+    duration_minutes: int = Field(default=50, ge=15, le=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
 
 
 class StatusUpdate(BaseModel):
@@ -110,7 +128,7 @@ class AdminAppointmentOut(BaseModel):
     duration_minutes: int = 25
     status: str
     payment_status: str
-    session_fee_pkr: int = 0
+    session_fee_pkr: Optional[int] = 0
 
 
 class AdminAppointmentList(BaseModel):
@@ -503,6 +521,7 @@ async def list_crisis_events(
             patient = patient_map.get(pid, {})
             result.append(CrisisEventAdminOut(
                 id=str(ev["_id"]),
+                patient_id=pid or None,
                 patient_name=patient.get("full_name", "Unknown"),
                 patient_email=patient.get("email", ""),
                 severity=ev.get("severity", "moderate"),
@@ -510,9 +529,115 @@ async def list_crisis_events(
                 keywords_matched=ev.get("keywords_matched", []),
                 created_at=_fmt_dt(ev.get("created_at")) or "",
                 therapist_notified=ev.get("therapist_notified", False),
+                free_session_granted=ev.get("free_session_granted", False),
             ))
 
         return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to list crisis events")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/{user_id}/grant-free-session")
+async def grant_free_session(
+    user_id: str,
+    body: GrantFreeSessionRequest,
+    current_admin: UserOut = Depends(require_admin),
+):
+    """Admin grants a free therapy session to a patient. Sends in-app notification and email."""
+    try:
+        db = db_manager.get_database()
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        sessions = body.sessions_to_grant
+        await db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$inc": {"sessions_remaining": sessions},
+                "$set": {"updated_at": datetime.now(timezone.utc)},
+            },
+        )
+
+        # In-app notification
+        from ..services.notification_service import create_notification
+        plural = "s" if sessions > 1 else ""
+        await create_notification(
+            db, user_id, "free_session_granted",
+            "Free Session Granted!",
+            f"Great news! TheraAI has granted you {sessions} free therapy session{plural}. Head to Appointments to book now!",
+            {"sessions_granted": sessions, "reason": body.reason},
+        )
+
+        # Email (non-blocking)
+        try:
+            from ..services.email_service import EmailService
+            from ..config import get_settings
+            import asyncio
+            _settings = get_settings()
+            if _settings.mail_enabled:
+                asyncio.create_task(
+                    EmailService.send_free_session_granted(
+                        to_email=user.get("email", ""),
+                        patient_name=user.get("full_name", "Patient"),
+                        sessions_count=sessions,
+                    )
+                )
+        except Exception:
+            pass
+
+        return {"success": True, "sessions_granted": sessions, "user_id": user_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to grant free session")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/appointments", response_model=AdminAppointmentOut, status_code=201)
+async def admin_book_appointment(
+    body: AdminBookAppointmentIn,
+    current_admin: UserOut = Depends(require_admin),
+):
+    """Admin books an appointment on behalf of a patient. Sends notification + email to patient."""
+    try:
+        from ..models.appointment import AppointmentCreate, AppointmentType
+        from ..services.appointment_service import AppointmentService
+
+        data = AppointmentCreate(
+            therapist_id=body.therapist_id,
+            scheduled_at=body.scheduled_at,
+            duration_minutes=body.duration_minutes,
+            type=AppointmentType.VIDEO,
+            notes=body.notes or "Booked by admin",
+        )
+        apt = await AppointmentService.create_appointment(
+            patient_id=body.patient_id,
+            data=data,
+        )
+
+        status_val = apt.status.value if hasattr(apt.status, "value") else str(apt.status)
+        return AdminAppointmentOut(
+            id=apt.id or body.patient_id,
+            patient_name=apt.patient_name or "",
+            therapist_name=apt.therapist_name or "",
+            scheduled_at=apt.scheduled_at.isoformat() if apt.scheduled_at else None,
+            duration_minutes=apt.duration_minutes,
+            status=status_val,
+            payment_status=apt.payment_status or "free",
+            session_fee_pkr=apt.session_fee_pkr or 0,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to admin-book appointment")
+        raise HTTPException(status_code=500, detail=str(e))
 
     except HTTPException:
         raise

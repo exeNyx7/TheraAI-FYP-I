@@ -145,7 +145,7 @@ export default function BookTherapist() {
   return (
     <div className="flex">
       <SidebarNav />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
             <Button variant="ghost" onClick={() => navigate('/therapists')} className="gap-2">

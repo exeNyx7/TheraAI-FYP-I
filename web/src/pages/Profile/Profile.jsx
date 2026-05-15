@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AppSidebar } from '../../components/Dashboard/AppSidebar';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { User, Mail, Calendar, Shield, Check, Phone, MapPin, Briefcase, AlertCircle } from 'lucide-react';
+import { User, Mail, Calendar, Shield, Check, Phone, MapPin, Briefcase, AlertCircle, Link2, Link2Off, RefreshCw, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
@@ -28,6 +29,137 @@ function Field({ label, icon: Icon, value, editing, children, hint }) {
       )}
       {hint && editing && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
+  );
+}
+
+function GoogleCalendarSection() {
+  const { showSuccess, showError } = useToast();
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/calendar/status');
+      setStatus(res.data);
+    } catch {
+      setStatus({ connected: false, configured: false });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+    const params = new URLSearchParams(window.location.search);
+    const val = params.get('calendar_connected');
+    if (val === 'true') {
+      showSuccess('Google Calendar connected!');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (val === 'false') {
+      showError('Google Calendar connection failed.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [fetchStatus, showSuccess, showError]);
+
+  const handleConnect = async () => {
+    try {
+      const res = await apiClient.get('/calendar/auth-url', { params: { redirect_page: 'profile' } });
+      if (res.data?.auth_url) window.location.href = res.data.auth_url;
+    } catch { showError('Failed to start Google Calendar connection.'); }
+  };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await apiClient.post('/calendar/disconnect');
+      showSuccess('Google Calendar disconnected.');
+      setStatus(s => ({ ...s, connected: false }));
+    } catch { showError('Failed to disconnect.'); }
+    finally { setDisconnecting(false); }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await apiClient.post('/calendar/sync');
+      showSuccess(`Synced ${res.data?.synced ?? 0} appointment(s) to Google Calendar.`);
+    } catch (err) {
+      showError(err?.response?.data?.detail || 'Sync failed.');
+    } finally { setSyncing(false); }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calendar className="h-5 w-5" /> Integrations
+        </CardTitle>
+        <CardDescription>Connect external services to your account</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Checking status…
+          </div>
+        ) : !status?.configured ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+            <p className="font-medium text-amber-700">Google Calendar not configured</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Admin must set <code className="font-mono bg-muted px-1 rounded">GOOGLE_CLIENT_ID</code> and{' '}
+              <code className="font-mono bg-muted px-1 rounded">GOOGLE_CLIENT_SECRET</code>.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                status.connected ? 'bg-green-500/10' : 'bg-muted'
+              }`}>
+                <Calendar className={`h-5 w-5 ${status.connected ? 'text-green-600' : 'text-muted-foreground'}`} />
+              </div>
+              <div>
+                <div className="text-sm font-medium flex items-center gap-2">
+                  Google Calendar
+                  {status.connected
+                    ? <Badge className="text-[10px] bg-green-100 text-green-700 border border-green-200">Connected</Badge>
+                    : <Badge variant="secondary" className="text-[10px]">Not connected</Badge>
+                  }
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {status.connected
+                    ? 'Appointments are synced automatically when booked.'
+                    : 'Sync your therapy sessions to Google Calendar.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {status.connected ? (
+                <>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={handleSync} disabled={syncing}>
+                    {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {syncing ? 'Syncing…' : 'Sync Now'}
+                  </Button>
+                  <Button
+                    size="sm" variant="outline"
+                    className="gap-1.5 h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={handleDisconnect} disabled={disconnecting}
+                  >
+                    {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />}
+                    Disconnect
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={handleConnect}>
+                  <Link2 className="h-3.5 w-3.5" /> Connect
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -96,7 +228,7 @@ export default function Profile() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-8">
             <div>
@@ -219,6 +351,9 @@ export default function Profile() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Google Calendar Integration */}
+            <GoogleCalendarSection />
           </div>
         </div>
       </main>

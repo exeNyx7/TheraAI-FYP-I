@@ -19,6 +19,8 @@ import {
   Users,
   ClipboardList,
   ShieldCheck,
+  History,
+  BookMarked,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -30,8 +32,9 @@ const ROLE_LABELS = {
 
 const THERAPIST_NAV = [
   { icon: LayoutDashboard, label: 'Dashboard',    href: '/dashboard' },
-  { icon: Users,           label: 'My Patients',  href: '/dashboard' },
+  { icon: Users,           label: 'My Patients',  href: '/patients' },
   { icon: Calendar,        label: 'Appointments', href: '/appointments' },
+  { icon: ClipboardList,   label: 'Schedule',     href: '/schedule' },
 ];
 
 const NAV_BY_ROLE = {
@@ -43,6 +46,8 @@ const NAV_BY_ROLE = {
     { icon: ClipboardList,   label: 'Assessments',   href: '/assessments' },
     { icon: Zap,             label: 'Achievements',  href: '/achievements' },
     { icon: Calendar,        label: 'Appointments',  href: '/appointments' },
+    { icon: History,         label: 'My Sessions',   href: '/sessions' },
+    { icon: BookMarked,      label: 'Resources',     href: '/resources' },
   ],
   psychiatrist: THERAPIST_NAV,
   therapist:    THERAPIST_NAV,
@@ -78,7 +83,7 @@ function UserMenu({ user, isCollapsed, onLogout }) {
     <div ref={ref} className="relative mt-1">
       <button
         onClick={() => setOpen((o) => !o)}
-        title={isCollapsed ? displayName : ''}
+        title={isCollapsed ? fullName : ''}
         className={`w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-sidebar-accent/60 transition-all duration-200 group ${
           isCollapsed ? 'justify-center' : ''
         }`}
@@ -153,6 +158,11 @@ export function SidebarNav() {
   });
   const role = user?.role || 'patient';
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
   useEffect(() => {
     if (isCollapsed) {
       document.body.classList.add('sidebar-collapsed');
@@ -176,14 +186,17 @@ export function SidebarNav() {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg"
-        aria-label="Toggle navigation"
-      >
-        {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-      </button>
+      {/* Mobile header bar — full-width, prevents hamburger from overlapping content */}
+      <header className="fixed top-0 left-0 right-0 h-16 z-40 lg:hidden flex items-center px-4 gap-3 bg-background/95 backdrop-blur-sm border-b border-border">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-sm flex-shrink-0"
+          aria-label="Toggle navigation"
+        >
+          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+        <img src="/logo.svg" alt="TheraAI" className="h-9 w-auto object-contain" />
+      </header>
 
       {/* Desktop collapse button */}
       <button
@@ -198,7 +211,7 @@ export function SidebarNav() {
       {/* Sidebar */}
       <aside
         className={`fixed left-0 top-0 h-screen bg-gradient-to-b from-sidebar to-sidebar/95 border-r border-sidebar-border p-4 flex flex-col transition-all duration-300 z-40 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${isCollapsed ? 'w-16' : 'w-56'}`}
       >
         {/* Logo */}
@@ -279,13 +292,13 @@ export function SidebarNav() {
       {isOpen && (
         <div
           onClick={() => setIsOpen(false)}
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
         />
       )}
 
       {/* Spacer */}
       <div
-        className={`hidden md:block flex-shrink-0 transition-all duration-300 ${
+        className={`hidden lg:block flex-shrink-0 transition-all duration-300 ${
           isCollapsed ? 'w-16' : 'w-56'
         }`}
       />

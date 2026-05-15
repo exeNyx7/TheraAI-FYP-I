@@ -118,6 +118,11 @@ export function TherapistSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -125,14 +130,18 @@ export function TherapistSidebar() {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg"
-        aria-label="Toggle navigation"
-      >
-        {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-      </button>
+      {/* Mobile header bar */}
+      <header className="fixed top-0 left-0 right-0 h-16 z-40 lg:hidden flex items-center px-4 gap-3 bg-background/95 backdrop-blur-sm border-b border-border">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-sm flex-shrink-0"
+          aria-label="Toggle navigation"
+        >
+          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+        <span className="text-base font-semibold" style={{ fontFamily: 'Montserrat' }}>Thera-AI</span>
+        <span className="text-xs text-muted-foreground">Therapist Portal</span>
+      </header>
 
       {/* Desktop collapse button */}
       <button
@@ -146,7 +155,7 @@ export function TherapistSidebar() {
       {/* Sidebar */}
       <aside
         className={`fixed left-0 top-0 h-screen bg-gradient-to-b from-sidebar to-sidebar/95 border-r-2 border-sidebar-border p-4 flex flex-col transition-all duration-300 z-40 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${isCollapsed ? 'w-20' : 'w-64'}`}
       >
         {/* Logo */}
@@ -208,11 +217,11 @@ export function TherapistSidebar() {
 
       {/* Mobile overlay */}
       {isOpen && (
-        <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/50 z-30 md:hidden" />
+        <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/50 z-30 lg:hidden" />
       )}
 
       {/* Spacer */}
-      <div className={`hidden md:block flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`} />
+      <div className={`hidden lg:block flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`} />
     </>
   );
 }

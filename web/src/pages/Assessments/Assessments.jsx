@@ -191,7 +191,7 @@ export default function Assessments() {
     return (
       <div className="flex">
         <AppSidebar />
-        <main className="flex-1 pt-16 md:pt-0">
+        <main className="flex-1 pt-16 lg:pt-0">
           <div className="bg-background min-h-screen">
             <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
               <div className="flex items-center justify-between">
@@ -251,7 +251,7 @@ export default function Assessments() {
           onClose={() => setAchievementModal([])}
         />
         <AppSidebar />
-        <main className="flex-1 pt-16 md:pt-0">
+        <main className="flex-1 pt-16 lg:pt-0">
           <div className="bg-background min-h-screen">
             <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
               <div className="flex items-center gap-3">
@@ -311,7 +311,7 @@ export default function Assessments() {
     return (
       <div className="flex">
         <AppSidebar />
-        <main className="flex-1 pt-16 md:pt-0">
+        <main className="flex-1 pt-16 lg:pt-0">
           <div className="bg-background min-h-screen">
             <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-6">
               {/* Header */}
@@ -421,7 +421,7 @@ export default function Assessments() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
             <div>

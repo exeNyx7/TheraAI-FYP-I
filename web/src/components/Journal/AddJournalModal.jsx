@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Smile, Frown, Heart, Wind, Circle, Sparkles, Loader2 } from 'lucide-react';
+import { Smile, Frown, Heart, Wind, Circle, Sparkles, Loader2, Mic, MicOff } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import apiClient from '../../apiClient';
 
@@ -23,8 +23,42 @@ export function AddJournalModal({ open, onOpenChange, onSubmit }) {
   const [aiInsight, setAiInsight] = useState(null);   // { insight, suggestion }
   const [analyzingAI, setAnalyzingAI] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      showError('Voice input is not supported in this browser. Try Chrome or Edge.');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((r) => r[0].transcript)
+        .join('');
+      setContent((prev) => {
+        const base = prev.trimEnd();
+        return base ? `${base} ${transcript}` : transcript;
+      });
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.start();
+    recognitionRef.current = recognition;
+    setIsListening(true);
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+  };
 
   const reset = () => {
+    stopListening();
     setTitle('');
     setContent('');
     setSelectedMood('neutral');
@@ -72,14 +106,14 @@ export function AddJournalModal({ open, onOpenChange, onSubmit }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={saved ? handleClose : undefined}
       />
-      {/* Modal */}
-      <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-fade-in">
+      {/* Modal — full-screen on mobile, card on sm+ */}
+      <div className="relative bg-card border-t sm:border border-border rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto shadow-2xl animate-fade-in">
         <h2 className="text-2xl font-bold mb-6" style={{ fontFamily: 'Montserrat' }}>
           Write a New Entry
         </h2>
@@ -101,7 +135,7 @@ export function AddJournalModal({ open, onOpenChange, onSubmit }) {
             {/* Mood selector */}
             <div className="space-y-3">
               <label className="text-sm font-medium">How are you feeling?</label>
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
                 {moods.map((mood) => {
                   const Icon = mood.icon;
                   return (
@@ -125,7 +159,27 @@ export function AddJournalModal({ open, onOpenChange, onSubmit }) {
 
             {/* Content */}
             <div className="space-y-2">
-              <label htmlFor="journal-content" className="text-sm font-medium">Your Thoughts</label>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="journal-content" className="text-sm font-medium">Your Thoughts</label>
+                <div className="flex items-center gap-2">
+                  {isListening && (
+                    <span className="flex items-center gap-1.5 text-xs text-red-500">
+                      <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                      Listening…
+                    </span>
+                  )}
+                  <Button
+                    type="button"
+                    variant={isListening ? 'destructive' : 'outline'}
+                    size="sm"
+                    onClick={isListening ? stopListening : startListening}
+                    className="gap-1.5 h-8 text-xs"
+                  >
+                    {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+                    {isListening ? 'Stop' : 'Voice'}
+                  </Button>
+                </div>
+              </div>
               <textarea
                 id="journal-content"
                 placeholder="Write what's on your mind... There are no rules or judgment here."

@@ -9,7 +9,7 @@ import { Plus, Search, BookOpen, X, AlertTriangle, Phone } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
-import apiClient from '../../apiClient';
+import { useJournals } from '../../hooks/useJournals';
 
 const CRISIS_COLORS = {
   emergency: { bg: 'bg-red-50 border-red-400 dark:bg-red-950/40', icon: 'text-red-500', title: 'text-red-700 dark:text-red-400' },
@@ -58,44 +58,30 @@ export default function Journal() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
-  const [journals, setJournals] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { journals, loading: isLoading, createJournal, deleteJournal } = useJournals();
   const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [moodFilter, setMoodFilter] = useState('all');
   const [crisisAlert, setCrisisAlert] = useState(null); // { severity, show_book_therapist }
 
   useEffect(() => {
-    if (!user) { navigate('/login'); return; }
-    fetchJournals();
-  }, [user]);
-
-  const fetchJournals = async () => {
-    setIsLoading(true);
-    try {
-      const res = await apiClient.get('/journals');
-      const data = res.data;
-      setJournals(Array.isArray(data) ? data : data.journals || []);
-    } catch { showError('Failed to load journals.'); }
-    finally { setIsLoading(false); }
-  };
+    if (!user) navigate('/login');
+  }, [user, navigate]);
 
   const handleCreate = async (entry) => {
-    const res = await apiClient.post('/journals', entry);
-    fetchJournals();
-    if (res.data?.crisis_detected) {
+    const data = await createJournal(entry);
+    if (data?.crisis_detected) {
       setCrisisAlert({
-        severity: res.data.crisis_severity,
-        show_book_therapist: res.data.crisis_severity === 'high' || res.data.crisis_severity === 'emergency',
+        severity: data.crisis_severity,
+        show_book_therapist: data.crisis_severity === 'high' || data.crisis_severity === 'emergency',
       });
     }
-    return res.data;
+    return data;
   };
 
   const handleDelete = async (id) => {
     try {
-      await apiClient.delete(`/journals/${id}`);
-      setJournals(prev => prev.filter(j => (j._id || j.id) !== id));
+      await deleteJournal(id);
       showSuccess('Diary entry deleted.');
     } catch { showError('Failed to delete entry.'); }
   };
@@ -112,18 +98,18 @@ export default function Journal() {
   return (
     <div className="flex">
       <AppSidebar />
-      <main className="flex-1 pt-16 md:pt-0">
+      <main className="flex-1 pt-16 lg:pt-0">
         <div className="bg-background min-h-screen">
           <div className="max-w-6xl mx-auto p-6 md:p-8 space-y-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>My Diary</h1>
-                <p className="text-muted-foreground mt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: 'Montserrat' }}>My Diary</h1>
+                <p className="text-muted-foreground mt-1 text-sm">
                   {journals.length} {journals.length === 1 ? 'entry' : 'entries'}
                 </p>
               </div>
-              <Button onClick={() => setModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
+              <Button onClick={() => setModalOpen(true)} className="gap-2 bg-primary hover:bg-primary/90 self-start sm:self-auto flex-shrink-0">
                 <Plus className="h-4 w-4" /> New Entry
               </Button>
             </div>
