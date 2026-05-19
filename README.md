@@ -22,7 +22,7 @@
 
 ## What is TheraAI?
 
-TheraAI is a production-deployed, full-stack mental health platform — built as a Final Year Project in Computer Science. It connects patients with licensed psychiatrists through a unified platform that uses AI at every layer to make care more effective.
+TheraAI is a production-deployed, full-stack mental health platform — built as a Final Year Project. It connects patients with licensed psychiatrists through a unified platform that uses AI at every layer to make care more effective.
 
 **For patients:** An always-available AI wellness companion (Thera), evidence-based self-assessment tools, mood and journal tracking with AI sentiment analysis, appointment booking, and video calls with their therapist.
 
