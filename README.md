@@ -366,6 +366,8 @@ Final Year Project · BS Artificial Intelligence
 **Noor-ul-Ain**
 Final Year Project · BS Artificial Intelligence
 
+---
+
 <div align="center">
 
 Built with FastAPI · React 18 · MongoDB · Llama 3.1 8B · DistilBERT · RoBERTa GoEmotions
