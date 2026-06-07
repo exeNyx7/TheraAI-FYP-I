@@ -360,6 +360,11 @@ See [DEPLOY.md](./DEPLOY.md) for the complete step-by-step deployment guide.
 **Dawood Qamar**
 Final Year Project · BS Computer Science
 
+**Zoha Binte Wajahat**
+Final Year Project · BS Artificial Intelligence
+
+**Noor-ul-Ain**
+Final Year Project · BS Artificial Intelligence
 ---
 
 <div align="center">
