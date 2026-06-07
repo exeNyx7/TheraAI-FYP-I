@@ -365,7 +365,6 @@ Final Year Project · BS Artificial Intelligence
 
 **Noor-ul-Ain**
 Final Year Project · BS Artificial Intelligence
----
 
 <div align="center">
 
